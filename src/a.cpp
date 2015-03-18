@@ -5,7 +5,6 @@
 #include "fast5.hpp"
 
 using namespace std;
-using namespace hdf5;
 
 
 int main(int argc, char* argv[])

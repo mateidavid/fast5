@@ -14,6 +14,35 @@ namespace fast5
 {
 using namespace hdf5_tools;
 
+struct Model_Entry
+{
+    char kmer[6];
+    long long variant;
+    double level_mean;
+    double level_stdv;
+    double sd_mean;
+    double sd_stdv;
+    double weight;
+}; // struct Model_Entry
+
+struct Event_Entry
+{
+    double mean;
+    double start;
+    double stdv;
+    double length;
+    char model_state[6];
+    double model_level;
+    long long move;
+    double p_model_state;
+    char mp_state[6];
+    double p_mp_state;
+    double p_A;
+    double p_C;
+    double p_G;
+    double p_T;
+}; // struct Event_Entry
+
 class File
 {
 public:
@@ -86,9 +115,56 @@ public:
         return res;
     }
 
+    bool have_model(size_t i) const
+    {
+        return hdf5_tools::addr_exists(_file_id, model_path(i));
+    }
+    bool have_events(size_t i) const
+    {
+        return hdf5_tools::addr_exists(_file_id, events_path(i));
+    }
+
+    std::vector< Model_Entry > get_model(size_t i) const
+    {
+        std::vector< Model_Entry > res;
+        hdf5_tools::Compound_Map m;
+        m.add_member("kmer", &Model_Entry::kmer);
+        m.add_member("level_mean", &Model_Entry::level_mean);
+        m.add_member("level_stdv", &Model_Entry::level_stdv);
+        hdf5_tools::Reader< Model_Entry >()(_file_id, model_path(i), res, &m);
+        return res;
+    }
+    std::vector< Event_Entry > get_events(size_t i) const
+    {
+        std::vector< Event_Entry > res;
+        hdf5_tools::Compound_Map m;
+        m.add_member("mean", &Event_Entry::mean);
+        m.add_member("start", &Event_Entry::start);
+        m.add_member("stdv", &Event_Entry::stdv);
+        m.add_member("length", &Event_Entry::length);
+        hdf5_tools::Reader< Event_Entry >()(_file_id, events_path(i), res, &m);
+        return res;
+    }
+
 private:
     std::string _file_name;
     hid_t _file_id;
+
+    static const std::string& model_path(size_t i)
+    {
+        static std::vector< std::string > _model_path =
+            { "/Analyses/Basecall_2D_000/BaseCalled_template/Model",
+              "/Analyses/Basecall_2D_000/BaseCalled_complement/Model" };
+        return _model_path.at(i);
+    }
+    static const std::string& events_path(size_t i)
+    {
+        static std::vector< std::string > _events_path =
+            { "/Analyses/Basecall_2D_000/BaseCalled_template/Events",
+              "/Analyses/Basecall_2D_000/BaseCalled_complement/Events" };
+        return _events_path.at(i);
+    }
+
 }; // class File
 
 } // namespace fast5

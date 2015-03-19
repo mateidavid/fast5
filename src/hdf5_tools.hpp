@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <vector>
 
 namespace hdf5
 {
@@ -18,6 +19,57 @@ namespace hdf5_tools
 {
 using namespace hdf5;
 
+namespace detail
+{
+
+/// TempMetaFunc: Given destination type, deduce memory type to be used in hdf5 read operation.
+/// Only useful for numeric types.
+/// HDF5 idiosyncracy:
+///   Types such as H5T_NATIVE_INT are not constants(!?), so id() is not a constexpr.
+template < typename T > struct get_mem_type           { static hid_t id() { return -1;                 } };
+// signed integral:
+template <> struct get_mem_type< char >               { static hid_t id() { return H5T_NATIVE_CHAR;    } };
+template <> struct get_mem_type< short >              { static hid_t id() { return H5T_NATIVE_SHORT;   } };
+template <> struct get_mem_type< int >                { static hid_t id() { return H5T_NATIVE_INT;     } };
+template <> struct get_mem_type< long >               { static hid_t id() { return H5T_NATIVE_LONG;    } };
+template <> struct get_mem_type< long long >          { static hid_t id() { return H5T_NATIVE_LLONG;   } };
+// unsigned integral:
+template <> struct get_mem_type< unsigned char >      { static hid_t id() { return H5T_NATIVE_UCHAR;   } };
+template <> struct get_mem_type< unsigned short >     { static hid_t id() { return H5T_NATIVE_USHORT;  } };
+template <> struct get_mem_type< unsigned >           { static hid_t id() { return H5T_NATIVE_UINT;    } };
+template <> struct get_mem_type< unsigned long >      { static hid_t id() { return H5T_NATIVE_ULONG;   } };
+template <> struct get_mem_type< unsigned long long > { static hid_t id() { return H5T_NATIVE_ULLONG;  } };
+// float:
+template <> struct get_mem_type< float >              { static hid_t id() { return H5T_NATIVE_FLOAT;   } };
+template <> struct get_mem_type< double >             { static hid_t id() { return H5T_NATIVE_DOUBLE;  } };
+template <> struct get_mem_type< long double >        { static hid_t id() { return H5T_NATIVE_LDOUBLE; } };
+
+/// TempMetaFunc: Given destination type, can we read it
+template < typename Out_Data_Type >
+struct can_read
+{
+    static const bool value =
+        std::is_integral< Out_Data_Type >::value
+        or std::is_floating_point< Out_Data_Type >::value
+        or std::is_same< typename std::remove_extent< Out_Data_Type >::type, char >::value
+        or std::is_same< Out_Data_Type, std::string >::value
+        or std::is_class< Out_Data_Type >:: value;
+};
+
+/// TempMetaFunc: Given a destination type, does it need a compound map
+template < typename Out_Data_Type >
+struct read_as_atomic
+{
+    static const bool value =
+        std::is_integral< Out_Data_Type >::value
+        or std::is_floating_point< Out_Data_Type >::value
+        or std::is_same< typename std::remove_extent< Out_Data_Type >::type, char >::value
+        or std::is_same< Out_Data_Type, std::string >::value;
+};
+
+}
+
+/// Exception class thrown by failed hdf5 operations.
 class Exception
     : public std::exception
 {
@@ -28,31 +80,122 @@ private:
     std::string _msg;
 }; // class Exception
 
+// Forward declaration
+class Compound_Map;
+
 namespace detail
 {
 
-/// Template meta-function for deducing memory type to be used during read.
-/// `cls`: memory type class
-/// `id()`: for H5T_INTEGER and H5T_FLOAT, the memory type to use
-template < typename T > struct get_mem_type           { static const hid_t cls = H5T_NO_CLASS; static hid_t id() { return -1;                } };
-// signed:
-template <> struct get_mem_type< char >               { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_CHAR;    } };
-template <> struct get_mem_type< short >              { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_SHORT;   } };
-template <> struct get_mem_type< int >                { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_INT;     } };
-template <> struct get_mem_type< long >               { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_LONG;    } };
-template <> struct get_mem_type< long long >          { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_LLONG;   } };
-// unsigned:
-template <> struct get_mem_type< unsigned char >      { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_UCHAR;   } };
-template <> struct get_mem_type< unsigned short >     { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_USHORT;  } };
-template <> struct get_mem_type< unsigned >           { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_UINT;    } };
-template <> struct get_mem_type< unsigned long >      { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_ULONG;   } };
-template <> struct get_mem_type< unsigned long long > { static const hid_t cls = H5T_INTEGER; static hid_t id() { return H5T_NATIVE_ULLONG;  } };
-// float:
-template <> struct get_mem_type< float >              { static const hid_t cls = H5T_FLOAT;   static hid_t id() { return H5T_NATIVE_FLOAT;   } };
-template <> struct get_mem_type< double >             { static const hid_t cls = H5T_FLOAT;   static hid_t id() { return H5T_NATIVE_DOUBLE;  } };
-template <> struct get_mem_type< long double >        { static const hid_t cls = H5T_FLOAT;   static hid_t id() { return H5T_NATIVE_LDOUBLE; } };
-// string:
-template <> struct get_mem_type< std::string >        { static const hid_t cls = H5T_STRING;  static hid_t id() { return H5T_C_S1;           } };
+/// Compute offset of a struct member from a member pointer (runtime version).
+template < typename T, typename U >
+std::size_t offset_of(U T::* mem_ptr)
+{
+    return reinterpret_cast< std::size_t >(&(((T*)0)->*mem_ptr));
+}
+
+/// Description of a member inside a compound
+/// Only works with numeric, string, and struct types.
+struct Compound_Member_Description
+{
+public:
+    Compound_Member_Description(const std::string& _name, size_t _offset, hid_t _numeric_type_id)
+        : name(_name), offset(_offset), numeric_type_id(_numeric_type_id)
+    {
+        type = numeric;
+    }
+    Compound_Member_Description(const std::string& _name, size_t _offset, size_t _char_array_size)
+        : name(_name), offset(_offset), char_array_size(_char_array_size)
+    {
+        type = char_array;
+    }
+    Compound_Member_Description(const std::string& _name, size_t _offset)
+        : name(_name), offset(_offset)
+    {
+        type = string;
+    }
+    Compound_Member_Description(const std::string& _name, size_t _offset, const Compound_Map* _compound_map_ptr)
+        : name(_name), offset(_offset), compound_map_ptr(_compound_map_ptr)
+    {
+        type = compound;
+    }
+
+    bool is_numeric() const { return type == numeric; }
+    bool is_char_array() const { return type == char_array; }
+    bool is_string() const { return type == string; }
+    bool is_compound() const { return type == compound; }
+
+    std::string name;
+    size_t offset;
+    union
+    {
+        hid_t numeric_type_id;
+        size_t char_array_size;
+        const Compound_Map* compound_map_ptr;
+    };
+
+private:
+    enum member_type
+    {
+        numeric,
+        char_array,
+        string,
+        compound
+    };
+    member_type type;
+}; // Compound_Member_Description
+
+} // namespace detail
+
+/// A map of struct fields to tags that is used to read compound datatypes
+class Compound_Map
+{
+public:
+    Compound_Map() = default;
+    Compound_Map(const Compound_Map&) = delete;
+    Compound_Map(Compound_Map&&) = default;
+    Compound_Map& operator = (const Compound_Map&) = delete;
+    Compound_Map& operator = (Compound_Map&&) = default;
+    ~Compound_Map() = default;
+
+    template < typename T, typename U >
+    void add_member(const std::string& name, U T::* mem_ptr)
+    {
+        static_assert(std::is_integral< U >::value
+                      or std::is_floating_point< U >::value
+                      or std::is_same< typename std::remove_extent< U >::type, char >::value
+                      or std::is_same< U, std::string >::value,
+                      "add_member(name, mem_ptr) overload expects numerical or string types only ");
+        if (std::is_integral< U >::value or std::is_floating_point< U >::value)
+        {
+            _members.emplace_back(name, detail::offset_of(mem_ptr), detail::get_mem_type< U >::id());
+        }
+        else if (std::is_same< typename std::remove_extent< U >::type, char >::value)
+        {
+            _members.emplace_back(name, detail::offset_of(mem_ptr), sizeof(U));
+        }
+        else if (std::is_same< U, std::string >::value)
+        {
+            _members.emplace_back(name, detail::offset_of(mem_ptr));
+        }
+    }
+
+    template < typename T, typename U >
+    void add_member(const std::string& name, U T::* mem_ptr, const Compound_Map* compound_map_ptr)
+    {
+        assert(false); // not currently implemented
+        static_assert(std::is_class< U >::value,
+                      "add_member(name, mem_ptr, compound_map_ptr) overload expects class types only ");
+        _members.emplace_back(name, detail::offset_of(mem_ptr), compound_map_ptr);
+    }
+
+    const std::vector< detail::Compound_Member_Description >& members() const { return _members; }
+
+private:
+    std::vector< detail::Compound_Member_Description > _members;
+}; // Compound_Map
+
+namespace detail
+{
 
 std::pair< std::string, std::string > get_path_name(const std::string& full_name)
 {
@@ -62,26 +205,28 @@ std::pair< std::string, std::string > get_path_name(const std::string& full_name
     return std::make_pair(path, name);
 } // get_path_name
 
-// template specialization for reading non-strings
+// TempSpec: reading numerics
 template < typename Out_Data_Type, typename Out_Data_Storage >
-struct Extent_Reader
+struct Extent_Atomic_Reader
 {
     void operator () (const std::string& loc_full_name, Out_Data_Storage& dest,
-                      hid_t mem_type_id, hid_t obj_id, hid_t,
+                      const Compound_Map*, hid_t obj_id, hid_t,
                       const std::string&, std::function< hid_t(hid_t) >,
                       const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
     {
+        hid_t mem_type_id = get_mem_type< Out_Data_Type >::id();
+        assert(mem_type_id != -1);
         int status = read_fcn(obj_id, mem_type_id, static_cast< void* >(dest.data()));
         if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
     }
-};
+}; // struct Extent_Atomic_Reader
 
-// template specialization for reading strings
+// TempSpec: for reading strings
 template < typename Out_Data_Storage >
-struct Extent_Reader< std::string, Out_Data_Storage >
+struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
 {
     void operator () (const std::string& loc_full_name, Out_Data_Storage& dest,
-                      hid_t, hid_t obj_id, hid_t obj_space_id,
+                      const Compound_Map*, hid_t obj_id, hid_t obj_space_id,
                       const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
                       const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
     {
@@ -135,17 +280,117 @@ struct Extent_Reader< std::string, Out_Data_Storage >
         status = H5Tclose(file_type_id);
         if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose(file_type_id)");
     }
-};
+}; // struct Extent_Atomic_Reader< std::string >
+
+template < typename Out_Data_Type, typename Out_Data_Storage >
+struct Extent_Compound_Reader
+{
+    void operator () (const std::string& loc_full_name, Out_Data_Storage& dest,
+                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t obj_space_id,
+                      const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
+                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
+    {
+        int status;
+        assert(compound_map_ptr);
+        hid_t file_type_id = get_type_fcn(obj_id);
+        if (file_type_id < 0) throw Exception(loc_full_name + ": error in " + get_type_fcn_name);
+        H5T_class_t file_type_class = H5Tget_class(file_type_id);
+        if (file_type_class == H5T_NO_CLASS) throw Exception(loc_full_name + ": error in H5Tget_class(file_type)");
+        if (file_type_class != H5T_COMPOUND) throw Exception(loc_full_name + ": expected H5T_COMPOUND datatype");
+
+        // pass 1
+        //   read numeric and char_array members only
+        hid_t mem_type_id = H5Tcreate(H5T_COMPOUND, sizeof(Out_Data_Type));
+        std::vector< hid_t > mem_stype_id_v;
+        for (const auto& e : compound_map_ptr->members())
+        {
+            assert(not e.is_compound()); // not implemented yet
+            if (e.is_string()) continue;
+            int file_stype_idx = H5Tget_member_index(file_type_id, e.name.c_str());
+            if (file_stype_idx < 0) throw Exception(loc_full_name + ": missing member \"" + e.name + "\"");
+            hid_t file_stype_id = H5Tget_member_type(file_type_id, file_stype_idx);
+            if (file_stype_id < 0) throw Exception(loc_full_name + ": error in H5Tget_member_type");
+            H5T_class_t file_stype_class = H5Tget_class(file_stype_id);
+            if (file_stype_class == H5T_NO_CLASS) throw Exception(loc_full_name + ": error in H5Tget_class(file_stype)");
+            if (e.is_numeric())
+            {
+                if (file_stype_class != H5T_INTEGER and file_stype_class != H5T_FLOAT)
+                    throw Exception(loc_full_name + ": member \"" + e.name + "\" is numeric, but file_stype is not numeric");
+                status = H5Tinsert(mem_type_id, e.name.c_str(), e.offset, e.numeric_type_id);
+                if (status < 0) throw Exception(loc_full_name + ": error in H5Tinsert(\"" + e.name + "\")");
+            }
+            if (e.is_char_array())
+            {
+                if (file_stype_class != H5T_STRING)
+                    throw Exception(loc_full_name + ": member \"" + e.name + "\" is char_array, but file_stype is not H5T_STRING");
+                status = H5Tis_variable_str(file_stype_id);
+                if (status < 0) throw Exception(loc_full_name + ": error in H5Tis_variable_str(\"" + e.name + "\")");
+                if (status) throw Exception(loc_full_name + ": member \"" + e.name + "\" is a char_array, but file_stype is a variable len string");
+                //size_t file_stype_size = H5Tget_size(file_stype_id);
+                //if (file_stype_size == 0) throw Exception(loc_full_name + ": H5Tget_size(\"" + e.name + "\") returned 0");
+                hid_t mem_stype_id = H5Tcopy(H5T_C_S1);
+                if (mem_stype_id < 0) throw Exception(loc_full_name + ": member \"" + e.name + "\": error in H5Tcopy");
+                status = H5Tset_size(mem_stype_id, e.char_array_size);
+                if (status < 0) throw Exception(loc_full_name + ": error in H5Tset_size(\"" + e.name + "\")");
+                status = H5Tinsert(mem_type_id, e.name.c_str(), e.offset, mem_stype_id);
+                if (status < 0) throw Exception(loc_full_name + ": error in H5Tinsert(\"" + e.name + "\")");
+                mem_stype_id_v.push_back(mem_stype_id);
+            }
+            status = H5Tclose(file_stype_id);
+            if (status < 0) throw Exception(loc_full_name + ": member \"" + e.name + "\": error in H5Tclose(file_stype)");
+        }
+        // perform the actual read
+        status = read_fcn(obj_id, mem_type_id, static_cast< void* >(dest.data()));
+        if (status < 0) throw Exception(loc_full_name + ": pass 1: error in " + read_fcn_name);
+        // release the memory types
+        for (const auto& mem_stype_id : mem_stype_id_v)
+        {
+            status = H5Tclose(mem_stype_id);
+            if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose(mem_stype)");
+        }
+        mem_stype_id_v.clear();
+        status = H5Tclose(mem_type_id);
+        if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose(mem_type)");
+
+        // pass 2
+        //   read strings
+        for (const auto& e : compound_map_ptr->members())
+        {
+            assert(not e.is_compound()); // not implemented yet
+            if (e.is_numeric() or e.is_char_array()) continue;
+            //TODO
+            assert(false);
+        }
+    }
+}; //struct Extent_Compound_Reader
+
+// TempSpec: read extent of atomic types
+template < typename Out_Data_Type, typename Out_Data_Storage, bool = true >
+struct Extent_Reader_as_atomic
+    : Extent_Atomic_Reader< Out_Data_Type, Out_Data_Storage >
+{};
+
+// TempSpec: read extent of compound types
+template < typename Out_Data_Type, typename Out_Data_Storage >
+struct Extent_Reader_as_atomic< Out_Data_Type, Out_Data_Storage, false >
+    : Extent_Compound_Reader< Out_Data_Type, Out_Data_Storage >
+{};
+
+// branch on atomic/compound destination
+template < typename Out_Data_Type, typename Out_Data_Storage >
+struct Extent_Reader
+    : public Extent_Reader_as_atomic< Out_Data_Type, Out_Data_Storage, read_as_atomic< Out_Data_Type >::value >
+{};
 
 template < typename, typename, bool >
 struct Object_Reader_impl;
 
-// template specialization for reading scalars
+// TempSpec: reading scalars
 template < typename Out_Data_Type >
 struct Object_Reader_impl< Out_Data_Type, Out_Data_Type, true >
 {
     void operator () (const std::string& loc_full_name, Out_Data_Type& dest,
-                      hid_t mem_type_id, hid_t obj_id, hid_t obj_space_id,
+                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t obj_space_id,
                       const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
                       const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
     {
@@ -155,19 +400,19 @@ struct Object_Reader_impl< Out_Data_Type, Out_Data_Type, true >
             throw Exception(loc_full_name + ": reading as scalar, but dataspace not H5S_SCALAR");
         std::vector< Out_Data_Type > tmp(1);
         Extent_Reader< Out_Data_Type, std::vector< Out_Data_Type > >()(
-            loc_full_name, tmp, mem_type_id, obj_id, obj_space_id,
+            loc_full_name, tmp, compound_map_ptr, obj_id, obj_space_id,
             get_type_fcn_name, get_type_fcn,
             read_fcn_name, read_fcn);
         dest = std::move(tmp[0]);
     }
 };
 
-// template specialization for reading vectors
+// TempSpec: reading vectors
 template < typename Out_Data_Type, typename Out_Data_Storage >
 struct Object_Reader_impl< Out_Data_Type, Out_Data_Storage, false >
 {
     void operator () (const std::string& loc_full_name, Out_Data_Storage& dest,
-                      hid_t mem_type_id, hid_t obj_id, hid_t obj_space_id,
+                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t obj_space_id,
                       const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
                       const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
     {
@@ -183,20 +428,20 @@ struct Object_Reader_impl< Out_Data_Type, Out_Data_Storage, false >
         dest.clear();
         dest.resize(sz);
         Extent_Reader< Out_Data_Type, Out_Data_Storage >()(
-            loc_full_name, dest, mem_type_id, obj_id, obj_space_id,
+            loc_full_name, dest, compound_map_ptr, obj_id, obj_space_id,
             get_type_fcn_name, get_type_fcn,
             read_fcn_name, read_fcn);
     }
 };
 
-// TMF: split scalar & vector reading branches
+// TempMetaFunc: split scalar & vector reading branches
 template < typename Out_Data_Type, typename Out_Data_Storage >
 struct Object_Reader
     : public Object_Reader_impl< Out_Data_Type, Out_Data_Storage, std::is_same< Out_Data_Type, Out_Data_Storage >::value > {};
 
 // open object and object space, then delegate
 template < typename Out_Data_Type, typename Out_Data_Storage >
-void read_obj_helper(const std::string& loc_full_name, Out_Data_Storage& dest, hid_t mem_type_id,
+void read_obj_helper(const std::string& loc_full_name, Out_Data_Storage& dest, const Compound_Map* compound_map_ptr,
                      const std::string& open_fcn_name, std::function< hid_t(void) > open_fcn,
                      const std::string& close_fcn_name, std::function< herr_t(hid_t) > close_fcn,
                      const std::string& get_space_fcn_name, std::function< hid_t(hid_t) > get_space_fcn,
@@ -212,7 +457,7 @@ void read_obj_helper(const std::string& loc_full_name, Out_Data_Storage& dest, h
     if (obj_space_id < 0) throw Exception(loc_full_name + ": error in " + get_space_fcn_name);
     // read object
     Object_Reader< Out_Data_Type, Out_Data_Storage >()(
-        loc_full_name, dest, mem_type_id, obj_id, obj_space_id,
+        loc_full_name, dest, compound_map_ptr, obj_id, obj_space_id,
         get_type_fcn_name, get_type_fcn,
         read_fcn_name, read_fcn);
     // close object space & object
@@ -225,7 +470,7 @@ void read_obj_helper(const std::string& loc_full_name, Out_Data_Storage& dest, h
 // determine if address is attribute or dataset, then delegate
 template < typename Out_Data_Type, typename Out_Data_Storage >
 void read_addr(hid_t root_id, const std::string& loc_full_name,
-               Out_Data_Storage& dest, hid_t mem_type_id)
+               Out_Data_Storage& dest, const Compound_Map* compound_map_ptr)
 {
     assert(root_id > 0);
     std::string loc_path;
@@ -239,7 +484,7 @@ void read_addr(hid_t root_id, const std::string& loc_full_name,
     if (is_attr)
     {
         read_obj_helper< Out_Data_Type, Out_Data_Storage >(
-            loc_full_name, dest, mem_type_id,
+            loc_full_name, dest, compound_map_ptr,
             "H5Aopen_by_name",
             [&root_id, &loc_path, &loc_name] ()
             {
@@ -257,7 +502,7 @@ void read_addr(hid_t root_id, const std::string& loc_full_name,
     else
     {
         read_obj_helper< Out_Data_Type, Out_Data_Storage >(
-            loc_full_name, dest, mem_type_id,
+            loc_full_name, dest, compound_map_ptr,
             "H5Dopen",
             [&root_id, &loc_full_name] ()
             {
@@ -274,28 +519,62 @@ void read_addr(hid_t root_id, const std::string& loc_full_name,
     }
 } // read_addr
 
-} // namespace detail
-
-template < typename Out_Data_Type >
-struct Reader
+// TempSpec: for atomic types
+template < typename Out_Data_Type, bool = true >
+struct Reader_as_atomic
 {
     template < typename Out_Data_Storage >
-    void operator () (hid_t root_id, const std::string& loc_full_name, Out_Data_Storage& dest, hid_t mem_type_id = -1)
+    void operator () (hid_t root_id, const std::string& loc_full_name, Out_Data_Storage& dest)
     {
-        if (detail::get_mem_type< Out_Data_Type >::cls == H5T_INTEGER
-            or detail::get_mem_type< Out_Data_Type >::cls == H5T_FLOAT
-            or detail::get_mem_type< Out_Data_Type >::cls == H5T_STRING)
-        {
-            // HDF5 idiosyncracy:
-            //   This check cannot be a static because types such as
-            //   H5T_NATIVE_INT are not constants, so id() is not a constexpr.
-            assert(mem_type_id == -1);
-            mem_type_id = detail::get_mem_type< Out_Data_Type >::id();
-        }
-        detail::read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_full_name, dest, mem_type_id);
+        static_assert(detail::can_read< Out_Data_Type >::value,
+                      "Reader_impl<Out_Data_Type,true>: expected a readable destination");
+        static_assert(detail::read_as_atomic< Out_Data_Type >::value,
+                      "Reader_impl<Out_Data_Type,true>: expected a type readable as atomic");
+        read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_full_name, dest, nullptr);
     }
-}; // struct Reader
+};
 
-} // namespace hdf5
+// TempSpec: for compound types
+template < typename Out_Data_Type >
+struct Reader_as_atomic< Out_Data_Type, false >
+{
+    template < typename Out_Data_Storage >
+    void operator () (hid_t root_id, const std::string& loc_full_name, Out_Data_Storage& dest, const Compound_Map* compound_map_ptr)
+    {
+        static_assert(detail::can_read< Out_Data_Type >::value,
+                      "Reader_impl<Out_Data_Type,false>: expected a readable destination");
+        static_assert(not detail::read_as_atomic< Out_Data_Type >::value,
+                      "Reader_impl<Out_Data_Type,false>: expected a type readable as compound");
+        read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_full_name, dest, compound_map_ptr);
+    }
+};
+
+} // namespace detail
+
+// determine if address is an attribute or dataset
+bool addr_exists(hid_t root_id, const std::string& loc_full_name)
+{
+    assert(root_id > 0);
+    std::string loc_path;
+    std::string loc_name;
+    std::tie(loc_path, loc_name) = detail::get_path_name(loc_full_name);
+    // determine if object is an attribute
+    int status;
+    status = H5Aexists_by_name(root_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT);
+    if (status < 0) throw Exception(loc_full_name + ": error in H5Aexists_by_name");
+    if (status) return true;
+    // not an attribute: try to open as a dataset
+    hid_t ds_id = H5Dopen(root_id, loc_full_name.c_str(), H5P_DEFAULT);
+    if (ds_id < 0) return false;
+    status = H5Dclose(ds_id);
+    if (status < 0) throw Exception(loc_full_name + ": error in H5Dclose");
+    return true;
+}
+
+template < typename Out_Data_Type >
+struct Reader : public detail::Reader_as_atomic< Out_Data_Type, detail::read_as_atomic< Out_Data_Type >::value >
+{};
+
+} // namespace hdf5_tools
 
 #endif

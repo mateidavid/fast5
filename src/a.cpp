@@ -44,5 +44,12 @@ int main(int argc, char* argv[])
         }
     }
 
+    auto v = f_p->get_event_alignments();
+   cout << "event_alignment().size()=" << v.size() << endl;
+    for (const auto& e : v)
+    {
+        cout << "(template=" << e.template_index << ", complement=" << e.complement_index << ", kmer=" << e.kmer << ")" << endl;
+    }
+
     delete f_p;
 }

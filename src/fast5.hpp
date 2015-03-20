@@ -43,6 +43,13 @@ struct Event_Entry
     double p_T;
 }; // struct Event_Entry
 
+struct Event_Alignment_Entry
+{
+    long long template_index;
+    long long complement_index;
+    char kmer[6];
+};
+
 class File
 {
 public:
@@ -128,6 +135,17 @@ public:
             return "";
         else
             return res.substr(nl1 + 1, nl2 - nl1 - 1);
+    }
+
+    std::vector< Event_Alignment_Entry > get_event_alignments() const
+    {
+        std::vector< Event_Alignment_Entry > res;
+        hdf5_tools::Compound_Map m;
+        m.add_member("template", &Event_Alignment_Entry::template_index);
+        m.add_member("complement", &Event_Alignment_Entry::complement_index);
+        m.add_member("kmer", &Event_Alignment_Entry::kmer);
+        hdf5_tools::Reader< Event_Alignment_Entry >()(_file_id, "/Analyses/Basecall_2D_000/BaseCalled_2D/Alignment", res, &m);
+        return res;
     }
 
     bool have_model(size_t i) const

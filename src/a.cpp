@@ -20,7 +20,17 @@ int main(int argc, char* argv[])
     cout << "basecall_version=" << f_p->basecall_version() << endl;
     cout << "eventdetection_version=" << f_p->eventdetection_version() << endl;
     cout << "sequences_version=" << f_p->sequences_version() << endl;
-    cout << "basecalled_2D=" << f_p->basecalled_2D() << endl;
+
+    if(f_p->have_basecalled_2D())
+    {
+        cout << "basecalled_2D=" << f_p->basecalled_2D() << endl;
+        auto v = f_p->get_event_alignments();
+        cout << "event_alignment().size()=" << v.size() << endl;
+        for (const auto& e : v)
+        {
+            cout << "(template=" << e.template_index << ", complement=" << e.complement_index << ", kmer=" << e.kmer << ")" << endl;
+        }
+    }
 
     for (size_t i = 0; i < 2; ++i)
     {
@@ -54,12 +64,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    auto v = f_p->get_event_alignments();
-    cout << "event_alignment().size()=" << v.size() << endl;
-    for (const auto& e : v)
-    {
-        cout << "(template=" << e.template_index << ", complement=" << e.complement_index << ", kmer=" << e.kmer << ")" << endl;
-    }
+
 
     delete f_p;
 }

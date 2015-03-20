@@ -132,6 +132,11 @@ public:
         return res;
     }
 
+    bool have_basecalled_2D() const
+    {
+        return hdf5_tools::addr_exists(_file_id, "/Analyses/Basecall_2D_000/BaseCalled_2D/Fastq");
+    }
+
     std::string basecalled_2D() const
     {
         std::string res;

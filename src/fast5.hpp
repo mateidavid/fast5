@@ -115,6 +115,21 @@ public:
         return res;
     }
 
+    std::string basecalled_2D() const
+    {
+        std::string res;
+        hdf5_tools::Reader< std::string >()(_file_id, "/Analyses/Basecall_2D_000/BaseCalled_2D/Fastq", res);
+        
+        // Split the FASTQ record on newlines
+        size_t nl1 = res.find_first_of('\n');
+        size_t nl2 = res.find_first_of('\n', nl1 + 1);
+
+        if(nl1 == std::string::npos || nl2 == std::string::npos)
+            return "";
+        else
+            return res.substr(nl1 + 1, nl2 - nl1 - 1);
+    }
+
     bool have_model(size_t i) const
     {
         return hdf5_tools::addr_exists(_file_id, model_path(i));

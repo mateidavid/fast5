@@ -20,6 +20,7 @@ int main(int argc, char* argv[])
     cout << "basecall_version=" << f_p->basecall_version() << endl;
     cout << "eventdetection_version=" << f_p->eventdetection_version() << endl;
     cout << "sequences_version=" << f_p->sequences_version() << endl;
+    cout << "basecalled_2D=" << f_p->basecalled_2D() << endl;
 
     for (size_t i = 0; i < 2; ++i)
     {

@@ -50,6 +50,15 @@ struct Event_Alignment_Entry
     char kmer[6];
 }; // struct Event_Alignment_Entry
 
+struct Model_Parameters
+{
+    double drift;
+    double scale;
+    double scale_sd;
+    double shift;
+    double var;
+    double var_sd;
+}; // struct Model_Parameters
 
 class File
 {
@@ -166,6 +175,19 @@ public:
         m.add_member("level_mean", &Model_Entry::level_mean);
         m.add_member("level_stdv", &Model_Entry::level_stdv);
         hdf5_tools::Reader< Model_Entry >()(_file_id, model_path(i), res, &m);
+        return res;
+    }
+
+    Model_Parameters get_model_parameters(size_t i) const
+    {
+        Model_Parameters res;
+        std::string path = model_path(i);
+        hdf5_tools::Reader< double >()(_file_id, path + "/drift", res.drift);
+        hdf5_tools::Reader< double >()(_file_id, path + "/scale", res.scale);
+        hdf5_tools::Reader< double >()(_file_id, path + "/scale_sd", res.scale_sd);
+        hdf5_tools::Reader< double >()(_file_id, path + "/shift", res.shift);
+        hdf5_tools::Reader< double >()(_file_id, path + "/var", res.var);
+        hdf5_tools::Reader< double >()(_file_id, path + "/var_sd", res.var_sd);
         return res;
     }
 

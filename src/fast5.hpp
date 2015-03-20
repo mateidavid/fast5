@@ -48,7 +48,8 @@ struct Event_Alignment_Entry
     long long template_index;
     long long complement_index;
     char kmer[6];
-};
+}; // struct Event_Alignment_Entry
+
 
 class File
 {
@@ -167,6 +168,7 @@ public:
         hdf5_tools::Reader< Model_Entry >()(_file_id, model_path(i), res, &m);
         return res;
     }
+
     std::vector< Event_Entry > get_events(size_t i) const
     {
         std::vector< Event_Entry > res;

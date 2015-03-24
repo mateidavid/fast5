@@ -14,6 +14,13 @@ namespace fast5
 {
 using namespace hdf5_tools;
 
+//
+// This struct represents the expected signal measured
+// given the kmer sequence that is in the pore when the
+// the observations are made. A pore model consists
+// of 1024 of these entries (one per 5-mer) and global
+// shift/scaling parameters.
+//
 struct Model_Entry
 {
     char kmer[6];
@@ -25,6 +32,25 @@ struct Model_Entry
     double weight;
 }; // struct Model_Entry
 
+//
+// This struct represents the global transformations
+// that must be applied to each Model_Entry
+//
+struct Model_Parameters
+{
+    double drift;
+    double scale;
+    double scale_sd;
+    double shift;
+    double var;
+    double var_sd;
+}; // struct Model_Parameters
+
+//
+// This struct represents an observed event.
+// The members of the struct are the same as 
+// the fields encoded in the FAST5 file.
+//
 struct Event_Entry
 {
     double mean;
@@ -43,22 +69,16 @@ struct Event_Entry
     double p_T;
 }; // struct Event_Entry
 
+//
+// This struct represents a template-to-complement
+// match that is emitted by ONT's 2D basecaller
+//
 struct Event_Alignment_Entry
 {
     long long template_index;
     long long complement_index;
     char kmer[6];
 }; // struct Event_Alignment_Entry
-
-struct Model_Parameters
-{
-    double drift;
-    double scale;
-    double scale_sd;
-    double shift;
-    double var;
-    double var_sd;
-}; // struct Model_Parameters
 
 class File
 {

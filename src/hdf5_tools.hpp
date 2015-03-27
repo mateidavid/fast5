@@ -630,7 +630,7 @@ private:
         std::string name = last_slash_pos != std::string::npos? full_name.substr(last_slash_pos + 1) : full_name;
         return std::make_pair(path, name);
     } // split_full_name
-};
+}; // class File_Reader
 
 } // namespace hdf5_tools
 

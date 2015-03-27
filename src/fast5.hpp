@@ -12,7 +12,6 @@
 
 namespace fast5
 {
-using namespace hdf5_tools;
 
 //
 // This struct represents the expected signal measured
@@ -81,45 +80,23 @@ struct Event_Alignment_Entry
 }; // struct Event_Alignment_Entry
 
 class File
+    : private hdf5_tools::File_Reader
 {
+private:
+    typedef hdf5_tools::File_Reader Base;
 public:
-    File() : _file_id(0) {}
-    File(const std::string& file_name) : _file_id(0) { open(file_name); }
-    File(const File&) = delete;
-    File(File&&) = default;
-    File& operator = (const File&) = delete;
-    File& operator = (File&&) = default;
-    ~File()
-    {
-        if (is_open())
-        {
-            close();
-        }
-    }
+    using Base::Base;
 
-    bool is_open() const { return _file_id > 0; }
-
-    void open(const std::string& file_name)
-    {
-        assert(not is_open());
-        _file_name = file_name;
-        _file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-        if (not is_open()) throw Exception(_file_name + ": error in H5Fopen");
-    }
-
-    void close()
-    {
-        assert(is_open());
-        assert(H5Fget_obj_count(_file_id, H5F_OBJ_ALL) == 1);
-        int status = H5Fclose(_file_id);
-        if (status < 0) throw Exception(_file_name + ": error in H5Fclose");
-        _file_id = 0;
-    }
+    using Base::is_open;
+    using Base::file_name;
+    using Base::open;
+    using Base::close;
 
     std::string file_version() const
     {
         double v;
-        hdf5_tools::Reader< double >()(_file_id, "/file_version", v);
+        assert(Base::exists("/file_version"));
+        Base::read< double >("/file_version", v);
         // convert it to string
         std::ostringstream os;
         os << v;
@@ -129,21 +106,24 @@ public:
     std::string basecall_version() const
     {
         std::string res;
-        hdf5_tools::Reader< std::string >()(_file_id, "/Analyses/Basecall_2D_000/version", res);
+        assert(Base::exists("/Analyses/Basecall_2D_000/version"));
+        Base::read< std::string >("/Analyses/Basecall_2D_000/version", res);
         return res;
     }
 
     std::string eventdetection_version() const
     {
         std::string res;
-        hdf5_tools::Reader< std::string >()(_file_id, "/Analyses/EventDetection_000/version", res);
+        assert(Base::exists("/Analyses/EventDetection_000/version"));
+        Base::read< std::string >("/Analyses/EventDetection_000/version", res);
         return res;
     }
 
     std::string sequences_version() const
     {
         std::vector< std::string > tmp;
-        hdf5_tools::Reader< std::string >()(_file_id, "/Sequences/Meta/version", tmp);
+        assert(Base::exists("/Sequences/Meta/version"));
+        Base::read< std::string >("/Sequences/Meta/version", tmp);
         std::string res;
         for (const auto& s: tmp)
         {
@@ -154,13 +134,13 @@ public:
 
     bool have_basecalled_2D() const
     {
-        return hdf5_tools::addr_exists(_file_id, "/Analyses/Basecall_2D_000/BaseCalled_2D/Fastq");
+        return Base::exists("/Analyses/Basecall_2D_000/BaseCalled_2D/Fastq");
     }
 
     std::string basecalled_2D() const
     {
         std::string res;
-        hdf5_tools::Reader< std::string >()(_file_id, "/Analyses/Basecall_2D_000/BaseCalled_2D/Fastq", res);
+        Base::read< std::string >("/Analyses/Basecall_2D_000/BaseCalled_2D/Fastq", res);
         
         // Split the FASTQ record on newlines
         size_t nl1 = res.find_first_of('\n');
@@ -179,17 +159,17 @@ public:
         m.add_member("template", &Event_Alignment_Entry::template_index);
         m.add_member("complement", &Event_Alignment_Entry::complement_index);
         m.add_member("kmer", &Event_Alignment_Entry::kmer);
-        hdf5_tools::Reader< Event_Alignment_Entry >()(_file_id, "/Analyses/Basecall_2D_000/BaseCalled_2D/Alignment", res, &m);
+        Base::read< Event_Alignment_Entry >("/Analyses/Basecall_2D_000/BaseCalled_2D/Alignment", res, &m);
         return res;
     }
 
     bool have_model(size_t i) const
     {
-        return hdf5_tools::addr_exists(_file_id, model_path(i));
+        return Base::exists(model_path(i));
     }
     bool have_events(size_t i) const
     {
-        return hdf5_tools::addr_exists(_file_id, events_path(i));
+        return Base::exists(events_path(i));
     }
 
     std::vector< Model_Entry > get_model(size_t i) const
@@ -199,7 +179,7 @@ public:
         m.add_member("kmer", &Model_Entry::kmer);
         m.add_member("level_mean", &Model_Entry::level_mean);
         m.add_member("level_stdv", &Model_Entry::level_stdv);
-        hdf5_tools::Reader< Model_Entry >()(_file_id, model_path(i), res, &m);
+        Base::read< Model_Entry >(model_path(i), res, &m);
         return res;
     }
 
@@ -207,12 +187,12 @@ public:
     {
         Model_Parameters res;
         std::string path = model_path(i);
-        hdf5_tools::Reader< double >()(_file_id, path + "/drift", res.drift);
-        hdf5_tools::Reader< double >()(_file_id, path + "/scale", res.scale);
-        hdf5_tools::Reader< double >()(_file_id, path + "/scale_sd", res.scale_sd);
-        hdf5_tools::Reader< double >()(_file_id, path + "/shift", res.shift);
-        hdf5_tools::Reader< double >()(_file_id, path + "/var", res.var);
-        hdf5_tools::Reader< double >()(_file_id, path + "/var_sd", res.var_sd);
+        Base::read< double >(path + "/drift", res.drift);
+        Base::read< double >(path + "/scale", res.scale);
+        Base::read< double >(path + "/scale_sd", res.scale_sd);
+        Base::read< double >(path + "/shift", res.shift);
+        Base::read< double >(path + "/var", res.var);
+        Base::read< double >(path + "/var_sd", res.var_sd);
         return res;
     }
 
@@ -224,14 +204,11 @@ public:
         m.add_member("start", &Event_Entry::start);
         m.add_member("stdv", &Event_Entry::stdv);
         m.add_member("length", &Event_Entry::length);
-        hdf5_tools::Reader< Event_Entry >()(_file_id, events_path(i), res, &m);
+        Base::read< Event_Entry >(events_path(i), res, &m);
         return res;
     }
 
 private:
-    std::string _file_name;
-    hid_t _file_id;
-
     static const std::string& model_path(size_t i)
     {
         static std::vector< std::string > _model_path =

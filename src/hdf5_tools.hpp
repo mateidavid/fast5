@@ -19,6 +19,20 @@ namespace hdf5_tools
 {
 using namespace hdf5;
 
+/// Exception class thrown by failed hdf5 operations.
+class Exception
+    : public std::exception
+{
+public:
+    Exception(const std::string& msg) : _msg(msg) {}
+    const char* what() const noexcept { return _msg.c_str(); }
+private:
+    std::string _msg;
+}; // class Exception
+
+// Forward declaration
+class Compound_Map;
+
 namespace detail
 {
 
@@ -66,25 +80,6 @@ struct read_as_atomic
         or std::is_same< typename std::remove_extent< Out_Data_Type >::type, char >::value
         or std::is_same< Out_Data_Type, std::string >::value;
 };
-
-}
-
-/// Exception class thrown by failed hdf5 operations.
-class Exception
-    : public std::exception
-{
-public:
-    Exception(const std::string& msg) : _msg(msg) {}
-    const char* what() const noexcept { return _msg.c_str(); }
-private:
-    std::string _msg;
-}; // class Exception
-
-// Forward declaration
-class Compound_Map;
-
-namespace detail
-{
 
 /// Compute offset of a struct member from a member pointer (runtime version).
 template < typename T, typename U >
@@ -196,14 +191,6 @@ private:
 
 namespace detail
 {
-
-std::pair< std::string, std::string > get_path_name(const std::string& full_name)
-{
-    auto last_slash_pos = full_name.find_last_of('/');
-    std::string path = last_slash_pos != std::string::npos? full_name.substr(0, last_slash_pos + 1) : std::string();
-    std::string name = last_slash_pos != std::string::npos? full_name.substr(last_slash_pos + 1) : full_name;
-    return std::make_pair(path, name);
-} // get_path_name
 
 // TempSpec: reading numerics
 template < typename Out_Data_Type, typename Out_Data_Storage >
@@ -469,13 +456,11 @@ void read_obj_helper(const std::string& loc_full_name, Out_Data_Storage& dest, c
 
 // determine if address is attribute or dataset, then delegate
 template < typename Out_Data_Type, typename Out_Data_Storage >
-void read_addr(hid_t root_id, const std::string& loc_full_name,
+void read_addr(hid_t root_id, const std::string& loc_path, const std::string& loc_name,
                Out_Data_Storage& dest, const Compound_Map* compound_map_ptr)
 {
     assert(root_id > 0);
-    std::string loc_path;
-    std::string loc_name;
-    std::tie(loc_path, loc_name) = get_path_name(loc_full_name);
+    std::string loc_full_name = loc_path + loc_name;
     // determine if object is an attribute; otherwise, assume it's a dataset
     int status;
     status = H5Aexists_by_name(root_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT);
@@ -524,13 +509,14 @@ template < typename Out_Data_Type, bool = true >
 struct Reader_as_atomic
 {
     template < typename Out_Data_Storage >
-    void operator () (hid_t root_id, const std::string& loc_full_name, Out_Data_Storage& dest)
+    void operator () (hid_t root_id, const std::string& loc_path, const std::string& loc_name,
+                      Out_Data_Storage& dest)
     {
-        static_assert(detail::can_read< Out_Data_Type >::value,
+        static_assert(can_read< Out_Data_Type >::value,
                       "Reader_impl<Out_Data_Type,true>: expected a readable destination");
-        static_assert(detail::read_as_atomic< Out_Data_Type >::value,
+        static_assert(read_as_atomic< Out_Data_Type >::value,
                       "Reader_impl<Out_Data_Type,true>: expected a type readable as atomic");
-        read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_full_name, dest, nullptr);
+        read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_path, loc_name, dest, nullptr);
     }
 };
 
@@ -539,41 +525,112 @@ template < typename Out_Data_Type >
 struct Reader_as_atomic< Out_Data_Type, false >
 {
     template < typename Out_Data_Storage >
-    void operator () (hid_t root_id, const std::string& loc_full_name, Out_Data_Storage& dest, const Compound_Map* compound_map_ptr)
+    void operator () (hid_t root_id, const std::string& loc_path, const std::string& loc_name,
+                      Out_Data_Storage& dest, const Compound_Map* compound_map_ptr)
     {
-        static_assert(detail::can_read< Out_Data_Type >::value,
+        static_assert(can_read< Out_Data_Type >::value,
                       "Reader_impl<Out_Data_Type,false>: expected a readable destination");
-        static_assert(not detail::read_as_atomic< Out_Data_Type >::value,
+        static_assert(not read_as_atomic< Out_Data_Type >::value,
                       "Reader_impl<Out_Data_Type,false>: expected a type readable as compound");
-        read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_full_name, dest, compound_map_ptr);
+        read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_path, loc_name, dest, compound_map_ptr);
     }
 };
 
+template < typename Out_Data_Type >
+struct Reader : public Reader_as_atomic< Out_Data_Type, read_as_atomic< Out_Data_Type >::value >
+{};
+
 } // namespace detail
 
-// determine if address is an attribute or dataset
-bool addr_exists(hid_t root_id, const std::string& loc_full_name)
+/// An HDF5 file reader
+class File_Reader
 {
-    assert(root_id > 0);
-    std::string loc_path;
-    std::string loc_name;
-    std::tie(loc_path, loc_name) = detail::get_path_name(loc_full_name);
-    // determine if object is an attribute
-    int status;
-    status = H5Aexists_by_name(root_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT);
-    if (status < 0) throw Exception(loc_full_name + ": error in H5Aexists_by_name");
-    if (status) return true;
-    // not an attribute: try to open as a dataset
-    hid_t ds_id = H5Dopen(root_id, loc_full_name.c_str(), H5P_DEFAULT);
-    if (ds_id < 0) return false;
-    status = H5Dclose(ds_id);
-    if (status < 0) throw Exception(loc_full_name + ": error in H5Dclose");
-    return true;
-}
+public:
+    File_Reader() : _file_id(0) {}
+    File_Reader(const std::string& file_name) : _file_id(0) { open(file_name); }
+    File_Reader(const File_Reader&) = delete;
+    File_Reader& operator = (const File_Reader&) = delete;
+    ~File_Reader() { if (is_open()) close(); }
 
-template < typename Out_Data_Type >
-struct Reader : public detail::Reader_as_atomic< Out_Data_Type, detail::read_as_atomic< Out_Data_Type >::value >
-{};
+    bool is_open() const { return _file_id > 0; }
+    const std::string& file_name() const { return _file_name; }
+
+    void open(const std::string& file_name)
+    {
+        assert(not is_open());
+        _file_name = file_name;
+        _file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+        if (not is_open()) throw Exception(_file_name + ": error in H5Fopen");
+    }
+    void close()
+    {
+        assert(is_open());
+        assert(H5Fget_obj_count(_file_id, H5F_OBJ_ALL) == 1);
+        int status = H5Fclose(_file_id);
+        if (status < 0) throw Exception(_file_name + ": error in H5Fclose");
+        _file_id = 0;
+        _file_name.clear();
+    }
+
+    /// Determine if address is an attribute or dataset
+    bool exists(const std::string& loc_full_name) const
+    {
+        assert(is_open());
+        assert(not loc_full_name.empty() and loc_full_name[0] == '/');
+        std::string loc_path;
+        std::string loc_name;
+        std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+        int status;
+        // check all path elements exist, except for what is to the right of the last '/'
+        size_t pos = 0;
+        while (true)
+        {
+            ++pos;
+            pos = loc_full_name.find('/', pos);
+            if (pos == std::string::npos) break;
+            std::string tmp = loc_full_name.substr(0, pos);
+            status = H5Lexists(_file_id, tmp.c_str(), H5P_DEFAULT);
+            if (status < 0) throw Exception(loc_full_name + ": error in H5Lexists");
+            if (not status) return false;
+            status = H5Oexists_by_name(_file_id, tmp.c_str(), H5P_DEFAULT);
+            if (status < 0) throw Exception(loc_full_name + ": error in H5Oexists_by_name");
+            if (not status) return false;
+        }
+        status = H5Aexists_by_name(_file_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT);
+        if (status < 0) throw Exception(loc_full_name + ": error in H5Aexists_by_name");
+        if (status) return true;
+        // not an attribute: try to open as a dataset
+        hid_t ds_id = H5Dopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT);
+        if (ds_id < 0) return false;
+        status = H5Dclose(ds_id);
+        if (status < 0) throw Exception(loc_full_name + ": error in H5Dclose");
+        return true;
+    }
+    /// Read attribute or dataset at address
+    template < typename Out_Data_Type, typename ...Args >
+    void read(const std::string& loc_full_name, Args&& ...args) const
+    {
+        assert(is_open());
+        assert(not loc_full_name.empty() and loc_full_name[0] == '/');
+        std::string loc_path;
+        std::string loc_name;
+        std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+        detail::Reader< Out_Data_Type >()(_file_id, loc_path, loc_name, std::forward< Args >(args)...);
+    }
+
+private:
+    std::string _file_name;
+    hid_t _file_id;
+
+    /// Split a full name into path and name
+    static std::pair< std::string, std::string > split_full_name(const std::string& full_name)
+    {
+        auto last_slash_pos = full_name.find_last_of('/');
+        std::string path = last_slash_pos != std::string::npos? full_name.substr(0, last_slash_pos + 1) : std::string();
+        std::string name = last_slash_pos != std::string::npos? full_name.substr(last_slash_pos + 1) : full_name;
+        return std::make_pair(path, name);
+    } // split_full_name
+};
 
 } // namespace hdf5_tools
 

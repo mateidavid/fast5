@@ -47,6 +47,9 @@ int main(int argc, char* argv[])
         // Check if a pore model for this strand exists
         if (f_p->have_model(i))
         {
+            // Print the name of ONT's reference model used to basecall
+            cout << "Model file: " << f_p->get_model_file(i) << endl;
+
             // Extract the global scaling parameters for the pore model
             auto params = f_p->get_model_parameters(i);
             cout << "model drift=" << params.drift <<

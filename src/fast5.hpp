@@ -119,6 +119,14 @@ public:
         return res;
     }
 
+    std::string get_model_file(size_t i) const
+    {
+        std::string res;
+        assert(Base::exists(model_file_path(i)));
+        Base::read< std::string >(model_file_path(i), res);
+        return res;
+    }
+
     std::string sequences_version() const
     {
         std::vector< std::string > tmp;
@@ -216,12 +224,21 @@ private:
               "/Analyses/Basecall_2D_000/BaseCalled_complement/Model" };
         return _model_path.at(i);
     }
+
     static const std::string& events_path(size_t i)
     {
         static std::vector< std::string > _events_path =
             { "/Analyses/Basecall_2D_000/BaseCalled_template/Events",
               "/Analyses/Basecall_2D_000/BaseCalled_complement/Events" };
         return _events_path.at(i);
+    }
+
+    static const std::string& model_file_path(size_t i)
+    {
+        static std::vector< std::string > _model_file_path =
+            { "/Analyses/Basecall_2D_000/Summary/basecall_1d_template/model_file",
+              "/Analyses/Basecall_2D_000/Summary/basecall_1d_complement/model_file" };
+        return _model_file_path.at(i);
     }
 
 }; // class File

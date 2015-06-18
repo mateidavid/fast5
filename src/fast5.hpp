@@ -119,6 +119,34 @@ public:
         return res;
     }
 
+    std::string log() const
+    {
+        std::string res;
+        assert(Base::exists("/Analyses/Basecall_2D_000/Log"));
+        Base::read< std::string >("/Analyses/Basecall_2D_000/Log", res);
+        return res;
+    }
+
+    double sampling_rate() const
+    {
+        auto lg = log();
+        auto idx = lg.find("Sampling rate");
+
+        std::string line;
+        std::stringstream ss1(lg.substr(idx));
+        std::getline(ss1,line,'\n');
+
+        std::stringstream ss2(line);
+
+        std::string token;
+        std::getline(ss2,token,' ');	//Sampling
+        std::getline(ss2,token,' ');	//rate
+        std::getline(ss2,token,' ');	//is
+        std::getline(ss2,token,' ');	//Hz value
+
+        return std::atof(token.c_str());
+    }
+
     std::string get_model_file(size_t i) const
     {
         std::string res;

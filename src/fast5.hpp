@@ -132,7 +132,7 @@ public:
     	assert(have_sampling_rate());
 
         auto lg = get_log();
-        auto idx = lg.find("Sampling rate");
+        auto idx = lg.find("Sampling rate is");
 
         std::string line;
         std::stringstream ss1(lg.substr(idx));
@@ -152,7 +152,7 @@ public:
     bool have_sampling_rate() const
     {
     	auto lg = get_log();
-    	auto idx = lg.find("Sampling rate");
+    	auto idx = lg.find("Sampling rate is");
     	return idx != std::string::npos;
     }
 

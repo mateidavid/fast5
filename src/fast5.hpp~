@@ -119,7 +119,7 @@ public:
         return res;
     }
 
-    std::string get_log() const
+    std::string log() const
     {
         std::string res;
         assert(Base::exists("/Analyses/Basecall_2D_000/Log"));
@@ -127,11 +127,9 @@ public:
         return res;
     }
 
-    double get_sampling_rate() const
+    double sampling_rate() const
     {
-    	assert(have_sampling_rate());
-
-        auto lg = get_log();
+        auto lg = log();
         auto idx = lg.find("Sampling rate");
 
         std::string line;
@@ -147,13 +145,6 @@ public:
         std::getline(ss2,token,' ');	//Hz value
 
         return std::atof(token.c_str());
-    }
-
-    bool have_sampling_rate() const
-    {
-    	auto lg = get_log();
-    	auto idx = lg.find("Sampling rate");
-    	return idx != std::string::npos;
     }
 
     std::string get_model_file(size_t i) const

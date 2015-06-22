@@ -129,7 +129,7 @@ public:
 
     double get_sampling_rate() const
     {
-    	assert(have_sampling_rate());
+        assert(have_sampling_rate());
 
         auto lg = get_log();
         auto idx = lg.find("Sampling rate is");
@@ -141,19 +141,19 @@ public:
         std::stringstream ss2(line);
 
         std::string token;
-        std::getline(ss2,token,' ');	//Sampling
-        std::getline(ss2,token,' ');	//rate
-        std::getline(ss2,token,' ');	//is
-        std::getline(ss2,token,' ');	//Hz value
+        std::getline(ss2,token,' ');    //Sampling
+        std::getline(ss2,token,' ');    //rate
+        std::getline(ss2,token,' ');    //is
+        std::getline(ss2,token,' ');    //Hz value
 
         return std::atof(token.c_str());
     }
 
     bool have_sampling_rate() const
     {
-    	auto lg = get_log();
-    	auto idx = lg.find("Sampling rate is");
-    	return idx != std::string::npos;
+        auto lg = get_log();
+        auto idx = lg.find("Sampling rate is");
+        return idx != std::string::npos;
     }
 
     std::string get_model_file(size_t i) const

@@ -224,8 +224,6 @@ public:
         m.add_member("kmer", &Model_Entry::kmer);
         m.add_member("level_mean", &Model_Entry::level_mean);
         m.add_member("level_stdv", &Model_Entry::level_stdv);
-        m.add_member("sd_mean", &Model_Entry::sd_mean);
-        m.add_member("sd_stdv", &Model_Entry::sd_stdv);
         Base::read< Model_Entry >(model_path(i), res, &m);
         return res;
     }

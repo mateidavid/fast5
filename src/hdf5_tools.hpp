@@ -348,6 +348,9 @@ struct Extent_Compound_Reader
             //TODO
             assert(false);
         }
+
+        status = H5Tclose(file_type_id);
+        if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose(file_type_id)");
     }
 }; //struct Extent_Compound_Reader
 

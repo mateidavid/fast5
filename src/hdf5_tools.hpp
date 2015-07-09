@@ -565,7 +565,7 @@ public:
     void close()
     {
         assert(is_open());
-        assert(H5Fget_obj_count(_file_id, H5F_OBJ_ALL) == 1);
+        assert(H5Fget_obj_count(_file_id, H5F_OBJ_ALL | H5F_OBJ_LOCAL) == 1);
         int status = H5Fclose(_file_id);
         if (status < 0) throw Exception(_file_name + ": error in H5Fclose");
         _file_id = 0;

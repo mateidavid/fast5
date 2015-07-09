@@ -273,7 +273,7 @@ template < typename Out_Data_Type, typename Out_Data_Storage >
 struct Extent_Compound_Reader
 {
     void operator () (const std::string& loc_full_name, Out_Data_Storage& dest,
-                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t obj_space_id,
+                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t,
                       const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
                       const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
     {

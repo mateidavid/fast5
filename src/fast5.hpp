@@ -5,6 +5,7 @@
 #include <exception>
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 #include <string>
 #include <vector>
 
@@ -106,24 +107,28 @@ public:
     std::string basecall_version() const
     {
         std::string res;
-        assert(Base::exists("/Analyses/Basecall_2D_000/version"));
-        Base::read< std::string >("/Analyses/Basecall_2D_000/version", res);
+        std::string path = get_bc_2d_root() + "/version";
+        assert(Base::exists(path));
+        Base::read< std::string >(path, res);
         return res;
     }
 
     std::string eventdetection_version() const
     {
         std::string res;
-        assert(Base::exists("/Analyses/EventDetection_000/version"));
-        Base::read< std::string >("/Analyses/EventDetection_000/version", res);
+        // only support eventdetection group 000 for now
+        std::string path = "/Analyses/EventDetection_000/version";
+        assert(Base::exists(path));
+        Base::read< std::string >(path, res);
         return res;
     }
 
     std::string get_log() const
     {
         std::string res;
-        assert(Base::exists("/Analyses/Basecall_2D_000/Log"));
-        Base::read< std::string >("/Analyses/Basecall_2D_000/Log", res);
+        std::string path = get_bc_2d_root() + "/Log";
+        assert(Base::exists(path));
+        Base::read< std::string >(path, res);
         return res;
     }
 
@@ -179,13 +184,13 @@ public:
 
     bool have_basecalled_2D() const
     {
-        return Base::exists("/Analyses/Basecall_2D_000/BaseCalled_2D/Fastq");
+        return Base::exists(get_bc_2d_root() + "/BaseCalled_2D/Fastq");
     }
 
     std::string basecalled_2D() const
     {
         std::string res;
-        Base::read< std::string >("/Analyses/Basecall_2D_000/BaseCalled_2D/Fastq", res);
+        Base::read< std::string >(get_bc_2d_root() + "/BaseCalled_2D/Fastq", res);
         
         // Split the FASTQ record on newlines
         size_t nl1 = res.find_first_of('\n');
@@ -204,7 +209,7 @@ public:
         m.add_member("template", &Event_Alignment_Entry::template_index);
         m.add_member("complement", &Event_Alignment_Entry::complement_index);
         m.add_member("kmer", &Event_Alignment_Entry::kmer);
-        Base::read< Event_Alignment_Entry >("/Analyses/Basecall_2D_000/BaseCalled_2D/Alignment", res, &m);
+        Base::read< Event_Alignment_Entry >(get_bc_2d_root() + "/BaseCalled_2D/Alignment", res, &m);
         return res;
     }
 
@@ -255,30 +260,50 @@ public:
         return res;
     }
 
+    void set_basecalled_group_id(size_t i)
+    {
+        assert(i <= 999);
+        std::stringstream ss;
+        ss << std::setfill('0') << std::setw(3) << i;
+        _basecalled_group_id = ss.str();
+    }
+
+
 private:
-    static const std::string& model_path(size_t i)
+    
+    // Returns the root path of the form:
+    // Analyses/Basecall_2D_ddd/ where ddd is the group
+    std::string get_bc_2d_root() const
+    {
+        return "/Analyses/Basecall_2D_" + _basecalled_group_id;
+    }
+
+    std::string model_path(size_t i) const
     {
         static std::vector< std::string > _model_path =
-            { "/Analyses/Basecall_2D_000/BaseCalled_template/Model",
-              "/Analyses/Basecall_2D_000/BaseCalled_complement/Model" };
-        return _model_path.at(i);
+            { "/BaseCalled_template/Model",
+              "/BaseCalled_complement/Model" };
+        return get_bc_2d_root() + _model_path.at(i);
     }
 
-    static const std::string& events_path(size_t i)
+    std::string events_path(size_t i) const
     {
         static std::vector< std::string > _events_path =
-            { "/Analyses/Basecall_2D_000/BaseCalled_template/Events",
-              "/Analyses/Basecall_2D_000/BaseCalled_complement/Events" };
-        return _events_path.at(i);
+            { "/BaseCalled_template/Events",
+              "/BaseCalled_complement/Events" };
+        return get_bc_2d_root() + _events_path.at(i);
     }
 
-    static const std::string& model_file_path(size_t i)
+    std::string model_file_path(size_t i) const
     {
         static std::vector< std::string > _model_file_path =
-            { "/Analyses/Basecall_2D_000/Summary/basecall_1d_template/model_file",
-              "/Analyses/Basecall_2D_000/Summary/basecall_1d_complement/model_file" };
-        return _model_file_path.at(i);
+            { "/Summary/basecall_1d_template/model_file",
+              "/Summary/basecall_1d_complement/model_file" };
+        return get_bc_2d_root() + _model_file_path.at(i);
     }
+
+    // default to using the 000 analysis group
+    std::string _basecalled_group_id = "000";
 
 }; // class File
 

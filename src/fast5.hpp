@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "hdf5_tools.hpp"
+#define MAX_K_LEN 8
 
 namespace fast5
 {
@@ -23,7 +24,7 @@ namespace fast5
 //
 struct Model_Entry
 {
-    char kmer[8];
+    char kmer[MAX_K_LEN];
     long long variant;
     double level_mean;
     double level_stdv;
@@ -57,11 +58,11 @@ struct Event_Entry
     double start;
     double stdv;
     double length;
-    char model_state[6];
+    char model_state[MAX_K_LEN];
     double model_level;
     long long move;
     double p_model_state;
-    char mp_state[6];
+    char mp_state[MAX_K_LEN];
     double p_mp_state;
     double p_A;
     double p_C;
@@ -77,7 +78,7 @@ struct Event_Alignment_Entry
 {
     long long template_index;
     long long complement_index;
-    char kmer[6];
+    char kmer[MAX_K_LEN];
 }; // struct Event_Alignment_Entry
 
 class File

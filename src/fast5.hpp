@@ -23,7 +23,7 @@ namespace fast5
 //
 struct Model_Entry
 {
-    char kmer[6];
+    char kmer[8];
     long long variant;
     double level_mean;
     double level_stdv;

@@ -81,6 +81,32 @@ struct Event_Alignment_Entry
     char kmer[MAX_K_LEN];
 }; // struct Event_Alignment_Entry
 
+struct EventDetection_Event_Entry
+{
+    double mean;
+    double stdv;
+    long long start;
+    long long length;
+}; // struct EventDetection_Event
+
+struct EventDetection_Event_Parameters
+{
+    unsigned abasic_found;
+    unsigned abasic_event_index;
+    double abasic_peak_height;
+    unsigned hairpin_found;
+    unsigned hairpin_event_index;
+    double hairpin_peak_height;
+    double hairpin_polyt_level;
+    long duration;
+    double median_before;
+    std::string read_id;
+    long read_number;
+    long scaling_used;
+    long start_mux;
+    long start_time;
+}; // struct EventDetection_Event_Parameters
+
 class File
     : private hdf5_tools::File_Reader
 {
@@ -261,6 +287,71 @@ public:
         return res;
     }
 
+    bool have_eventdetection_events() const
+    {
+        if (not Base::group_exists(get_eventdetection_root() + "/Reads")) return false;
+        auto reads = Base::list_group(get_eventdetection_root() + "/Reads");
+        return not reads.empty();
+    }
+
+    std::string get_eventdetection_read_name() const
+    {
+        auto reads = Base::list_group(get_eventdetection_root() + "/Reads");
+        assert(not reads.empty());
+        return reads[0];
+    }
+
+    std::vector< EventDetection_Event_Entry > get_eventdetection_events() const
+    {
+        std::vector< EventDetection_Event_Entry > res;
+        hdf5_tools::Compound_Map m;
+        m.add_member("mean", &EventDetection_Event_Entry::mean);
+        m.add_member("stdv", &EventDetection_Event_Entry::stdv);
+        m.add_member("start", &EventDetection_Event_Entry::start);
+        m.add_member("length", &EventDetection_Event_Entry::length);
+        auto path = get_eventdetection_root() + "/Reads/" + get_eventdetection_read_name() + "/Events";
+        Base::read< EventDetection_Event_Entry >(path, res, &m);
+        return res;
+    }
+
+    EventDetection_Event_Parameters get_eventdetection_event_parameters() const
+    {
+        EventDetection_Event_Parameters res;
+        auto path = get_eventdetection_root() + "/Reads/" + get_eventdetection_read_name();
+
+        Base::read< decltype(res.abasic_found) >(path + "/abasic_found", res.abasic_found);
+        if (res.abasic_found)
+        {
+            Base::read< decltype(res.abasic_event_index) >(path + "/abasic_event_index", res.abasic_event_index);
+            Base::read< decltype(res.abasic_peak_height) >(path + "/abasic_peak_height", res.abasic_peak_height);
+        }
+        Base::read< decltype(res.hairpin_found) >(path + "/hairpin_found", res.hairpin_found);
+        if (res.hairpin_found)
+        {
+            Base::read< decltype(res.hairpin_event_index) >(path + "/hairpin_event_index", res.hairpin_event_index);
+            Base::read< decltype(res.hairpin_peak_height) >(path + "/hairpin_peak_height", res.hairpin_peak_height);
+            Base::read< decltype(res.hairpin_polyt_level) >(path + "/hairpin_polyt_level", res.hairpin_polyt_level);
+        }
+        Base::read< decltype(res.duration) >(path + "/duration", res.duration);
+        Base::read< decltype(res.median_before) >(path + "/median_before", res.median_before);
+        Base::read< decltype(res.read_id) >(path + "/read_id", res.read_id);
+        Base::read< decltype(res.read_number) >(path + "/read_number", res.read_number);
+        Base::read< decltype(res.scaling_used) >(path + "/scaling_used", res.scaling_used);
+        Base::read< decltype(res.start_mux) >(path + "/start_mux", res.start_mux);
+        Base::read< decltype(res.start_time) >(path + "/start_time", res.start_time);
+        // hack: read_id is currently wrong
+        res.read_id.resize(res.read_id.size() - 1);
+        return res;
+    }
+
+    void set_eventdetection_group_id(size_t i)
+    {
+        assert(i <= 999);
+        std::stringstream ss;
+        ss << std::setfill('0') << std::setw(3) << i;
+        _eventdetection_group_id = ss.str();
+    }
+
     void set_basecalled_group_id(size_t i)
     {
         assert(i <= 999);
@@ -271,7 +362,11 @@ public:
 
 
 private:
-    
+    std::string get_eventdetection_root() const
+    {
+        return "/Analyses/EventDetection_" + _eventdetection_group_id;
+    }
+
     // Returns the root path of the form:
     // Analyses/Basecall_2D_ddd/ where ddd is the group
     std::string get_bc_2d_root() const
@@ -302,6 +397,9 @@ private:
               "/Summary/basecall_1d_complement/model_file" };
         return get_bc_2d_root() + _model_file_path.at(i);
     }
+
+    // default to 000 event detection group
+    std::string _eventdetection_group_id = "000";
 
     // default to using the 000 analysis group
     std::string _basecalled_group_id = "000";

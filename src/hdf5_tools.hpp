@@ -575,6 +575,31 @@ public:
         _file_name.clear();
     }
 
+    /// Determine if a path to an element exists
+    bool path_exists(const std::string& full_path_name) const
+    {
+        assert(is_open());
+        assert(not full_path_name.empty()
+               and full_path_name[0] == '/'
+               and full_path_name[full_path_name.size() - 1] == '/');
+        int status;
+        // check all path elements exist, except for what is to the right of the last '/'
+        size_t pos = 0;
+        while (true)
+        {
+            ++pos;
+            pos = full_path_name.find('/', pos);
+            if (pos == std::string::npos) break;
+            std::string tmp = full_path_name.substr(0, pos);
+            status = H5Lexists(_file_id, tmp.c_str(), H5P_DEFAULT);
+            if (status < 0) throw Exception(full_path_name + ": error in H5Lexists");
+            if (not status) return false;
+            status = H5Oexists_by_name(_file_id, tmp.c_str(), H5P_DEFAULT);
+            if (status < 0) throw Exception(full_path_name + ": error in H5Oexists_by_name");
+            if (not status) return false;
+        }
+        return true;
+    }
     /// Determine if address is an attribute or dataset
     bool exists(const std::string& loc_full_name) const
     {
@@ -585,20 +610,8 @@ public:
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
         int status;
         // check all path elements exist, except for what is to the right of the last '/'
-        size_t pos = 0;
-        while (true)
-        {
-            ++pos;
-            pos = loc_full_name.find('/', pos);
-            if (pos == std::string::npos) break;
-            std::string tmp = loc_full_name.substr(0, pos);
-            status = H5Lexists(_file_id, tmp.c_str(), H5P_DEFAULT);
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Lexists");
-            if (not status) return false;
-            status = H5Oexists_by_name(_file_id, tmp.c_str(), H5P_DEFAULT);
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Oexists_by_name");
-            if (not status) return false;
-        }
+        if (not path_exists(loc_path)) return false;
+        // try to open as attribute
         status = H5Aexists_by_name(_file_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT);
         if (status < 0) throw Exception(loc_full_name + ": error in H5Aexists_by_name");
         if (status) return true;
@@ -607,6 +620,22 @@ public:
         if (ds_id < 0) return false;
         status = H5Dclose(ds_id);
         if (status < 0) throw Exception(loc_full_name + ": error in H5Dclose");
+        return true;
+    }
+    /// Check if a group exists
+    bool group_exists(const std::string& loc_full_name) const
+    {
+        assert(is_open());
+        assert(not loc_full_name.empty() and loc_full_name[0] == '/');
+        std::string loc_path;
+        std::string loc_name;
+        std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+        // check all path elements exist, except for what is to the right of the last '/'
+        if (not path_exists(loc_path)) return false;
+        hid_t g_id = H5Gopen1(_file_id, loc_full_name.c_str());
+        if (g_id < 0) return false;
+        hid_t status = H5Gclose(g_id);
+        if (status < 0) throw Exception(loc_full_name + ": error in H5Gclose");
         return true;
     }
     /// Read attribute or dataset at address
@@ -619,6 +648,35 @@ public:
         std::string loc_name;
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
         detail::Reader< Out_Data_Type >()(_file_id, loc_path, loc_name, std::forward< Args >(args)...);
+    }
+    /// Return a list of name in the given group
+    std::vector< std::string > list_group(const std::string& group_full_name) const
+    {
+        std::vector< std::string > res;
+        assert(group_exists(group_full_name));
+        hid_t g_id = H5Gopen1(_file_id, group_full_name.c_str());
+        if (g_id < 0) throw Exception(group_full_name + ": error in H5Gopen");
+        H5G_info_t g_info;
+        hid_t status = H5Gget_info(g_id, &g_info);
+        if (status < 0) throw Exception(group_full_name + ": error in H5Gget_info");
+        res.resize(g_info.nlinks);
+        hid_t lapl_id = H5Pcreate(H5P_LINK_ACCESS);
+        if (lapl_id < 0) throw Exception(group_full_name + ": error in H5Pcreate");
+        for (unsigned i = 0; i < res.size(); ++i)
+        {
+            // find size first
+            long sz = H5Lget_name_by_idx(_file_id, group_full_name.c_str(), H5_INDEX_NAME, H5_ITER_NATIVE, i, nullptr, 0, lapl_id);
+            if (sz < 0) throw Exception(group_full_name + ": error in H5Lget_name_by_idx");
+            res[i].resize(sz);
+            long sz2 = H5Lget_name_by_idx(_file_id, group_full_name.c_str(), H5_INDEX_NAME, H5_ITER_NATIVE, i, &res[i][0], sz+1, lapl_id);
+            if (sz2 < 0) throw Exception(group_full_name + ": error in H5Lget_name_by_idx");
+            if (sz != sz2) throw Exception(group_full_name + ": error in H5Lget_name_by_idx: sz!=sz2");
+        }
+        status = H5Pclose(lapl_id);
+        if (status < 0) throw Exception(group_full_name + ": error in H5Pclose");
+        status = H5Gclose(g_id);
+        if (status < 0) throw Exception(group_full_name + ": error in H5Gclose");
+        return res;
     }
 
 private:

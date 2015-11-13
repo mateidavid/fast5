@@ -81,6 +81,33 @@ int main(int argc, char* argv[])
         }
     }
 
+    if (f_p->have_eventdetection_events())
+    {
+        cout << "EventDetection read name: " << f_p->get_eventdetection_read_name() << endl;
+        auto ed_params = f_p->get_eventdetection_event_parameters();
+        cout << "EventDetection event parameters:" << endl
+             << "abasic_found: " << ed_params.abasic_found << endl
+             << "abasic_event_index: " << ed_params.abasic_event_index << endl
+             << "abasic_peak_height: " << ed_params.abasic_peak_height << endl
+             << "hairpin_found: " << ed_params.hairpin_found << endl
+             << "hairpin_event_index: " << ed_params.hairpin_event_index << endl
+             << "hairpin_peak_height: " << ed_params.hairpin_peak_height << endl
+             << "hairpin_polyt_level: " << ed_params.hairpin_polyt_level << endl
+             << "duration: " << ed_params.duration << endl
+             << "median_before: " << ed_params.median_before << endl
+             << "read_id: " << ed_params.read_id << endl
+             << "read_number: " << ed_params.read_number << endl
+             << "scaling_used: " << ed_params.scaling_used << endl
+             << "start_mux: " << ed_params.start_mux << endl
+             << "start_time: " << ed_params.start_time << endl;
+        auto ed_events = f_p->get_eventdetection_events();
+        cout << "EventDetection num events: " << ed_events.size() << endl;
+        for (const auto& e : ed_events)
+        {
+            cout << "(mean=" << e.mean << ", stdv=" << e.stdv << ", start=" << e.start << ", length=" << e.length << ")" << endl;
+        }
+    }
+
     // Cleanup the file pointer, which closes the file
     delete f_p;
 }

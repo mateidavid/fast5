@@ -92,12 +92,14 @@ struct EventDetection_Event_Entry
 struct EventDetection_Event_Parameters
 {
     unsigned abasic_found;
+    /*
     unsigned abasic_event_index;
     double abasic_peak_height;
     unsigned hairpin_found;
     unsigned hairpin_event_index;
     double hairpin_peak_height;
     double hairpin_polyt_level;
+    */
     long duration;
     double median_before;
     std::string read_id;
@@ -207,6 +209,21 @@ public:
             res += s;
         }
         return res;
+    }
+
+    bool have_basecalled_group() const
+    {
+        return Base::group_exists(get_bc_2d_root());
+    }
+
+    bool have_eventdetection_group() const
+    {
+        return Base::group_exists(get_eventdetection_root());
+    }
+
+    bool have_sequences_group() const
+    {
+        return Base::group_exists("/Sequences");
     }
 
     bool have_basecalled_2D() const
@@ -320,6 +337,7 @@ public:
         auto path = get_eventdetection_root() + "/Reads/" + get_eventdetection_read_name();
 
         Base::read< decltype(res.abasic_found) >(path + "/abasic_found", res.abasic_found);
+        /*
         if (res.abasic_found)
         {
             Base::read< decltype(res.abasic_event_index) >(path + "/abasic_event_index", res.abasic_event_index);
@@ -332,6 +350,7 @@ public:
             Base::read< decltype(res.hairpin_peak_height) >(path + "/hairpin_peak_height", res.hairpin_peak_height);
             Base::read< decltype(res.hairpin_polyt_level) >(path + "/hairpin_polyt_level", res.hairpin_polyt_level);
         }
+        */
         Base::read< decltype(res.duration) >(path + "/duration", res.duration);
         Base::read< decltype(res.median_before) >(path + "/median_before", res.median_before);
         Base::read< decltype(res.read_id) >(path + "/read_id", res.read_id);

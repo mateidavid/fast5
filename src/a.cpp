@@ -17,12 +17,12 @@ int main(int argc, char* argv[])
     if (not hdf5_tools::File_Reader::is_valid_file(file_name))
     {
         cerr << "error: not a hdf file [" << file_name << "]" << endl;
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
     if (not fast5::File::is_valid_file(file_name))
     {
         cerr << "error: not a fast5 file [" << file_name << "]" << endl;
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
     fast5::File* f_p;
     f_p = new fast5::File(file_name);

@@ -4,6 +4,7 @@
 #include <cassert>
 #include <exception>
 #include <functional>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -576,6 +577,11 @@ public:
     }
     static bool is_valid_file(const std::string& file_name)
     {
+        std::ifstream ifs(file_name);
+        if (not ifs) return false;
+        (void)ifs.peek();
+        if (not ifs) return false;
+        ifs.close();
         auto status = H5Fis_hdf5(file_name.c_str());
         return status > 0;
     }

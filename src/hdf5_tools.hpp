@@ -574,6 +574,11 @@ public:
         _file_id = 0;
         _file_name.clear();
     }
+    static bool is_valid_file(const std::string& file_name)
+    {
+        auto status = H5Fis_hdf5(file_name.c_str());
+        return status > 0;
+    }
 
     /// Check if a group exists
     bool group_exists(const std::string& loc_full_name) const

@@ -379,6 +379,15 @@ public:
         _basecalled_group_id = ss.str();
     }
 
+    static bool is_valid_file(const std::string& file_name)
+    {
+        if (not Base::is_valid_file(file_name))
+        {
+            return false;
+        }
+        File f(file_name);
+        return f.have_eventdetection_group();
+    }
 
 private:
     std::string get_eventdetection_root() const

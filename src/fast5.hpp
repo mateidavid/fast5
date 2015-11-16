@@ -353,13 +353,16 @@ public:
         */
         Base::read< decltype(res.duration) >(path + "/duration", res.duration);
         Base::read< decltype(res.median_before) >(path + "/median_before", res.median_before);
-        Base::read< decltype(res.read_id) >(path + "/read_id", res.read_id);
+        if (Base::exists(path + "/read_id"))
+        {
+            Base::read< decltype(res.read_id) >(path + "/read_id", res.read_id);
+            // hack: read_id is currently wrong
+            res.read_id.resize(res.read_id.size() - 1);
+        }
         Base::read< decltype(res.read_number) >(path + "/read_number", res.read_number);
         Base::read< decltype(res.scaling_used) >(path + "/scaling_used", res.scaling_used);
         Base::read< decltype(res.start_mux) >(path + "/start_mux", res.start_mux);
         Base::read< decltype(res.start_time) >(path + "/start_time", res.start_time);
-        // hack: read_id is currently wrong
-        res.read_id.resize(res.read_id.size() - 1);
         return res;
     }
 

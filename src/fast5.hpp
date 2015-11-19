@@ -133,6 +133,11 @@ public:
         return os.str();
     }
 
+    bool have_basecall_version() const
+    {
+        return Base::exists(get_bc_2d_root() + "/version");
+    }
+
     std::string basecall_version() const
     {
         std::string res;

@@ -43,7 +43,10 @@ int main(int argc, char* argv[])
         // This function checks to see if 2D basecalls are available
         if(f_p->have_basecalled_2D())
         {
-            cout << "basecall_version=" << f_p->basecall_version() << endl;
+            if (f_p->have_basecall_version())
+            {
+                cout << "basecall_version=" << f_p->basecall_version() << endl;
+            }
 
             cout << "basecalled_2D=" << f_p->basecalled_2D() << endl;
 

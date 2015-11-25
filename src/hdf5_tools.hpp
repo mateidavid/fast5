@@ -667,6 +667,58 @@ public:
         if (status < 0) throw Exception(group_full_name + ": error in H5Gclose");
         return res;
     }
+    /// Return a list of struct field names in the given dataset/attribute
+    std::vector< std::string > get_struct_members(const std::string& loc_full_name) const
+    {
+        std::vector< std::string > res;
+        assert(attribute_exists(loc_full_name) or dataset_exists(loc_full_name));
+        hid_t attr_id = 0;
+        hid_t ds_id = 0;
+        hid_t type_id = 0;
+        if (attribute_exists(loc_full_name))
+        {
+            std::string loc_path;
+            std::string loc_name;
+            std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+            attr_id = H5Aopen_by_name(_file_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT, H5P_DEFAULT);
+            if (attr_id < 0) throw Exception(loc_full_name + ": error in H5Aopen_by_name");
+            type_id = H5Aget_type(attr_id);
+            if (type_id < 0) throw Exception(loc_full_name + ": error in H5Aget_type");
+        }
+        else
+        {
+            ds_id = H5Oopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT);
+            if (ds_id < 0) throw Exception(loc_full_name + ": error in H5Oopen");
+            type_id = H5Dget_type(ds_id);
+            if (type_id < 0) throw Exception(loc_full_name + ": error in H5Dget_type");
+        }
+        if (H5Tget_class(type_id) == H5T_COMPOUND)
+        {
+            // type is indeed a struct
+            int nmem = H5Tget_nmembers(type_id);
+            if (nmem < 0) throw Exception(loc_full_name + ": error in H5Tget_nmembers");
+            for (int i = 0; i < nmem; ++i)
+            {
+                char* s = H5Tget_member_name(type_id, i);
+                res.emplace_back(s);
+                free(s);
+            }
+        }
+        // close type and attr/ds
+        int status = H5Tclose(type_id);
+        if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose");
+        if (attr_id)
+        {
+            status = H5Aclose(attr_id);
+            if (status < 0) throw Exception(loc_full_name + ": error in H5Aclose");
+        }
+        else
+        {
+            status = H5Oclose(ds_id);
+            if (status < 0) throw Exception(loc_full_name + ": error in H5Oclose");
+        }
+        return res;
+    }
 
 private:
     std::string _file_name;

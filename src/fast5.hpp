@@ -2,6 +2,7 @@
 #define __FAST5_HPP
 
 #include <cassert>
+#include <cmath>
 #include <exception>
 #include <iostream>
 #include <sstream>
@@ -326,13 +327,38 @@ public:
     std::vector< EventDetection_Event_Entry > get_eventdetection_events() const
     {
         std::vector< EventDetection_Event_Entry > res;
+        auto path = get_eventdetection_root() + "/Reads/" + get_eventdetection_read_name() + "/Events";
+        auto struct_member_names = Base::get_struct_members(path);
+        assert(struct_member_names.size() >= 4);
+        bool have_stdv = false;
+        bool have_variance = false;
+        for (const auto& s : struct_member_names)
+        {
+            if (s == "stdv") have_stdv = true;
+            else if (s == "variance") have_variance = true;
+        }
+        assert(have_stdv or have_variance);
         hdf5_tools::Compound_Map m;
         m.add_member("mean", &EventDetection_Event_Entry::mean);
-        m.add_member("stdv", &EventDetection_Event_Entry::stdv);
         m.add_member("start", &EventDetection_Event_Entry::start);
         m.add_member("length", &EventDetection_Event_Entry::length);
-        auto path = get_eventdetection_root() + "/Reads/" + get_eventdetection_read_name() + "/Events";
+        if (have_stdv)
+        {
+            m.add_member("stdv", &EventDetection_Event_Entry::stdv);
+        }
+        else
+        {
+            m.add_member("variance", &EventDetection_Event_Entry::stdv);
+        }
         Base::read< EventDetection_Event_Entry >(path, res, &m);
+        if (not have_stdv)
+        {
+            // have read variances
+            for (auto& e : res)
+            {
+                e.stdv = std::sqrt(e.stdv);
+            }
+        }
         return res;
     }
 

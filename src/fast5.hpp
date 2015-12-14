@@ -116,12 +116,24 @@ class File
 private:
     typedef hdf5_tools::File_Reader Base;
 public:
-    using Base::Base;
-
     using Base::is_open;
     using Base::file_name;
-    using Base::open;
     using Base::close;
+
+    File(const std::string& file_name) { open(file_name); }
+
+    void open(const std::string& file_name)
+    {
+        Base::open(file_name);
+        // detect basecall version
+        if (is_open())
+        {
+            if (have_basecall_version())
+            {
+                _basecall_version = basecall_version();
+            }
+        }
+    }
 
     std::string file_version() const
     {
@@ -136,13 +148,13 @@ public:
 
     bool have_basecall_version() const
     {
-        return Base::exists(get_bc_2d_root() + "/version");
+        return Base::exists(get_bc_2d_root() + "/chimaera version");
     }
 
     std::string basecall_version() const
     {
         std::string res;
-        std::string path = get_bc_2d_root() + "/version";
+        std::string path = get_bc_2d_root() + "/chimaera version";
         assert(Base::exists(path));
         Base::read< std::string >(path, res);
         return res;
@@ -430,10 +442,15 @@ private:
     }
 
     // Returns the root path of the form:
-    // Analyses/Basecall_2D_ddd/ where ddd is the group
+    // /Analyses/Basecall_2D_ddd/ where ddd is the group
     std::string get_bc_2d_root() const
     {
         return "/Analyses/Basecall_2D_" + _basecalled_group_id;
+    }
+    // /Analyses/Basecall_1D_ddd/ where ddd is the group
+    std::string get_bc_1d_root() const
+    {
+        return "/Analyses/Basecall_1D_" + _basecalled_group_id;
     }
 
     std::string model_path(size_t i) const
@@ -441,7 +458,14 @@ private:
         static std::vector< std::string > _model_path =
             { "/BaseCalled_template/Model",
               "/BaseCalled_complement/Model" };
-        return get_bc_2d_root() + _model_path.at(i);
+        if (_basecall_version < std::string("1.16"))
+        {
+            return get_bc_2d_root() + _model_path.at(i);
+        }
+        else
+        {
+            return get_bc_1d_root() + _model_path.at(i);
+        }
     }
 
     std::string events_path(size_t i) const
@@ -457,7 +481,14 @@ private:
         static std::vector< std::string > _model_file_path =
             { "/Summary/basecall_1d_template/model_file",
               "/Summary/basecall_1d_complement/model_file" };
-        return get_bc_2d_root() + _model_file_path.at(i);
+        if (_basecall_version < std::string("1.16"))
+        {
+            return get_bc_2d_root() + _model_file_path.at(i);
+        }
+        else
+        {
+            return get_bc_1d_root() + _model_file_path.at(i);
+        }
     }
 
     // default to 000 event detection group
@@ -465,6 +496,9 @@ private:
 
     // default to using the 000 analysis group
     std::string _basecalled_group_id = "000";
+
+    // basecall (chimera) version
+    std::string _basecall_version;
 
 }; // class File
 

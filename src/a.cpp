@@ -33,6 +33,8 @@ int main(int argc, char* argv[])
     // Extract version information for the ONT software used to generate this dataset
     cout << "file_version=" << f_p->file_version() << endl;
 
+    cout << "sampling rate: " << f_p->get_sampling_rate() << endl;
+
     if (f_p->have_sequences_group())
     {
         cout << "sequences_version=" << f_p->sequences_version() << endl;

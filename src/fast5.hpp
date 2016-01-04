@@ -457,7 +457,14 @@ private:
         static std::vector< std::string > _events_path =
             { "/BaseCalled_template/Events",
               "/BaseCalled_complement/Events" };
-        return get_bc_2d_root() + _events_path.at(i);
+        if (_basecall_version < std::string("1.16"))
+        {
+            return get_bc_2d_root() + _events_path.at(i);
+        }
+        else
+        {
+            return get_bc_1d_root() + _events_path.at(i);
+        }
     }
 
     std::string model_file_path(size_t i) const

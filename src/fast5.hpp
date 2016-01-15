@@ -301,6 +301,8 @@ public:
         m.add_member("start", &Event_Entry::start);
         m.add_member("stdv", &Event_Entry::stdv);
         m.add_member("length", &Event_Entry::length);
+        m.add_member("model_state", &Event_Entry::model_state);
+        m.add_member("move", &Event_Entry::move);
         Base::read< Event_Entry >(events_path(i), res, &m);
         return res;
     }

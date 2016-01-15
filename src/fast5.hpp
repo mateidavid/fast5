@@ -233,19 +233,18 @@ public:
         return Base::exists(get_bc_2d_root() + "/BaseCalled_2D/Fastq");
     }
 
+    std::string basecalled_1D(size_t i) const
+    {
+        std::string res;
+        Base::read< std::string >(fastq_path(i), res);
+        return fastq2sequence(res);
+    }
+
     std::string basecalled_2D() const
     {
         std::string res;
         Base::read< std::string >(get_bc_2d_root() + "/BaseCalled_2D/Fastq", res);
-        
-        // Split the FASTQ record on newlines
-        size_t nl1 = res.find_first_of('\n');
-        size_t nl2 = res.find_first_of('\n', nl1 + 1);
-
-        if(nl1 == std::string::npos || nl2 == std::string::npos)
-            return "";
-        else
-            return res.substr(nl1 + 1, nl2 - nl1 - 1);
+        return fastq2sequence(res);
     }
 
     std::vector< Event_Alignment_Entry > get_event_alignments() const
@@ -420,6 +419,19 @@ public:
     }
 
 private:
+
+    std::string fastq2sequence(std::string& str) const
+    {
+        // Split the FASTQ record on newlines
+        size_t nl1 = str.find_first_of('\n');
+        size_t nl2 = str.find_first_of('\n', nl1 + 1);
+
+        if(nl1 == std::string::npos || nl2 == std::string::npos)
+            return "";
+        else
+            return str.substr(nl1 + 1, nl2 - nl1 - 1);
+    }
+
     std::string get_eventdetection_root() const
     {
         return "/Analyses/EventDetection_" + _eventdetection_group_id;
@@ -479,6 +491,22 @@ private:
         else
         {
             return get_bc_1d_root() + _model_file_path.at(i);
+        }
+    }
+
+    std::string fastq_path(size_t i) const
+    {
+        static std::vector< std::string > _fastq_path =
+            { "/BaseCalled_template/Fastq",
+              "/BaseCalled_complement/Fastq" };
+
+        if (_basecall_version < std::string("1.16"))
+        {
+            return get_bc_2d_root() + _fastq_path.at(i);
+        }
+        else
+        {
+            return get_bc_1d_root() + _fastq_path.at(i);
         }
     }
 

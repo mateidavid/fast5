@@ -40,6 +40,17 @@ int main(int argc, char* argv[])
         cout << "sequences_version=" << f_p->sequences_version() << endl;
     }
 
+    if (f_p->have_raw_samples())
+    {
+        cout << "have_raw_samples=1" << endl;
+        auto r = f_p->get_raw_samples();
+        cout << "number_raw_samples=" << r.size() << endl;
+    }
+    else
+    {
+        cout << "have_raw_samples=0" << endl;
+    }
+
     if (f_p->have_basecalled_group())
     {
         // This function checks to see if 2D basecalls are available

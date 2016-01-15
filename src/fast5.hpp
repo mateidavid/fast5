@@ -110,6 +110,17 @@ struct EventDetection_Event_Parameters
     long start_time;
 }; // struct EventDetection_Event_Parameters
 
+struct Channel_Id_Parameters
+{
+    std::string channel_number;
+    double digitisation;
+    double offset;
+    double range;
+    double sampling_rate;
+}; // struct Channel_Id_Parameters
+
+typedef uint16_t Raw_Sample_Type;
+
 class File
     : private hdf5_tools::File_Reader
 {
@@ -176,6 +187,23 @@ public:
         std::string path = get_bc_2d_root() + "/Log";
         assert(Base::exists(path));
         Base::read< std::string >(path, res);
+        return res;
+    }
+
+    bool have_channel_id_params() const
+    {
+        return Base::group_exists("/UniqueGlobalKey/channel_id");
+    }
+
+    Channel_Id_Parameters get_channel_id_params() const
+    {
+        Channel_Id_Parameters res;
+        std::string path("/UniqueGlobalKey/channel_id");
+        Base::read< decltype(res.channel_number) >(path + "/channel_number", res.channel_number);
+        Base::read< decltype(res.digitisation) >(path + "/digitisation", res.digitisation);
+        Base::read< decltype(res.offset) >(path + "/offset", res.offset);
+        Base::read< decltype(res.range) >(path + "/range", res.range);
+        Base::read< decltype(res.sampling_rate) >(path + "/sampling_rate", res.sampling_rate);
         return res;
     }
 
@@ -391,6 +419,49 @@ public:
         Base::read< decltype(res.scaling_used) >(path + "/scaling_used", res.scaling_used);
         Base::read< decltype(res.start_mux) >(path + "/start_mux", res.start_mux);
         Base::read< decltype(res.start_time) >(path + "/start_time", res.start_time);
+        return res;
+    }
+
+    //
+    // Access to raw samples.
+    //
+    bool have_raw_samples_read_name() const
+    {
+        if (not Base::group_exists("/Raw/Reads")) return false;
+        auto reads = Base::list_group("/Raw/Reads");
+        return not reads.empty();
+    }
+
+    std::string get_raw_samples_read_name() const
+    {
+        assert(have_raw_samples_read_name());
+        auto reads = Base::list_group("/Raw/Reads");
+        return reads[0];
+    }
+
+    bool have_raw_samples() const
+    {
+        return (have_channel_id_params()
+                and have_raw_samples_read_name()
+                and Base::dataset_exists(std::string("/Raw/Reads/") + get_raw_samples_read_name() + "/Signal"));
+    }
+
+    std::vector< float > get_raw_samples() const
+    {
+        assert(have_raw_samples());
+        // get raw samples
+        std::vector< Raw_Sample_Type > raw_samples;
+        auto path = std::string("/Raw/Reads/") + get_raw_samples_read_name() + "/Signal";
+        Base::read< Raw_Sample_Type >(path, raw_samples);
+        // get scaling parameters
+        auto params = get_channel_id_params();
+        // decode levels
+        std::vector< float > res;
+        res.reserve(raw_samples.size());
+        for (auto int_level : raw_samples)
+        {
+            res.push_back((static_cast< float >(int_level) + params.offset) * params.range / params.digitisation);
+        }
         return res;
     }
 

@@ -583,7 +583,12 @@ public:
         if (not ifs) return false;
         ifs.close();
         auto status = H5Fis_hdf5(file_name.c_str());
-        return status > 0;
+        if (status <= 0) return 0;
+        auto file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT); // error if file is truncated
+        if (file_id < 0) return 0;
+        status = H5Fclose(file_id);
+        if (status < 0) throw Exception(file_name + ": error in H5Fclose");
+        return 1;
     }
 
     /// Check if a group exists

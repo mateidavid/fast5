@@ -131,6 +131,7 @@ public:
     using Base::file_name;
     using Base::close;
 
+    File() = default;
     File(const std::string& file_name) { open(file_name); }
 
     void open(const std::string& file_name)

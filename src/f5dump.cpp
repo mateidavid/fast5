@@ -9,11 +9,14 @@ using namespace std;
 
 int main(int argc, char* argv[])
 {
-    assert(argc == 2);
+    if (argc != 2)
+    {
+        cerr << "use: " << argv[0] << " <fast5_file>" << endl;
+        return EXIT_FAILURE;
+    }
     string file_name(argv[1]);
-    //string ds_name(argv[2]);
 
-    // Open the FAST5 file for reading
+    // open the FAST5 file for reading
     if (not hdf5_tools::File_Reader::is_valid_file(file_name))
     {
         cout << "not a hdf file [" << file_name << "]" << endl;
@@ -24,21 +27,39 @@ int main(int argc, char* argv[])
         cout << "not a fast5 file [" << file_name << "]" << endl;
         return EXIT_SUCCESS;
     }
+
     fast5::File f;
+    //
+    // All fast5 operations are performed inside a try-catch block. This should
+    // resist various hdf5 errors without leaking memory.
+    //
     try
     {
+        //
+        // open file
+        //
         f.open(file_name);
-        // check that it opened successfully
         assert(f.is_open());
+
+        //
         // extract version information for the ONT software used to generate this dataset
+        //
         cout << "file_version=" << f.file_version() << endl;
         cout << "sampling_rate=" << f.get_sampling_rate() << endl;
+
+        //
+        // inspect sequences group
+        //
         bool have_sequences_group = f.have_sequences_group();
         cout << "have_sequences_group=" << have_sequences_group << endl;
         if (have_sequences_group)
         {
             cout << "sequences_version=" << f.sequences_version() << endl;
         }
+
+        //
+        // inspect raw samples
+        //
         bool have_raw_samples = f.have_raw_samples();
         cout << "have_raw_samples=" << have_raw_samples << endl;
         if (have_raw_samples)
@@ -46,6 +67,10 @@ int main(int argc, char* argv[])
             auto r = f.get_raw_samples();
             cout << "number_raw_samples=" << r.size() << endl;
         }
+
+        //
+        // inspect eventdetection group
+        //
         bool have_eventdetection_group = f.have_eventdetection_group();
         cout << "have_eventdetection_group=" << have_eventdetection_group << endl;
         if (have_eventdetection_group)
@@ -84,6 +109,10 @@ int main(int argc, char* argv[])
                 }
             } // have_eventdetection_events
         } // have_eventdetection_group
+
+        //
+        // inspect basecall group
+        //
         bool have_basecall_version = f.have_basecall_version();
         cout << "have_basecall_version=" << have_basecall_version << endl;
         if (have_basecall_version)
@@ -109,7 +138,6 @@ int main(int argc, char* argv[])
                          << ", kmer=" << e.kmer << ")" << endl;
                 }
             }
-
             // Iterate over the template/complement strands
             for (size_t i = 0; i < 2; ++i)
             {
@@ -161,4 +189,8 @@ int main(int argc, char* argv[])
     {
         cout << "hdf5 error: " << e.what() << endl;
     }
+
+    //
+    // fast5 file is closed by its destructor at the end of this scope
+    //
 }

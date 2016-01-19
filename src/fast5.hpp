@@ -130,6 +130,7 @@ public:
     using Base::is_open;
     using Base::file_name;
     using Base::close;
+    using Base::get_object_count;
 
     File() = default;
     File(const std::string& file_name) { open(file_name); }

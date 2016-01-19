@@ -172,6 +172,20 @@ struct HDF_Object_Holder
     }
 }; // struct HDF_Object_Holder
 
+// Struct that check the hdf5 object count during destruction
+struct Object_Count_Checker
+{
+    Object_Count_Checker()
+    {
+        //std::cerr << "Object_Count_Checker ctor" << std::endl;
+    }
+    ~Object_Count_Checker()
+    {
+        //std::cerr << "Object_Count_Checker dtor: HDF5 object count: " << H5Fget_obj_count(H5F_OBJ_ALL, H5F_OBJ_ALL) << std::endl;
+        assert(H5Fget_obj_count(H5F_OBJ_ALL, H5F_OBJ_ALL) == 0);
+    }
+};
+
 } // namespace detail
 
 /// A map of struct fields to tags that is used to read compound datatypes
@@ -597,6 +611,7 @@ public:
 
     void open(const std::string& file_name)
     {
+        object_count_checker_fcn();
         assert(not is_open());
         _file_name = file_name;
         _file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -613,6 +628,7 @@ public:
     }
     static bool is_valid_file(const std::string& file_name)
     {
+        object_count_checker_fcn();
         std::ifstream ifs(file_name);
         if (not ifs) return false;
         (void)ifs.peek();
@@ -835,6 +851,11 @@ private:
         status = H5Oget_info(o_id_holder.id, &o_info);
         if (status < 0) throw Exception(loc_full_name + ": error in H5Oget_info");
         return o_info.type == type_id;
+    }
+
+    static void object_count_checker_fcn()
+    {
+        static detail::Object_Count_Checker object_count_checker;
     }
 }; // class File_Reader
 

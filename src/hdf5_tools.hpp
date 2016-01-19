@@ -10,6 +10,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <deque>
 
 namespace hdf5
 {
@@ -140,6 +141,37 @@ private:
     member_type type;
 }; // Compound_Member_Description
 
+// Struct whose purpuse is to destroy the HDF object during destruction
+struct HDF_Object_Holder
+{
+    int id;
+    std::function< herr_t(hid_t) > dtor;
+    std::string dtor_message;
+    HDF_Object_Holder()
+        : id(0) {}
+    HDF_Object_Holder(int _id, std::function< herr_t(hid_t) > _dtor,
+                      const std::string& _ctor_message, const std::string& _dtor_message)
+    {
+        load(_id, _dtor, _ctor_message, _dtor_message);
+    }
+    ~HDF_Object_Holder() noexcept(false)
+    {
+        if (id > 0)
+        {
+            int status = dtor(id);
+            if (status < 0 and not std::uncaught_exception()) throw Exception(dtor_message);
+        }
+    }
+    void load(int _id, std::function< herr_t(hid_t) > _dtor,
+              const std::string& _ctor_message, const std::string& _dtor_message)
+    {
+        if (_id < 0) throw Exception(_ctor_message);
+        id = _id;
+        dtor = _dtor;
+        dtor_message = _dtor_message;
+    }
+}; // struct HDF_Object_Holder
+
 } // namespace detail
 
 /// A map of struct fields to tags that is used to read compound datatypes
@@ -219,21 +251,27 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
                       const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
     {
         int status;
-        int file_type_id = get_type_fcn(obj_id);
-        if (file_type_id < 0) throw Exception(loc_full_name + ": error in " + get_type_fcn_name);
-        int is_vlen_str = H5Tis_variable_str(file_type_id);
+        detail::HDF_Object_Holder file_type_id_holder(
+            get_type_fcn(obj_id),
+            H5Tclose,
+            loc_full_name + ": error in " + get_type_fcn_name,
+            loc_full_name + ": error in H5Tclose(file_type)");
+        int is_vlen_str = H5Tis_variable_str(file_type_id_holder.id);
         if (is_vlen_str < 0) throw Exception(loc_full_name + ": error in H5Tis_variable_str");
-        hid_t mem_type_id = H5Tcopy(H5T_C_S1);
-        if (mem_type_id < 0) throw Exception(loc_full_name + ": error in H5Tcopy");
+        detail::HDF_Object_Holder mem_type_id_holder(
+            H5Tcopy(H5T_C_S1),
+            H5Tclose,
+            loc_full_name + ": error in H5Tcopy",
+            loc_full_name + ": error in H5Tclose(mem_type)");
         if (is_vlen_str) // stored as variable-length string
         {
             // compute mem_type
-            status = H5Tset_size(mem_type_id, H5T_VARIABLE);
+            status = H5Tset_size(mem_type_id_holder.id, H5T_VARIABLE);
             if (status < 0) throw Exception(loc_full_name + ": error in H5Tset_size(variable)");
             // prepare buffer to receive data
             std::vector< char* > char_p_buff(dest.size(), nullptr);
             // perform the read
-            status = read_fcn(obj_id, mem_type_id, static_cast< void* >(char_p_buff.data()));
+            status = read_fcn(obj_id, mem_type_id_holder.id, static_cast< void* >(char_p_buff.data()));
             if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
             // transfer strings to destination
             for (size_t i = 0; i < dest.size(); ++i)
@@ -242,20 +280,20 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
                 dest[i] = char_p_buff[i];
             }
             // reclaim memory allocated by libhdf5
-            status = H5Dvlen_reclaim(mem_type_id, obj_space_id, H5P_DEFAULT, char_p_buff.data());
+            status = H5Dvlen_reclaim(mem_type_id_holder.id, obj_space_id, H5P_DEFAULT, char_p_buff.data());
             if (status < 0) throw Exception(loc_full_name + ": error in H5Dvlen_reclaim");
         }
         else // stored as fixed-length string
         {
             // compute mem_type
-            size_t sz = H5Tget_size(file_type_id);
+            size_t sz = H5Tget_size(file_type_id_holder.id);
             if (sz == 0) throw Exception(loc_full_name + ": H5Tget_size returned 0; is this an error?!");
-            status = H5Tset_size(mem_type_id, sz + 1);
+            status = H5Tset_size(mem_type_id_holder.id, sz + 1);
             if (status < 0) throw Exception(loc_full_name + ": error in H5Tset_size(fixed)");
             // prepare buffer to receieve data
             std::vector< char > char_buff(dest.size() * (sz + 1));
             // perform the read
-            status = read_fcn(obj_id, mem_type_id, static_cast< void* >(char_buff.data()));
+            status = read_fcn(obj_id, mem_type_id_holder.id, static_cast< void* >(char_buff.data()));
             if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
             // transfer strings to destination
             for (size_t i = 0; i < dest.size(); ++i)
@@ -263,10 +301,6 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
                 dest[i] = std::string(&char_buff[i * (sz + 1)], sz);
             }
         }
-        status = H5Tclose(mem_type_id);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose(mem_type_id)");
-        status = H5Tclose(file_type_id);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose(file_type_id)");
     }
 }; // struct Extent_Atomic_Reader< std::string >
 
@@ -280,65 +314,70 @@ struct Extent_Compound_Reader
     {
         int status;
         assert(compound_map_ptr);
-        hid_t file_type_id = get_type_fcn(obj_id);
-        if (file_type_id < 0) throw Exception(loc_full_name + ": error in " + get_type_fcn_name);
-        H5T_class_t file_type_class = H5Tget_class(file_type_id);
+        detail::HDF_Object_Holder file_type_id_holder(
+            get_type_fcn(obj_id),
+            H5Tclose,
+            loc_full_name + ": error in " + get_type_fcn_name,
+            loc_full_name + ": error in H5Tclose(file_type)");
+
+        H5T_class_t file_type_class = H5Tget_class(file_type_id_holder.id);
         if (file_type_class == H5T_NO_CLASS) throw Exception(loc_full_name + ": error in H5Tget_class(file_type)");
         if (file_type_class != H5T_COMPOUND) throw Exception(loc_full_name + ": expected H5T_COMPOUND datatype");
 
         // pass 1
         //   read numeric and char_array members only
-        hid_t mem_type_id = H5Tcreate(H5T_COMPOUND, sizeof(Out_Data_Type));
-        std::vector< hid_t > mem_stype_id_v;
+        detail::HDF_Object_Holder mem_type_id_holder(
+            H5Tcreate(H5T_COMPOUND, sizeof(Out_Data_Type)),
+            H5Tclose,
+            loc_full_name + ": error in H5Tcreate",
+            loc_full_name + ": error in H5Tclose(mem_type)");
+
+        std::deque< detail::HDF_Object_Holder > mem_stype_id_holder_v;
         for (const auto& e : compound_map_ptr->members())
         {
             assert(not e.is_compound()); // not implemented yet
             if (e.is_string()) continue;
-            int file_stype_idx = H5Tget_member_index(file_type_id, e.name.c_str());
+            int file_stype_idx = H5Tget_member_index(file_type_id_holder.id, e.name.c_str());
             if (file_stype_idx < 0) throw Exception(loc_full_name + ": missing member \"" + e.name + "\"");
-            hid_t file_stype_id = H5Tget_member_type(file_type_id, file_stype_idx);
-            if (file_stype_id < 0) throw Exception(loc_full_name + ": error in H5Tget_member_type");
-            H5T_class_t file_stype_class = H5Tget_class(file_stype_id);
+            detail::HDF_Object_Holder file_stype_id_holder(
+                H5Tget_member_type(file_type_id_holder.id, file_stype_idx),
+                H5Tclose,
+                loc_full_name + ": error in H5Tget_member_type",
+                loc_full_name + ": member \"" + e.name + "\": error in H5Tclose(file_stype)");
+            H5T_class_t file_stype_class = H5Tget_class(file_stype_id_holder.id);
             if (file_stype_class == H5T_NO_CLASS) throw Exception(loc_full_name + ": error in H5Tget_class(file_stype)");
             if (e.is_numeric())
             {
                 if (file_stype_class != H5T_INTEGER and file_stype_class != H5T_FLOAT)
                     throw Exception(loc_full_name + ": member \"" + e.name + "\" is numeric, but file_stype is not numeric");
-                status = H5Tinsert(mem_type_id, e.name.c_str(), e.offset, e.numeric_type_id);
+                status = H5Tinsert(mem_type_id_holder.id, e.name.c_str(), e.offset, e.numeric_type_id);
                 if (status < 0) throw Exception(loc_full_name + ": error in H5Tinsert(\"" + e.name + "\")");
             }
             if (e.is_char_array())
             {
                 if (file_stype_class != H5T_STRING)
                     throw Exception(loc_full_name + ": member \"" + e.name + "\" is char_array, but file_stype is not H5T_STRING");
-                status = H5Tis_variable_str(file_stype_id);
+                status = H5Tis_variable_str(file_stype_id_holder.id);
                 if (status < 0) throw Exception(loc_full_name + ": error in H5Tis_variable_str(\"" + e.name + "\")");
                 if (status) throw Exception(loc_full_name + ": member \"" + e.name + "\" is a char_array, but file_stype is a variable len string");
                 //size_t file_stype_size = H5Tget_size(file_stype_id);
                 //if (file_stype_size == 0) throw Exception(loc_full_name + ": H5Tget_size(\"" + e.name + "\") returned 0");
-                hid_t mem_stype_id = H5Tcopy(H5T_C_S1);
-                if (mem_stype_id < 0) throw Exception(loc_full_name + ": member \"" + e.name + "\": error in H5Tcopy");
-                status = H5Tset_size(mem_stype_id, e.char_array_size);
+                detail::HDF_Object_Holder mem_stype_id_holder(
+                    H5Tcopy(H5T_C_S1),
+                    H5Tclose,
+                    loc_full_name + ": member \"" + e.name + "\": error in H5Tcopy",
+                    loc_full_name + ": member \"" + e.name + "\": error in H5Tclose(mem_stype)");
+                status = H5Tset_size(mem_stype_id_holder.id, e.char_array_size);
                 if (status < 0) throw Exception(loc_full_name + ": error in H5Tset_size(\"" + e.name + "\")");
-                status = H5Tinsert(mem_type_id, e.name.c_str(), e.offset, mem_stype_id);
+                status = H5Tinsert(mem_type_id_holder.id, e.name.c_str(), e.offset, mem_stype_id_holder.id);
                 if (status < 0) throw Exception(loc_full_name + ": error in H5Tinsert(\"" + e.name + "\")");
-                mem_stype_id_v.push_back(mem_stype_id);
+                mem_stype_id_holder_v.emplace_back();
+                std::swap(mem_stype_id_holder_v.back(), mem_stype_id_holder);
             }
-            status = H5Tclose(file_stype_id);
-            if (status < 0) throw Exception(loc_full_name + ": member \"" + e.name + "\": error in H5Tclose(file_stype)");
         }
         // perform the actual read
-        status = read_fcn(obj_id, mem_type_id, static_cast< void* >(dest.data()));
+        status = read_fcn(obj_id, mem_type_id_holder.id, static_cast< void* >(dest.data()));
         if (status < 0) throw Exception(loc_full_name + ": pass 1: error in " + read_fcn_name);
-        // release the memory types
-        for (const auto& mem_stype_id : mem_stype_id_v)
-        {
-            status = H5Tclose(mem_stype_id);
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose(mem_stype)");
-        }
-        mem_stype_id_v.clear();
-        status = H5Tclose(mem_type_id);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose(mem_type)");
 
         // pass 2
         //   read strings
@@ -349,9 +388,6 @@ struct Extent_Compound_Reader
             //TODO
             assert(false);
         }
-
-        status = H5Tclose(file_type_id);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose(file_type_id)");
     }
 }; //struct Extent_Compound_Reader
 
@@ -439,23 +475,23 @@ void read_obj_helper(const std::string& loc_full_name, Out_Data_Storage& dest, c
                      const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
 {
-    int status;
     // open object
-    hid_t obj_id = open_fcn();
-    if (obj_id < 0) throw Exception(loc_full_name + ": error in " + open_fcn_name);
+    detail::HDF_Object_Holder obj_id_holder(
+        open_fcn(),
+        close_fcn,
+        loc_full_name + ": error in " + open_fcn_name,
+        loc_full_name + ": error in " + close_fcn_name);
     // open object space, check reading ode matches storage mode (scalar/vector)
-    hid_t obj_space_id = get_space_fcn(obj_id);
-    if (obj_space_id < 0) throw Exception(loc_full_name + ": error in " + get_space_fcn_name);
+    detail::HDF_Object_Holder obj_space_id_holder(
+        get_space_fcn(obj_id_holder.id),
+        H5Sclose,
+        loc_full_name + ": error in " + get_space_fcn_name,
+        loc_full_name + ": error in H5Sclose");
     // read object
     Object_Reader< Out_Data_Type, Out_Data_Storage >()(
-        loc_full_name, dest, compound_map_ptr, obj_id, obj_space_id,
+        loc_full_name, dest, compound_map_ptr, obj_id_holder.id, obj_space_id_holder.id,
         get_type_fcn_name, get_type_fcn,
         read_fcn_name, read_fcn);
-    // close object space & object
-    status = H5Sclose(obj_space_id);
-    if (status < 0) throw Exception(loc_full_name + ": error in H5Sclose");
-    status = close_fcn(obj_id);
-    if (status < 0) throw Exception(loc_full_name + ": error in " + close_fcn_name);
 }
 
 // determine if address is attribute or dataset, then delegate
@@ -652,10 +688,13 @@ public:
     {
         std::vector< std::string > res;
         assert(group_exists(group_full_name));
-        hid_t g_id = H5Gopen1(_file_id, group_full_name.c_str());
-        if (g_id < 0) throw Exception(group_full_name + ": error in H5Gopen");
+        detail::HDF_Object_Holder g_id_holder(
+            H5Gopen1(_file_id, group_full_name.c_str()),
+            H5Gclose,
+            group_full_name + ": error in H5Gopen",
+            group_full_name + ": error in H5Gclose");
         H5G_info_t g_info;
-        hid_t status = H5Gget_info(g_id, &g_info);
+        hid_t status = H5Gget_info(g_id_holder.id, &g_info);
         if (status < 0) throw Exception(group_full_name + ": error in H5Gget_info");
         res.resize(g_info.nlinks);
         for (unsigned i = 0; i < res.size(); ++i)
@@ -668,8 +707,6 @@ public:
             if (sz2 < 0) throw Exception(group_full_name + ": error in H5Lget_name_by_idx");
             if (sz != sz2) throw Exception(group_full_name + ": error in H5Lget_name_by_idx: sz!=sz2");
         }
-        status = H5Gclose(g_id);
-        if (status < 0) throw Exception(group_full_name + ": error in H5Gclose");
         return res;
     }
     /// Return a list of struct field names in the given dataset/attribute
@@ -677,50 +714,49 @@ public:
     {
         std::vector< std::string > res;
         assert(attribute_exists(loc_full_name) or dataset_exists(loc_full_name));
-        hid_t attr_id = 0;
-        hid_t ds_id = 0;
-        hid_t type_id = 0;
+        detail::HDF_Object_Holder attr_id_holder;
+        detail::HDF_Object_Holder ds_id_holder;
+        detail::HDF_Object_Holder type_id_holder;
         if (attribute_exists(loc_full_name))
         {
             std::string loc_path;
             std::string loc_name;
             std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
-            attr_id = H5Aopen_by_name(_file_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT, H5P_DEFAULT);
-            if (attr_id < 0) throw Exception(loc_full_name + ": error in H5Aopen_by_name");
-            type_id = H5Aget_type(attr_id);
-            if (type_id < 0) throw Exception(loc_full_name + ": error in H5Aget_type");
+            attr_id_holder.load(
+                H5Aopen_by_name(_file_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT, H5P_DEFAULT),
+                H5Aclose,
+                loc_full_name + ": error in H5Aopen_by_name",
+                loc_full_name + ": error in H5Aclose");
+            type_id_holder.load(
+                H5Aget_type(attr_id_holder.id),
+                H5Tclose,
+                loc_full_name + ": error in H5Aget_type",
+                loc_full_name + ": error in H5Tclose");
         }
         else
         {
-            ds_id = H5Oopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT);
-            if (ds_id < 0) throw Exception(loc_full_name + ": error in H5Oopen");
-            type_id = H5Dget_type(ds_id);
-            if (type_id < 0) throw Exception(loc_full_name + ": error in H5Dget_type");
+            ds_id_holder.load(
+                H5Oopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT),
+                H5Oclose,
+                loc_full_name + ": error in H5Oopen",
+                loc_full_name + ": error in H5Oclose");
+            type_id_holder.load(
+                H5Dget_type(ds_id_holder.id),
+                H5Tclose,
+                loc_full_name + ": error in H5Dget_type",
+                loc_full_name + ": error in H5Tclose");
         }
-        if (H5Tget_class(type_id) == H5T_COMPOUND)
+        if (H5Tget_class(type_id_holder.id) == H5T_COMPOUND)
         {
             // type is indeed a struct
-            int nmem = H5Tget_nmembers(type_id);
+            int nmem = H5Tget_nmembers(type_id_holder.id);
             if (nmem < 0) throw Exception(loc_full_name + ": error in H5Tget_nmembers");
             for (int i = 0; i < nmem; ++i)
             {
-                char* s = H5Tget_member_name(type_id, i);
+                char* s = H5Tget_member_name(type_id_holder.id, i);
                 res.emplace_back(s);
                 free(s);
             }
-        }
-        // close type and attr/ds
-        int status = H5Tclose(type_id);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Tclose");
-        if (attr_id)
-        {
-            status = H5Aclose(attr_id);
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Aclose");
-        }
-        else
-        {
-            status = H5Oclose(ds_id);
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Oclose");
         }
         return res;
     }
@@ -763,15 +799,15 @@ private:
             if (status < 0) throw Exception(full_path_name + ": error in H5Oexists_by_name");
             if (not status) return false;
             // open object in order to check type
-            hid_t o_id = H5Oopen(_file_id, tmp.c_str(), H5P_DEFAULT);
-            if (o_id < 0) throw Exception(full_path_name + ": error in H5Oopen");
+            detail::HDF_Object_Holder o_id_holder(
+                H5Oopen(_file_id, tmp.c_str(), H5P_DEFAULT),
+                H5Oclose,
+                full_path_name + ": error in H5Oopen",
+                full_path_name + ": error in H5Oclose");
             // check object is a group
             H5O_info_t o_info;
-            status = H5Oget_info(o_id, &o_info);
+            status = H5Oget_info(o_id_holder.id, &o_info);
             if (status < 0) throw Exception(full_path_name + ": error in H5Oget_info");
-            // close object
-            status = H5Oclose(o_id);
-            if (status < 0) throw Exception(full_path_name + ": error in H5Oclose");
             if (o_info.type != H5O_TYPE_GROUP) return false;
         }
         return true;
@@ -789,15 +825,15 @@ private:
         if (status < 0) throw Exception(loc_full_name + ": error in H5Oexists_by_name");
         if (not status) return false;
         // open object in order to check type
-        hid_t o_id = H5Oopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT);
-        if (o_id < 0) throw Exception(loc_full_name + ": error in H5Oopen");
+        detail::HDF_Object_Holder o_id_holder(
+            H5Oopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT),
+            H5Oclose,
+            loc_full_name + ": error in H5Oopen",
+            loc_full_name + ": error in H5Oclose");
         // check object is a group
         H5O_info_t o_info;
-        status = H5Oget_info(o_id, &o_info);
+        status = H5Oget_info(o_id_holder.id, &o_info);
         if (status < 0) throw Exception(loc_full_name + ": error in H5Oget_info");
-        // close object
-        status = H5Oclose(o_id);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Oclose");
         return o_info.type == type_id;
     }
 }; // class File_Reader

@@ -1,3 +1,9 @@
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2015 Matei David, Ontario Institute for Cancer Research
+//
+
 #ifndef __HDF5_TOOLS_HPP
 #define __HDF5_TOOLS_HPP
 

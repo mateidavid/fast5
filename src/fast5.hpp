@@ -364,7 +364,6 @@ public:
             if (s == "stdv") have_stdv = true;
             else if (s == "variance") have_variance = true;
         }
-        assert(have_stdv or have_variance);
         hdf5_tools::Compound_Map m;
         m.add_member("mean", &EventDetection_Event_Entry::mean);
         m.add_member("start", &EventDetection_Event_Entry::start);
@@ -373,9 +372,14 @@ public:
         {
             m.add_member("stdv", &EventDetection_Event_Entry::stdv);
         }
-        else
+        else if (have_variance)
         {
             m.add_member("variance", &EventDetection_Event_Entry::stdv);
+        }
+        else
+        {
+            // must have stdv or variance
+            abort();
         }
         Base::read< EventDetection_Event_Entry >(path, res, &m);
         if (not have_stdv)

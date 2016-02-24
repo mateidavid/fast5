@@ -161,15 +161,19 @@ public:
 
     bool have_basecall_version() const
     {
-        return Base::exists(get_bc_2d_root() + "/chimaera version");
+        return (Base::exists(get_bc_1d_root() + "/chimaera version")
+                or Base::exists(get_bc_2d_root() + "/chimaera version"));
     }
 
     std::string basecall_version() const
     {
         std::string res;
-        std::string path = get_bc_2d_root() + "/chimaera version";
-        assert(Base::exists(path));
-        Base::read< std::string >(path, res);
+        std::string path;
+        if (Base::exists(path = get_bc_1d_root() + "/chimaera version")
+            or Base::exists(path = get_bc_2d_root() + "/chimaera version"))
+        {
+            Base::read< std::string >(path, res);
+        }
         return res;
     }
 
@@ -256,6 +260,11 @@ public:
     bool have_sequences_group() const
     {
         return Base::group_exists("/Sequences");
+    }
+
+    bool have_basecalled_1D(size_t i) const
+    {
+        return Base::exists(fastq_path(i));
     }
 
     bool have_basecalled_2D() const

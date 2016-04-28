@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <string>
 #include <vector>
+#include <set>
 #include <map>
 
 #include "hdf5_tools.hpp"
@@ -374,31 +375,34 @@ public:
     {
         EventDetection_Event_Parameters res;
         auto p = eventdetection_event_params_path(ed_gr, rn);
-        Base::read< decltype(res.abasic_found) >(p + "/abasic_found", res.abasic_found);
-        /*
-        if (res.abasic_found)
-        {
-            Base::read< decltype(res.abasic_event_index) >(p + "/abasic_event_index", res.abasic_event_index);
-            Base::read< decltype(res.abasic_peak_height) >(p + "/abasic_peak_height", res.abasic_peak_height);
-        }
-        Base::read< decltype(res.hairpin_found) >(p + "/hairpin_found", res.hairpin_found);
-        if (res.hairpin_found)
-        {
-            Base::read< decltype(res.hairpin_event_index) >(p + "/hairpin_event_index", res.hairpin_event_index);
-            Base::read< decltype(res.hairpin_peak_height) >(p + "/hairpin_peak_height", res.hairpin_peak_height);
-            Base::read< decltype(res.hairpin_polyt_level) >(p + "/hairpin_polyt_level", res.hairpin_polyt_level);
-        }
-        */
-        Base::read< decltype(res.duration) >(p + "/duration", res.duration);
-        Base::read< decltype(res.median_before) >(p + "/median_before", res.median_before);
-        if (Base::exists(p + "/read_id"))
-        {
-            Base::read< decltype(res.read_id) >(p + "/read_id", res.read_id);
-        }
+        auto a_v = Base::get_attr_list(p);
+        std::set< std::string > a_s(a_v.begin(), a_v.end());
         Base::read< decltype(res.read_number) >(p + "/read_number", res.read_number);
         Base::read< decltype(res.scaling_used) >(p + "/scaling_used", res.scaling_used);
         Base::read< decltype(res.start_mux) >(p + "/start_mux", res.start_mux);
         Base::read< decltype(res.start_time) >(p + "/start_time", res.start_time);
+        Base::read< decltype(res.duration) >(p + "/duration", res.duration);
+        // optional fields
+        if (a_s.count("read_id"))
+        {
+            Base::read< decltype(res.read_id) >(p + "/read_id", res.read_id);
+        }
+        if (a_s.count("median_before"))
+        {
+            Base::read< decltype(res.median_before) >(p + "/median_before", res.median_before);
+        }
+        else
+        {
+            res.median_before = -1;
+        }
+        if (a_s.count("abasic_found"))
+        {
+            Base::read< decltype(res.abasic_found) >(p + "/abasic_found", res.abasic_found);
+        }
+        else
+        {
+            res.abasic_found = 0;
+        }
         return res;
     }
     /**

@@ -136,11 +136,8 @@ int main(int argc, char* argv[])
                 cout << endl;
                 for (const auto& ed_gr : ed_gr_list)
                 {
-                    auto d = f.get_eventdetection_params(ed_gr);
-                    for (const auto& p : d)
-                    {
-                        cout << "eventdetection/" << ed_gr << "/" << p.first << "=" << p.second << endl;
-                    }
+                    auto ed_params = f.get_eventdetection_params(ed_gr);
+                    print_map(cout, ed_params, "eventdetection/");
                     auto rn_list = f.get_eventdetection_read_name_list(ed_gr);
                     cout << "eventdetection/" << ed_gr << "/read_name_list=";
                     print_vector(cout, rn_list, ",");
@@ -151,18 +148,18 @@ int main(int argc, char* argv[])
                     {
                         std::ostringstream tmp;
                         tmp << "eventdetection/" << ed_gr << "/" << rn;
-                        auto ed_params = f.get_eventdetection_event_params();
-                        auto ed_events = f.get_eventdetection_events();
-                        cout << tmp.str() << "/abasic_found=" << ed_params.abasic_found << endl
-                             << tmp.str() << "/duration=" << ed_params.duration << endl
-                             << tmp.str() << "/median_before=" << ed_params.median_before << endl
-                             << tmp.str() << "/read_id=" << ed_params.read_id << endl
-                             << tmp.str() << "/read_number=" << ed_params.read_number << endl
-                             << tmp.str() << "/scaling_used=" << ed_params.scaling_used << endl
-                             << tmp.str() << "/start_mux=" << ed_params.start_mux << endl
-                             << tmp.str() << "/start_time=" << ed_params.start_time << endl
-                             << tmp.str() << "/size=" << ed_events.size() << endl;
-                        for (const auto& e : ed_events)
+                        auto ed_ev_params = f.get_eventdetection_event_params(ed_gr, rn);
+                        auto ed_ev = f.get_eventdetection_events(ed_gr, rn);
+                        cout << tmp.str() << "/abasic_found=" << ed_ev_params.abasic_found << endl
+                             << tmp.str() << "/duration=" << ed_ev_params.duration << endl
+                             << tmp.str() << "/median_before=" << ed_ev_params.median_before << endl
+                             << tmp.str() << "/read_id=" << ed_ev_params.read_id << endl
+                             << tmp.str() << "/read_number=" << ed_ev_params.read_number << endl
+                             << tmp.str() << "/scaling_used=" << ed_ev_params.scaling_used << endl
+                             << tmp.str() << "/start_mux=" << ed_ev_params.start_mux << endl
+                             << tmp.str() << "/start_time=" << ed_ev_params.start_time << endl
+                             << tmp.str() << "/size=" << ed_ev.size() << endl;
+                        for (const auto& e : ed_ev)
                         {
                             cout << "  (mean=" << e.mean
                                  << ", stdv=" << e.stdv
@@ -196,10 +193,8 @@ int main(int argc, char* argv[])
                     // dump basecall params
                     auto bc_params = f.get_basecall_params(bc_gr);
                     std::ostringstream tmp;
-                    for (const auto& p : bc_params)
-                    {
-                        cout << "basecall/" << bc_gr << "/" << p.first << "=" << p.second << endl;
-                    }
+                    tmp << "basecall/" << bc_gr << "/";
+                    print_map(cout, bc_params, tmp.str());
                     // check if basecall log exists
                     cout << "basecall/" << bc_gr << "/have_log=" << f.have_basecall_log(bc_gr) << endl;
                 }

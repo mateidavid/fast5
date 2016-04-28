@@ -35,10 +35,10 @@ typedef float Raw_Samples_Entry;
 struct Raw_Samples_Parameters
 {
     std::string read_id;
-    long read_number;
-    long start_mux;
-    long start_time;
-    long duration;
+    long long read_number;
+    long long start_mux;
+    long long start_time;
+    long long duration;
 }; // struct Raw_Samples_Parameters
 
 struct EventDetection_Event_Entry
@@ -51,22 +51,14 @@ struct EventDetection_Event_Entry
 
 struct EventDetection_Event_Parameters
 {
-    unsigned abasic_found;
-    /*
-    unsigned abasic_event_index;
-    double abasic_peak_height;
-    unsigned hairpin_found;
-    unsigned hairpin_event_index;
-    double hairpin_peak_height;
-    double hairpin_polyt_level;
-    */
-    long duration;
-    double median_before;
     std::string read_id;
-    long read_number;
-    long scaling_used;
-    long start_mux;
-    long start_time;
+    long long read_number;
+    long long scaling_used;
+    long long start_mux;
+    long long start_time;
+    long long duration;
+    double median_before;
+    unsigned abasic_found;
 }; // struct EventDetection_Event_Parameters
 
 //
@@ -78,13 +70,13 @@ struct EventDetection_Event_Parameters
 //
 struct Model_Entry
 {
-    char kmer[MAX_K_LEN];
     long long variant;
     double level_mean;
     double level_stdv;
     double sd_mean;
     double sd_stdv;
     double weight;
+    char kmer[MAX_K_LEN];
 }; // struct Model_Entry
 
 //
@@ -112,16 +104,16 @@ struct Event_Entry
     double start;
     double stdv;
     double length;
-    char model_state[MAX_K_LEN];
-    double model_level;
-    long long move;
     double p_model_state;
-    char mp_state[MAX_K_LEN];
     double p_mp_state;
     double p_A;
     double p_C;
     double p_G;
     double p_T;
+    double model_level;
+    long long move;
+    char model_state[MAX_K_LEN];
+    char mp_state[MAX_K_LEN];
 }; // struct Event_Entry
 
 //

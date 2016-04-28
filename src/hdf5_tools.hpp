@@ -248,6 +248,7 @@ struct Extent_Atomic_Reader
 }; // struct Extent_Atomic_Reader
 
 // TempSpec: for reading strings
+// Note: allow reading singed/unsigned integers and floats as strings, using operator <<
 template < typename Out_Data_Storage >
 struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
 {
@@ -264,14 +265,14 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
             loc_full_name + ": error in H5Tclose(file_type)");
         int is_vlen_str = H5Tis_variable_str(file_type_id_holder.id);
         if (is_vlen_str < 0) throw Exception(loc_full_name + ": error in H5Tis_variable_str");
-        detail::HDF_Object_Holder mem_type_id_holder(
-            H5Tcopy(H5T_C_S1),
-            H5Tclose,
-            loc_full_name + ": error in H5Tcopy",
-            loc_full_name + ": error in H5Tclose(mem_type)");
         if (is_vlen_str) // stored as variable-length string
         {
             // compute mem_type
+            detail::HDF_Object_Holder mem_type_id_holder(
+                H5Tcopy(H5T_C_S1),
+                H5Tclose,
+                loc_full_name + ": error in H5Tcopy",
+                loc_full_name + ": error in H5Tclose(mem_type)");
             status = H5Tset_size(mem_type_id_holder.id, H5T_VARIABLE);
             if (status < 0) throw Exception(loc_full_name + ": error in H5Tset_size(variable)");
             // prepare buffer to receive data
@@ -289,15 +290,20 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
             status = H5Dvlen_reclaim(mem_type_id_holder.id, obj_space_id, H5P_DEFAULT, char_p_buff.data());
             if (status < 0) throw Exception(loc_full_name + ": error in H5Dvlen_reclaim");
         }
-        else // stored as fixed-length string
+        else if (H5Tget_class(file_type_id_holder.id) == H5T_STRING) // stored as fixed-length string
         {
             // compute mem_type
+            detail::HDF_Object_Holder mem_type_id_holder(
+                H5Tcopy(H5T_C_S1),
+                H5Tclose,
+                loc_full_name + ": error in H5Tcopy",
+                loc_full_name + ": error in H5Tclose(mem_type)");
             size_t sz = H5Tget_size(file_type_id_holder.id);
             if (sz == 0) throw Exception(loc_full_name + ": H5Tget_size returned 0; is this an error?!");
             status = H5Tset_size(mem_type_id_holder.id, sz + 1);
             if (status < 0) throw Exception(loc_full_name + ": error in H5Tset_size(fixed)");
             // prepare buffer to receieve data
-            std::vector< char > char_buff(dest.size() * (sz + 1));
+            std::vector< char > char_buff(dest.size() * (sz + 1), '\0');
             // perform the read
             status = read_fcn(obj_id, mem_type_id_holder.id, static_cast< void* >(char_buff.data()));
             if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
@@ -305,6 +311,65 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
             for (size_t i = 0; i < dest.size(); ++i)
             {
                 dest[i] = std::string(&char_buff[i * (sz + 1)], sz);
+                // trim trailing '\0'-s
+                while (not dest[i].empty() and dest[i].back() == '\0')
+                {
+                    dest[i].resize(dest[i].size() - 1);
+                }
+            }
+        }
+        else if (H5Tget_class(file_type_id_holder.id) == H5T_INTEGER) // stored as an integer
+        {
+            if (H5Tget_sign(file_type_id_holder.id) == H5T_SGN_NONE) // stored as an unsigned integer
+            {
+                // compute mem_type
+                hid_t mem_type_id = get_mem_type< unsigned long long >::id();
+                // prepare buffer to read data
+                std::vector< unsigned long long > buff(dest.size());
+                // perform the read
+                status = read_fcn(obj_id, mem_type_id, static_cast< void* >(buff.data()));
+                if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
+                // transfer to destination
+                for (size_t i = 0; i < dest.size(); ++i)
+                {
+                    std::ostringstream oss;
+                    oss << buff[i];
+                    dest[i] = oss.str();
+                }
+            }
+            else // stored as a signed integer
+            {
+                // compute mem_type
+                hid_t mem_type_id = get_mem_type< long long >::id();
+                // prepare buffer to read data
+                std::vector< long long > buff(dest.size());
+                // perform the read
+                status = read_fcn(obj_id, mem_type_id, static_cast< void* >(buff.data()));
+                if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
+                // transfer to destination
+                for (size_t i = 0; i < dest.size(); ++i)
+                {
+                    std::ostringstream oss;
+                    oss << buff[i];
+                    dest[i] = oss.str();
+                }
+            }
+        }
+        else if (H5Tget_class(file_type_id_holder.id) == H5T_FLOAT) // stored as a float
+        {
+            // compute mem_type
+            hid_t mem_type_id = get_mem_type< long double >::id();
+            // prepare buffer to read data
+            std::vector< long double > buff(dest.size());
+            // perform the read
+            status = read_fcn(obj_id, mem_type_id, static_cast< void* >(buff.data()));
+            if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
+            // transfer to destination
+            for (size_t i = 0; i < dest.size(); ++i)
+            {
+                std::ostringstream oss;
+                oss << buff[i];
+                dest[i] = oss.str();
             }
         }
     }
@@ -395,7 +460,7 @@ struct Extent_Compound_Reader
             assert(false);
         }
     }
-}; //struct Extent_Compound_Reader
+}; // struct Extent_Compound_Reader
 
 // TempSpec: read extent of atomic types
 template < typename Out_Data_Type, typename Out_Data_Storage, bool = true >
@@ -429,14 +494,79 @@ struct Object_Reader_impl< Out_Data_Type, Out_Data_Type, true >
     {
         H5S_class_t obj_class_t = H5Sget_simple_extent_type(obj_space_id);
         if (obj_class_t == H5S_NO_CLASS) throw Exception(loc_full_name + ": error in H5Sget_simple_extent_type");
-        if (obj_class_t != H5S_SCALAR)
-            throw Exception(loc_full_name + ": reading as scalar, but dataspace not H5S_SCALAR");
-        std::vector< Out_Data_Type > tmp(1);
-        Extent_Reader< Out_Data_Type, std::vector< Out_Data_Type > >()(
-            loc_full_name, tmp, compound_map_ptr, obj_id, obj_space_id,
-            get_type_fcn_name, get_type_fcn,
-            read_fcn_name, read_fcn);
-        dest = std::move(tmp[0]);
+        if (obj_class_t == H5S_SCALAR)
+        {
+            std::vector< Out_Data_Type > tmp(1);
+            Extent_Reader< Out_Data_Type, std::vector< Out_Data_Type > >()(
+                loc_full_name, tmp, compound_map_ptr, obj_id, obj_space_id,
+                get_type_fcn_name, get_type_fcn,
+                read_fcn_name, read_fcn);
+            dest = std::move(tmp[0]);
+        }
+        else
+        {
+            throw Exception(loc_full_name + ": cannot read as scalar: extent type not H5S_SCALAR");
+        }
+    }
+};
+
+// TempSpec: reading string scalars
+// Hack: allow reading an extent of single characters as a string, which is how ONT stores /Sequences/Meta
+template <>
+struct Object_Reader_impl< std::string, std::string, true >
+{
+    void operator () (const std::string& loc_full_name, std::string& dest,
+                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t obj_space_id,
+                      const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
+                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
+    {
+        H5S_class_t obj_class_t = H5Sget_simple_extent_type(obj_space_id);
+        if (obj_class_t == H5S_NO_CLASS) throw Exception(loc_full_name + ": error in H5Sget_simple_extent_type");
+        if (obj_class_t == H5S_SCALAR)
+        {
+            std::vector< std::string > tmp(1);
+            Extent_Reader< std::string, std::vector< std::string > >()(
+                loc_full_name, tmp, compound_map_ptr, obj_id, obj_space_id,
+                get_type_fcn_name, get_type_fcn,
+                read_fcn_name, read_fcn);
+            dest = std::move(tmp[0]);
+        }
+        else if (obj_class_t == H5S_SIMPLE)
+        {
+            detail::HDF_Object_Holder file_type_id_holder(
+                get_type_fcn(obj_id),
+                H5Tclose,
+                loc_full_name + ": error in " + get_type_fcn_name,
+                loc_full_name + ": error in H5Tclose(file_type)");
+            if (H5Tget_class(file_type_id_holder.id) == H5T_STRING
+                and H5Tis_variable_str(file_type_id_holder.id) == 0
+                and H5Tget_size(file_type_id_holder.id) == 1)
+            {
+                int status = H5Sget_simple_extent_dims(obj_space_id, nullptr, nullptr);
+                if (status < 0) throw Exception(loc_full_name + ": error in H5Sget_simple_extent_dims");
+                if (status != 1) throw Exception(loc_full_name + ": expected extent of dimension 1");
+                hsize_t sz;
+                H5Sget_simple_extent_dims(obj_space_id, &sz, nullptr);
+                std::vector< std::string > tmp(sz);
+                Extent_Reader< std::string, std::vector< std::string > >()(
+                    loc_full_name, tmp, compound_map_ptr, obj_id, obj_space_id,
+                    get_type_fcn_name, get_type_fcn,
+                    read_fcn_name, read_fcn);
+                dest.clear();
+                for (hsize_t i = 0; i < sz; ++i)
+                {
+                    dest += tmp[i];
+                }
+            }
+            else
+            {
+                throw Exception(loc_full_name + ": cannot read string as scalar: file type not single char");
+            }
+        }
+        else
+        {
+            throw Exception(loc_full_name + ": cannot read string as scalar: bad extent type");
+        }
     }
 };
 
@@ -487,7 +617,7 @@ void read_obj_helper(const std::string& loc_full_name, Out_Data_Storage& dest, c
         close_fcn,
         loc_full_name + ": error in " + open_fcn_name,
         loc_full_name + ": error in " + close_fcn_name);
-    // open object space, check reading ode matches storage mode (scalar/vector)
+    // open object space, check reading mode matches storage mode (scalar/vector)
     detail::HDF_Object_Holder obj_space_id_holder(
         get_space_fcn(obj_id_holder.id),
         H5Sclose,
@@ -694,7 +824,7 @@ public:
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
         detail::Reader< Out_Data_Type >()(_file_id, loc_path, loc_name, std::forward< Args >(args)...);
     }
-    /// Return a list of name in the given group
+    /// Return a list of names (groups/datasets) in the given group
     std::vector< std::string > list_group(const std::string& group_full_name) const
     {
         std::vector< std::string > res;
@@ -719,7 +849,35 @@ public:
             if (sz != sz2) throw Exception(group_full_name + ": error in H5Lget_name_by_idx: sz!=sz2");
         }
         return res;
-    }
+    } // list_group
+    /// Return a list of attributes of the given object
+    std::vector< std::string > get_attr_list(const std::string& loc_full_name) const
+    {
+        std::vector< std::string > res;
+        assert(group_exists(loc_full_name) or dataset_exists(loc_full_name));
+        detail::HDF_Object_Holder id_holder;
+        id_holder.load(
+            H5Oopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT),
+            H5Oclose,
+            loc_full_name + ": error in H5Oopen",
+            loc_full_name + ": error in H5Oclose");
+        H5O_info_t info;
+        auto status = H5Oget_info(id_holder.id, &info);
+        if (status < 0) throw Exception(loc_full_name + ": error in H5Oget_info");
+        // num_attrs in info.num_attrs
+        for (unsigned i = 0; i < (unsigned)info.num_attrs; ++i)
+        {
+            status = H5Aget_name_by_idx(id_holder.id, ".", H5_INDEX_NAME, H5_ITER_NATIVE, i,
+                                        nullptr, 0, H5P_DEFAULT);
+            if (status < 0) throw Exception(loc_full_name + ": error in H5Aget_name_by_idx");
+            std::string tmp(status, '\0');
+            status = H5Aget_name_by_idx(id_holder.id, ".", H5_INDEX_NAME, H5_ITER_NATIVE, i,
+                                        &tmp[0], status + 1, H5P_DEFAULT);
+            if (status < 0) throw Exception(loc_full_name + ": error in H5Aget_name_by_idx");
+            res.emplace_back(move(tmp));
+        }
+        return res;
+    } // get_attr_list
     /// Return a list of struct field names in the given dataset/attribute
     std::vector< std::string > get_struct_members(const std::string& loc_full_name) const
     {
@@ -770,7 +928,7 @@ public:
             }
         }
         return res;
-    }
+    } // get_struct_members
 
 private:
     std::string _file_name;

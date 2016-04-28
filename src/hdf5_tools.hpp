@@ -358,9 +358,9 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
         else if (H5Tget_class(file_type_id_holder.id) == H5T_FLOAT) // stored as a float
         {
             // compute mem_type
-            hid_t mem_type_id = get_mem_type< long double >::id();
+            hid_t mem_type_id = get_mem_type< double >::id();
             // prepare buffer to read data
-            std::vector< long double > buff(dest.size());
+            std::vector< double > buff(dest.size());
             // perform the read
             status = read_fcn(obj_id, mem_type_id, static_cast< void* >(buff.data()));
             if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);

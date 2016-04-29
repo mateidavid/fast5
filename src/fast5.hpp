@@ -111,7 +111,6 @@ struct Event_Entry
     double p_C;
     double p_G;
     double p_T;
-    double model_level;
     long long move;
     char model_state[MAX_K_LEN];
     char mp_state[MAX_K_LEN];

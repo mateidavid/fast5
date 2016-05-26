@@ -818,7 +818,7 @@ struct Writer_helper< 1, In_Data_Type >
     : public Writer_helper_base
 {
     void operator () (hid_t grp_id, const std::string& loc_name, bool as_ds,
-                      hid_t dspace_id, size_t sz,
+                      hid_t dspace_id, size_t,
                       const In_Data_Type * in, hid_t file_dtype_id = 0) const
     {
         assert(std::is_integral< In_Data_Type >::value or std::is_floating_point< In_Data_Type >::value);
@@ -932,7 +932,7 @@ struct Writer_helper< 4, In_Data_Type >
     : public Writer_helper_base
 {
     void operator () (hid_t grp_id, const std::string& loc_name, bool as_ds,
-                      hid_t dspace_id, size_t sz,
+                      hid_t dspace_id, size_t,
                       const In_Data_Type * in, const Compound_Map& cm) const
     {
         // create the file type

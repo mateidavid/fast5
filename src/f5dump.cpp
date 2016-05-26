@@ -35,11 +35,6 @@ int main(int argc, char* argv[])
     //
     // open the FAST5 file for reading
     //
-    if (not hdf5_tools::File_Reader::is_valid_file(file_name))
-    {
-        cout << "not a hdf file [" << file_name << "]" << endl;
-        return EXIT_SUCCESS;
-    }
     if (not fast5::File::is_valid_file(file_name))
     {
         cout << "not a fast5 file [" << file_name << "]" << endl;
@@ -109,11 +104,11 @@ int main(int argc, char* argv[])
             //
             // inspect eventdetection events
             //
+            cout << "eventdetection_group_list=";
+            print_vector(cout, f.get_eventdetection_group_list(), ",");
+            cout << endl;
             if (f.have_eventdetection_events())
             {
-                cout << "eventdetection_group_list=";
-                print_vector(cout, f.get_eventdetection_group_list(), ",");
-                cout << endl;
                 auto ed_params = f.get_eventdetection_params();
                 print_map(cout, ed_params, "eventdetection/");
                 auto ed_ev_params = f.get_eventdetection_event_params();
@@ -160,7 +155,7 @@ int main(int argc, char* argv[])
                          << "basecall(" << st << ")/model/var_sd=" << m_params.var_sd << endl
                          << "basecall(" << st << ")/model/size=" << m.size() << endl;
                     const auto& e = m.front();
-                    cout << "  (kmer=" << e.kmer
+                    cout << "  (kmer=" << e.kmer.data()
                          << ", level_mean=" << e.level_mean
                          << ", level_stdv=" << e.level_stdv << ")" << endl;
                 }
@@ -183,7 +178,7 @@ int main(int argc, char* argv[])
                     const auto& e = al.front();
                     cout << "  (template_index=" << e.template_index
                          << ", complement_index=" << e.complement_index
-                         << ", kmer=" << e.kmer << ")" << endl;
+                         << ", kmer=" << e.kmer.data() << ")" << endl;
                 }
             } // for st
         }

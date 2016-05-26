@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <string>
 #include <vector>
+#include <array>
 #include <set>
 #include <map>
 
@@ -77,7 +78,7 @@ struct Model_Entry
     double sd_mean;
     double sd_stdv;
     double weight;
-    char kmer[MAX_K_LEN];
+    std::array< char, MAX_K_LEN > kmer;
 }; // struct Model_Entry
 
 //
@@ -102,8 +103,8 @@ struct Model_Parameters
 struct Event_Entry
 {
     double mean;
-    double start;
     double stdv;
+    double start;
     double length;
     double p_model_state;
     double p_mp_state;
@@ -112,8 +113,8 @@ struct Event_Entry
     double p_G;
     double p_T;
     long long move;
-    char model_state[MAX_K_LEN];
-    char mp_state[MAX_K_LEN];
+    std::array< char, MAX_K_LEN > model_state;
+    std::array< char, MAX_K_LEN > mp_state;
 }; // struct Event_Entry
 
 //
@@ -124,28 +125,31 @@ struct Event_Alignment_Entry
 {
     long long template_index;
     long long complement_index;
-    char kmer[MAX_K_LEN];
+    std::array< char, MAX_K_LEN > kmer;
 }; // struct Event_Alignment_Entry
 
 
 class File
-    : private hdf5_tools::File_Reader
+    : private hdf5_tools::File
 {
 private:
-    typedef hdf5_tools::File_Reader Base;
+    typedef hdf5_tools::File Base;
 public:
     using Base::is_open;
+    using Base::is_rw;
     using Base::file_name;
+    using Base::create;
     using Base::close;
     using Base::get_object_count;
     using Base::is_valid_file;
+    using Base::write;
 
     File() = default;
-    File(const std::string& file_name) { open(file_name); }
+    File(const std::string& file_name, bool rw = false) { open(file_name, rw); }
 
-    void open(const std::string& file_name)
+    void open(const std::string& file_name, bool rw = false)
     {
-        Base::open(file_name);
+        Base::open(file_name, rw);
         if (is_open())
         {
             // detect raw samples read name
@@ -330,7 +334,7 @@ public:
      */
     bool have_eventdetection_events() const
     {
-        return have_eventdetection_events(get_eventdetection_group_list().front());
+        return have_eventdetection_groups() and have_eventdetection_events(get_eventdetection_group_list().front());
     }
     /**
      * Check if EventDetection events exist for given EventDetection group.
@@ -555,6 +559,13 @@ public:
         return res;
     }
     /**
+     * Add Basecall fastq
+     */
+    void add_basecall_fastq(const std::string& bc_gr, unsigned st, const std::string& fq) const
+    {
+        Base::write(basecall_fastq_path(bc_gr, st), true, fq);
+    }
+    /**
      * Check if Basecall seq exists for first Basecall group for given strand.
      */
     bool have_basecall_seq(unsigned st) const
@@ -581,6 +592,19 @@ public:
     std::string get_basecall_seq(const std::string& bc_gr, unsigned st) const
     {
         return fq2seq(get_basecall_fastq(bc_gr, st));
+    }
+    /**
+     * Add Basecall seq
+     */
+    void add_basecall_seq(const std::string& bc_gr, unsigned st,
+                          const std::string& name, const std::string& seq, int default_qual = 33) const
+    {
+        std::ostringstream oss;
+        oss << '@' << name << std::endl
+            << seq << std::endl
+            << '+' << std::endl
+            << std::string(seq.size(), static_cast< char >(default_qual));
+        add_basecall_fastq(bc_gr, st, oss.str());
     }
     /**
      * Check if Basecall model exist for first Basecall group for given strand.
@@ -695,6 +719,20 @@ public:
         m.add_member("move", &Event_Entry::move);
         Base::read< Event_Entry >(basecall_events_path(bc_gr, st), res, &m);
         return res;
+    }
+    /**
+     * Add Basecall events
+     */
+    void add_basecall_events(const std::string& bc_gr, unsigned st, const std::vector< Event_Entry >& ev) const
+    {
+        hdf5_tools::Compound_Map cm;
+        cm.add_member("mean", &Event_Entry::mean);
+        cm.add_member("start", &Event_Entry::start);
+        cm.add_member("stdv", &Event_Entry::stdv);
+        cm.add_member("length", &Event_Entry::length);
+        cm.add_member("model_state", &Event_Entry::model_state);
+        cm.add_member("move", &Event_Entry::move);
+        Base::write(basecall_events_path(bc_gr, st), true, ev, cm);
     }
     /**
      * Check if Basecall event alignment exist for first Basecall group with 2d calls.

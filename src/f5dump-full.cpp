@@ -35,11 +35,6 @@ int main(int argc, char* argv[])
     //
     // open the FAST5 file for reading
     //
-    if (not hdf5_tools::File_Reader::is_valid_file(file_name))
-    {
-        cout << "not a hdf file [" << file_name << "]" << endl;
-        return EXIT_SUCCESS;
-    }
     if (not fast5::File::is_valid_file(file_name))
     {
         cout << "not a fast5 file [" << file_name << "]" << endl;
@@ -222,7 +217,7 @@ int main(int argc, char* argv[])
                              << "basecall(" << st << ")/model/size=" << m.size() << endl;
                         for (const auto& e : m)
                         {
-                            cout << "  (kmer=" << e.kmer
+                            cout << "  (kmer=" << e.kmer.data()
                                  << ", level_mean=" << e.level_mean
                                  << ", level_stdv=" << e.level_stdv << ")" << endl;
                             break;
@@ -255,7 +250,7 @@ int main(int argc, char* argv[])
                             {
                                 cout << "  (template_index=" << e.template_index
                                      << ", complement_index=" << e.complement_index
-                                     << ", kmer=" << e.kmer << ")" << endl;
+                                     << ", kmer=" << e.kmer.data() << ")" << endl;
                                 break;
                             }
                         }

@@ -17,6 +17,9 @@
 #include <tuple>
 #include <vector>
 #include <deque>
+#include <map>
+#include <limits>
+#include <type_traits>
 
 namespace hdf5
 {
@@ -66,27 +69,48 @@ template <> struct get_mem_type< float >              { static hid_t id() { retu
 template <> struct get_mem_type< double >             { static hid_t id() { return H5T_NATIVE_DOUBLE;  } };
 template <> struct get_mem_type< long double >        { static hid_t id() { return H5T_NATIVE_LDOUBLE; } };
 
-/// TempMetaFunc: Given destination type, can we read it
-template < typename Out_Data_Type >
-struct can_read
+/**
+ * Class of memory type:
+ *   0 - unknown
+ *   1 - numeric (signed/unsigned integer or float)
+ *   2 - fixed length string (char array)
+ *   3 - variable length string (std::string)
+ *   4 - class
+ */
+template < typename T >
+struct mem_type_class
 {
-    static const bool value =
-        std::is_integral< Out_Data_Type >::value
-        or std::is_floating_point< Out_Data_Type >::value
-        or std::is_same< typename std::remove_extent< Out_Data_Type >::type, char >::value
-        or std::is_same< Out_Data_Type, std::string >::value
-        or std::is_class< Out_Data_Type >:: value;
+    static const int value =
+        std::conditional< std::is_integral< T >::value or std::is_floating_point< T >::value,
+                          std::integral_constant< int, 1 >,
+                          typename std::conditional< std::is_class< T >::value,
+                                                     std::integral_constant< int, 4 >,
+                                                     std::integral_constant< int, 0 > >::type >::type::value;
 };
-
-/// TempMetaFunc: Given a destination type, does it need a compound map
-template < typename Out_Data_Type >
-struct read_as_atomic
+template < size_t Size >
+struct mem_type_class< char[Size] >
 {
-    static const bool value =
-        std::is_integral< Out_Data_Type >::value
-        or std::is_floating_point< Out_Data_Type >::value
-        or std::is_same< typename std::remove_extent< Out_Data_Type >::type, char >::value
-        or std::is_same< Out_Data_Type, std::string >::value;
+    static const int value = 2;
+};
+template < size_t Size >
+struct mem_type_class< const char[Size] >
+{
+    static const int value = 2;
+};
+template < size_t Size >
+struct mem_type_class< std::array< char, Size > >
+{
+    static const int value = 2;
+};
+template < size_t Size >
+struct mem_type_class< std::array< const char, Size > >
+{
+    static const int value = 2;
+};
+template <>
+struct mem_type_class< std::string >
+{
+    static const int value = 3;
 };
 
 /// Compute offset of a struct member from a member pointer (runtime version).
@@ -155,6 +179,12 @@ struct HDF_Object_Holder
     std::string dtor_message;
     HDF_Object_Holder()
         : id(0) {}
+    HDF_Object_Holder(const HDF_Object_Holder&) = delete;
+    HDF_Object_Holder(HDF_Object_Holder&& other)
+        : id(0)
+    {
+        *this = std::move(other);
+    }
     HDF_Object_Holder(int _id, std::function< herr_t(hid_t) > _dtor,
                       const std::string& _ctor_message, const std::string& _dtor_message)
     {
@@ -166,7 +196,19 @@ struct HDF_Object_Holder
         {
             int status = dtor(id);
             if (status < 0 and not std::uncaught_exception()) throw Exception(dtor_message);
+            id = 0;
         }
+    }
+    HDF_Object_Holder& operator = (const HDF_Object_Holder&) = delete;
+    HDF_Object_Holder& operator = (HDF_Object_Holder&& other)
+    {
+        if (&other != this)
+        {
+            std::swap(id, other.id);
+            std::swap(dtor, other.dtor);
+            std::swap(dtor_message, other.dtor_message);
+        }
+        return *this;
     }
     void load(int _id, std::function< herr_t(hid_t) > _dtor,
               const std::string& _ctor_message, const std::string& _dtor_message)
@@ -177,6 +219,26 @@ struct HDF_Object_Holder
         dtor_message = _dtor_message;
     }
 }; // struct HDF_Object_Holder
+
+struct Util
+{
+    /**
+     * Make hdf5 string type.
+     * @param sz If negative, make varlen string; else make fixlen string of size sz.
+     */
+    static HDF_Object_Holder make_str_type(long sz)
+    {
+        assert(sz != 0);
+        HDF_Object_Holder res(
+            H5Tcopy(H5T_C_S1),
+            H5Tclose,
+            "error in H5Tcopy",
+            "error in H5Tclose");
+        auto status = H5Tset_size(res.id, sz < 0? H5T_VARIABLE : sz);
+        if (status < 0) throw Exception("error in H5Tset_size");
+        return res;
+    }
+}; // struct Util
 
 } // namespace detail
 
@@ -194,20 +256,19 @@ public:
     template < typename T, typename U >
     void add_member(const std::string& name, U T::* mem_ptr)
     {
-        static_assert(std::is_integral< U >::value
-                      or std::is_floating_point< U >::value
-                      or std::is_same< typename std::remove_extent< U >::type, char >::value
-                      or std::is_same< U, std::string >::value,
+        static_assert(detail::mem_type_class< U >::value == 1
+                      or detail::mem_type_class< U >::value == 2
+                      or detail::mem_type_class< U >::value == 3,
                       "add_member(name, mem_ptr) overload expects numerical or string types only ");
-        if (std::is_integral< U >::value or std::is_floating_point< U >::value)
+        if (detail::mem_type_class< U >::value == 1)
         {
             _members.emplace_back(name, detail::offset_of(mem_ptr), detail::get_mem_type< U >::id());
         }
-        else if (std::is_same< typename std::remove_extent< U >::type, char >::value)
+        else if (detail::mem_type_class< U >::value == 2)
         {
             _members.emplace_back(name, detail::offset_of(mem_ptr), sizeof(U));
         }
-        else if (std::is_same< U, std::string >::value)
+        else if (detail::mem_type_class< U >::value == 3)
         {
             _members.emplace_back(name, detail::offset_of(mem_ptr));
         }
@@ -217,7 +278,7 @@ public:
     void add_member(const std::string& name, U T::* mem_ptr, const Compound_Map* compound_map_ptr)
     {
         assert(false); // not currently implemented
-        static_assert(std::is_class< U >::value,
+        static_assert(detail::mem_type_class< U >::value == 4,
                       "add_member(name, mem_ptr, compound_map_ptr) overload expects class types only ");
         _members.emplace_back(name, detail::offset_of(mem_ptr), compound_map_ptr);
     }
@@ -258,7 +319,7 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
                       const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
     {
         int status;
-        detail::HDF_Object_Holder file_type_id_holder(
+        HDF_Object_Holder file_type_id_holder(
             get_type_fcn(obj_id),
             H5Tclose,
             loc_full_name + ": error in " + get_type_fcn_name,
@@ -268,13 +329,7 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
         if (is_vlen_str) // stored as variable-length string
         {
             // compute mem_type
-            detail::HDF_Object_Holder mem_type_id_holder(
-                H5Tcopy(H5T_C_S1),
-                H5Tclose,
-                loc_full_name + ": error in H5Tcopy",
-                loc_full_name + ": error in H5Tclose(mem_type)");
-            status = H5Tset_size(mem_type_id_holder.id, H5T_VARIABLE);
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Tset_size(variable)");
+            HDF_Object_Holder mem_type_id_holder(Util::make_str_type(-1));
             // prepare buffer to receive data
             std::vector< char* > char_p_buff(dest.size(), nullptr);
             // perform the read
@@ -293,15 +348,9 @@ struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
         else if (H5Tget_class(file_type_id_holder.id) == H5T_STRING) // stored as fixed-length string
         {
             // compute mem_type
-            detail::HDF_Object_Holder mem_type_id_holder(
-                H5Tcopy(H5T_C_S1),
-                H5Tclose,
-                loc_full_name + ": error in H5Tcopy",
-                loc_full_name + ": error in H5Tclose(mem_type)");
             size_t sz = H5Tget_size(file_type_id_holder.id);
             if (sz == 0) throw Exception(loc_full_name + ": H5Tget_size returned 0; is this an error?!");
-            status = H5Tset_size(mem_type_id_holder.id, sz + 1);
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Tset_size(fixed)");
+            HDF_Object_Holder mem_type_id_holder(Util::make_str_type(sz + 1));
             // prepare buffer to receieve data
             std::vector< char > char_buff(dest.size() * (sz + 1), '\0');
             // perform the read
@@ -385,7 +434,7 @@ struct Extent_Compound_Reader
     {
         int status;
         assert(compound_map_ptr);
-        detail::HDF_Object_Holder file_type_id_holder(
+        HDF_Object_Holder file_type_id_holder(
             get_type_fcn(obj_id),
             H5Tclose,
             loc_full_name + ": error in " + get_type_fcn_name,
@@ -397,20 +446,20 @@ struct Extent_Compound_Reader
 
         // pass 1
         //   read numeric and char_array members only
-        detail::HDF_Object_Holder mem_type_id_holder(
+        HDF_Object_Holder mem_type_id_holder(
             H5Tcreate(H5T_COMPOUND, sizeof(Out_Data_Type)),
             H5Tclose,
             loc_full_name + ": error in H5Tcreate",
             loc_full_name + ": error in H5Tclose(mem_type)");
 
-        std::deque< detail::HDF_Object_Holder > mem_stype_id_holder_v;
+        std::deque< HDF_Object_Holder > mem_stype_id_holder_v;
         for (const auto& e : compound_map_ptr->members())
         {
             assert(not e.is_compound()); // not implemented yet
             if (e.is_string()) continue;
             int file_stype_idx = H5Tget_member_index(file_type_id_holder.id, e.name.c_str());
             if (file_stype_idx < 0) throw Exception(loc_full_name + ": missing member \"" + e.name + "\"");
-            detail::HDF_Object_Holder file_stype_id_holder(
+            HDF_Object_Holder file_stype_id_holder(
                 H5Tget_member_type(file_type_id_holder.id, file_stype_idx),
                 H5Tclose,
                 loc_full_name + ": error in H5Tget_member_type",
@@ -433,13 +482,7 @@ struct Extent_Compound_Reader
                 if (status) throw Exception(loc_full_name + ": member \"" + e.name + "\" is a char_array, but file_stype is a variable len string");
                 //size_t file_stype_size = H5Tget_size(file_stype_id);
                 //if (file_stype_size == 0) throw Exception(loc_full_name + ": H5Tget_size(\"" + e.name + "\") returned 0");
-                detail::HDF_Object_Holder mem_stype_id_holder(
-                    H5Tcopy(H5T_C_S1),
-                    H5Tclose,
-                    loc_full_name + ": member \"" + e.name + "\": error in H5Tcopy",
-                    loc_full_name + ": member \"" + e.name + "\": error in H5Tclose(mem_stype)");
-                status = H5Tset_size(mem_stype_id_holder.id, e.char_array_size);
-                if (status < 0) throw Exception(loc_full_name + ": error in H5Tset_size(\"" + e.name + "\")");
+                HDF_Object_Holder mem_stype_id_holder(Util::make_str_type(e.char_array_size));
                 status = H5Tinsert(mem_type_id_holder.id, e.name.c_str(), e.offset, mem_stype_id_holder.id);
                 if (status < 0) throw Exception(loc_full_name + ": error in H5Tinsert(\"" + e.name + "\")");
                 mem_stype_id_holder_v.emplace_back();
@@ -477,7 +520,10 @@ struct Extent_Reader_as_atomic< Out_Data_Type, Out_Data_Storage, false >
 // branch on atomic/compound destination
 template < typename Out_Data_Type, typename Out_Data_Storage >
 struct Extent_Reader
-    : public Extent_Reader_as_atomic< Out_Data_Type, Out_Data_Storage, read_as_atomic< Out_Data_Type >::value >
+    : public Extent_Reader_as_atomic< Out_Data_Type, Out_Data_Storage,
+                                      mem_type_class< Out_Data_Type >::value == 1
+                                      or mem_type_class< Out_Data_Type >::value == 2
+                                      or mem_type_class< Out_Data_Type >::value == 3 >
 {};
 
 template < typename, typename, bool >
@@ -533,7 +579,7 @@ struct Object_Reader_impl< std::string, std::string, true >
         }
         else if (obj_class_t == H5S_SIMPLE)
         {
-            detail::HDF_Object_Holder file_type_id_holder(
+            HDF_Object_Holder file_type_id_holder(
                 get_type_fcn(obj_id),
                 H5Tclose,
                 loc_full_name + ": error in " + get_type_fcn_name,
@@ -612,13 +658,13 @@ void read_obj_helper(const std::string& loc_full_name, Out_Data_Storage& dest, c
                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
 {
     // open object
-    detail::HDF_Object_Holder obj_id_holder(
+    HDF_Object_Holder obj_id_holder(
         open_fcn(),
         close_fcn,
         loc_full_name + ": error in " + open_fcn_name,
         loc_full_name + ": error in " + close_fcn_name);
     // open object space, check reading mode matches storage mode (scalar/vector)
-    detail::HDF_Object_Holder obj_space_id_holder(
+    HDF_Object_Holder obj_space_id_holder(
         get_space_fcn(obj_id_holder.id),
         H5Sclose,
         loc_full_name + ": error in " + get_space_fcn_name,
@@ -688,9 +734,9 @@ struct Reader_as_atomic
     void operator () (hid_t root_id, const std::string& loc_path, const std::string& loc_name,
                       Out_Data_Storage& dest)
     {
-        static_assert(can_read< Out_Data_Type >::value,
-                      "Reader_impl<Out_Data_Type,true>: expected a readable destination");
-        static_assert(read_as_atomic< Out_Data_Type >::value,
+        static_assert(mem_type_class< Out_Data_Type >::value == 1
+                      or mem_type_class< Out_Data_Type >::value == 2
+                      or mem_type_class< Out_Data_Type >::value == 3,
                       "Reader_impl<Out_Data_Type,true>: expected a type readable as atomic");
         read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_path, loc_name, dest, nullptr);
     }
@@ -704,38 +750,304 @@ struct Reader_as_atomic< Out_Data_Type, false >
     void operator () (hid_t root_id, const std::string& loc_path, const std::string& loc_name,
                       Out_Data_Storage& dest, const Compound_Map* compound_map_ptr)
     {
-        static_assert(can_read< Out_Data_Type >::value,
-                      "Reader_impl<Out_Data_Type,false>: expected a readable destination");
-        static_assert(not read_as_atomic< Out_Data_Type >::value,
+        static_assert(mem_type_class< Out_Data_Type >::value == 4,
                       "Reader_impl<Out_Data_Type,false>: expected a type readable as compound");
         read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_path, loc_name, dest, compound_map_ptr);
     }
 };
 
 template < typename Out_Data_Type >
-struct Reader : public Reader_as_atomic< Out_Data_Type, read_as_atomic< Out_Data_Type >::value >
+struct Reader : public Reader_as_atomic< Out_Data_Type,
+                                         mem_type_class< Out_Data_Type >::value == 1
+                                         or mem_type_class< Out_Data_Type >::value == 2
+                                         or mem_type_class< Out_Data_Type >::value == 3 >
 {};
+
+// Writer_helper_base
+//   Common base for Write_helper atomic/compound
+struct Writer_helper_base
+{
+    static HDF_Object_Holder create(hid_t grp_id, const std::string& loc_name, bool as_ds,
+                                    hid_t dspace_id, hid_t file_dtype_id)
+    {
+        HDF_Object_Holder obj_id_holder;
+        if (as_ds)
+        {
+            obj_id_holder.load(
+                H5Dcreate2(grp_id, loc_name.c_str(), file_dtype_id, dspace_id,
+                           H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
+                H5Dclose,
+                "error in H5Dcreate2",
+                "error in H5Dclose");
+        }
+        else
+        {
+            obj_id_holder.load(
+                H5Acreate2(grp_id, loc_name.c_str(), file_dtype_id, dspace_id,
+                           H5P_DEFAULT, H5P_DEFAULT),
+                H5Aclose,
+                "error in H5Acreate2",
+                "error in H5Aclose");
+        }
+        return obj_id_holder;
+    }
+    static void write(hid_t obj_id, bool as_ds, hid_t mem_dtype_id, const void* in)
+    {
+        auto status = as_ds
+            ? H5Dwrite(obj_id, mem_dtype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, in)
+            : H5Awrite(obj_id, mem_dtype_id, in);
+        if (status < 0) throw Exception("error in H5Dwrite/H5Awrite");
+    }
+    static void create_and_write(hid_t grp_id, const std::string& loc_name, bool as_ds,
+                                 hid_t dspace_id, hid_t mem_dtype_id, hid_t file_dtype_id,
+                                 const void* in)
+    {
+        HDF_Object_Holder obj_id_holder(create(grp_id, loc_name, as_ds, dspace_id, file_dtype_id));
+        write(obj_id_holder.id, as_ds, mem_dtype_id, in);
+    }
+}; // struct Writer_helper_base
+
+// Writer_helper
+//  Branch on memory type classes
+template < int, typename >
+struct Writer_helper;
+
+// numeric
+template < typename In_Data_Type >
+struct Writer_helper< 1, In_Data_Type >
+    : public Writer_helper_base
+{
+    void operator () (hid_t grp_id, const std::string& loc_name, bool as_ds,
+                      hid_t dspace_id, size_t sz,
+                      const In_Data_Type * in, hid_t file_dtype_id = 0) const
+    {
+        assert(std::is_integral< In_Data_Type >::value or std::is_floating_point< In_Data_Type >::value);
+        hid_t mem_dtype_id = get_mem_type< In_Data_Type >::id();
+        if (file_dtype_id == 0)
+        {
+            file_dtype_id = mem_dtype_id;
+        }
+        Writer_helper_base::create_and_write(
+            grp_id, loc_name, as_ds,
+            dspace_id, mem_dtype_id, file_dtype_id,
+            in);
+    }
+};
+
+// fixed-length string
+template < typename In_Data_Type >
+struct Writer_helper< 2, In_Data_Type >
+    : public Writer_helper_base
+{
+    void operator () (hid_t grp_id, const std::string& loc_name, bool as_ds,
+                      hid_t dspace_id, size_t sz,
+                      const In_Data_Type * in, hid_t file_dtype_id = 0) const
+    {
+        HDF_Object_Holder mem_dtype_id_holder;
+        HDF_Object_Holder file_dtype_id_holder;
+        std::vector< const char * > charptr_buff;
+        const void * vptr_in = in;
+        if (file_dtype_id >= 0)
+        {
+            mem_dtype_id_holder = std::move(Util::make_str_type(sizeof(In_Data_Type)));
+            if (file_dtype_id == 0)
+            {
+                file_dtype_id = mem_dtype_id_holder.id;
+            }
+            else // file_dtype_id > 0
+            {
+                file_dtype_id_holder = std::move(Util::make_str_type(file_dtype_id));
+                file_dtype_id = file_dtype_id_holder.id;
+            }
+        }
+        else // file_dtype_id < 0: write as varlen strings
+        {
+            mem_dtype_id_holder = std::move(Util::make_str_type(-1));
+            file_dtype_id = mem_dtype_id_holder.id;
+            // prepare array of pointers
+            charptr_buff.resize(sz);
+            for (hsize_t i = 0; i < sz; ++i)
+            {
+                charptr_buff[i] = &in[i][0];
+            }
+            vptr_in = charptr_buff.data();
+        }
+        Writer_helper_base::create_and_write(
+            grp_id, loc_name, as_ds,
+            dspace_id, mem_dtype_id_holder.id, file_dtype_id,
+            vptr_in);
+    }
+};
+
+// variable-length string
+template <>
+struct Writer_helper< 3, std::string >
+    : public Writer_helper_base
+{
+    void operator () (hid_t grp_id, const std::string& loc_name, bool as_ds,
+                      hid_t dspace_id, size_t sz,
+                      const std::string * in, hid_t file_dtype_id = -1) const
+    {
+        HDF_Object_Holder mem_dtype_id_holder;
+        std::vector< const char * > charptr_buff;
+        std::vector< char > char_buff;
+        const void * vptr_in;
+        if (file_dtype_id == -1) // varlen to varlen
+        {
+            mem_dtype_id_holder = std::move(Util::make_str_type(-1));
+            charptr_buff.resize(sz);
+            for (hsize_t i = 0; i < sz; ++i)
+            {
+                charptr_buff[i] = in[i].data();
+            }
+            vptr_in = charptr_buff.data();
+        }
+        else // varlen to fixlen
+        {
+            assert(file_dtype_id > 0 or sz == 1); // file_dtype_id == 0 only allowed for single strings
+            size_t slen = file_dtype_id > 0 ? file_dtype_id : in[0].size() + 1;
+            assert(slen <= std::numeric_limits< long >::max());
+            mem_dtype_id_holder = std::move(Util::make_str_type(slen));
+            char_buff.resize(sz * slen);
+            for (hsize_t i = 0; i < sz; ++i)
+            {
+                for (size_t j = 0; j < slen - 1; ++j)
+                {
+                    char_buff[i * slen + j] = j < in[i].size()? in[i][j] : '\0';
+                }
+                char_buff[i * slen + slen - 1] = '\0';
+            }
+            vptr_in = char_buff.data();
+        }
+        Writer_helper_base::create_and_write(
+            grp_id, loc_name, as_ds,
+            dspace_id, mem_dtype_id_holder.id, mem_dtype_id_holder.id,
+            vptr_in);
+    }
+};
+
+// compound
+template < typename In_Data_Type >
+struct Writer_helper< 4, In_Data_Type >
+    : public Writer_helper_base
+{
+    void operator () (hid_t grp_id, const std::string& loc_name, bool as_ds,
+                      hid_t dspace_id, size_t sz,
+                      const In_Data_Type * in, const Compound_Map& cm) const
+    {
+        // create the file type
+        HDF_Object_Holder file_dtype_id_holder(
+            H5Tcreate(H5T_COMPOUND, sizeof(In_Data_Type)),
+            H5Tclose,
+            "error in H5Tcopy",
+            "error in H5Tclose");
+        std::map< const Compound_Member_Description*, HDF_Object_Holder > file_stype_id_holder_m;
+        int status;
+        for (const auto& e : cm.members())
+        {
+            assert(not e.is_compound()); // not implemented
+            assert(not e.is_string()); // not implemented
+            if (e.is_numeric())
+            {
+                status = H5Tinsert(file_dtype_id_holder.id, e.name.c_str(), e.offset, e.numeric_type_id);
+                if (status < 0) throw Exception("error in H5Tinsert");
+            }
+            else if (e.is_char_array())
+            {
+                HDF_Object_Holder stype_holder(Util::make_str_type(e.char_array_size));
+                std::pair< const Compound_Member_Description*, HDF_Object_Holder > p;
+                p = std::make_pair(std::move(&e), std::move(stype_holder));
+                file_stype_id_holder_m.emplace(std::move(p));
+                status = H5Tinsert(file_dtype_id_holder.id, e.name.c_str(), e.offset, file_stype_id_holder_m[&e].id);
+            }
+        }
+        // create object
+        HDF_Object_Holder obj_id_holder(
+            Writer_helper_base::create(
+                grp_id, loc_name, as_ds,
+                dspace_id, file_dtype_id_holder.id));
+        // write all-in-one
+        Writer_helper_base::write(obj_id_holder.id, as_ds, file_dtype_id_holder.id, in);
+    }
+};
+
+// Writer
+//   Struct branches on data argument type:
+//   if std::vector, it writes a simple extent;
+//   if not std::vector, it writes a scalar.
+template < typename In_Data_Type >
+struct Writer
+{
+    template < typename ...Args >
+    void operator () (hid_t grp_id, const std::string& loc_name, bool as_ds,
+                      const In_Data_Type & in, Args&& ...args) const
+    {
+        // create dataspace
+        HDF_Object_Holder dspace_id_holder(
+            H5Screate(H5S_SCALAR),
+            H5Sclose,
+            "error in H5Screate",
+            "error in H5Sclose");
+        Writer_helper< mem_type_class< In_Data_Type >::value, In_Data_Type >()(
+            grp_id, loc_name, as_ds,
+            dspace_id_holder.id, 1,
+            &in, std::forward< Args >(args)...);
+    }
+};
+
+
+template < typename In_Data_Type >
+struct Writer< std::vector< In_Data_Type > >
+{
+    template < typename ...Args >
+    void operator () (hid_t grp_id, const std::string& loc_name, bool as_ds,
+                      const std::vector< In_Data_Type > & in, Args&& ...args) const
+    {
+        assert(not in.empty());
+        // create dataspace
+        hsize_t sz = in.size();
+        HDF_Object_Holder dspace_id_holder(
+            H5Screate_simple(1, &sz, nullptr),
+            H5Sclose,
+            "error in H5Screate_simple",
+            "error in H5Sclose");
+        Writer_helper< mem_type_class< In_Data_Type >::value, In_Data_Type >()(
+            grp_id, loc_name, as_ds,
+            dspace_id_holder.id, sz,
+            in.data(), std::forward< Args >(args)...);
+    }
+};
 
 } // namespace detail
 
 /// An HDF5 file reader
-class File_Reader
+class File
 {
 public:
-    File_Reader() : _file_id(0) {}
-    File_Reader(const std::string& file_name) : _file_id(0) { open(file_name); }
-    File_Reader(const File_Reader&) = delete;
-    File_Reader& operator = (const File_Reader&) = delete;
-    ~File_Reader() { if (is_open()) close(); }
+    File() : _file_id(0) {}
+    File(const std::string& file_name, bool rw = false) : _file_id(0) { open(file_name, rw); }
+    File(const File&) = delete;
+    File& operator = (const File&) = delete;
+    ~File() { if (is_open()) close(); }
 
     bool is_open() const { return _file_id > 0; }
+    bool is_rw() const { return _rw; }
     const std::string& file_name() const { return _file_name; }
 
-    void open(const std::string& file_name)
+    void create(const std::string& file_name, bool truncate = false)
     {
         assert(not is_open());
         _file_name = file_name;
-        _file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+        _rw = true;
+        _file_id = H5Fcreate(file_name.c_str(), truncate? H5F_ACC_TRUNC : H5F_ACC_EXCL, H5P_DEFAULT, H5P_DEFAULT);
+        if (not is_open()) throw Exception(_file_name + ": error in H5Fcreate");
+    }
+    void open(const std::string& file_name, bool rw = false)
+    {
+        assert(not is_open());
+        _file_name = file_name;
+        _rw = rw;
+        _file_id = H5Fopen(file_name.c_str(), not rw? H5F_ACC_RDONLY : H5F_ACC_RDWR, H5P_DEFAULT);
         if (not is_open()) throw Exception(_file_name + ": error in H5Fopen");
     }
     void close()
@@ -824,6 +1136,54 @@ public:
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
         detail::Reader< Out_Data_Type >()(_file_id, loc_path, loc_name, std::forward< Args >(args)...);
     }
+    /// Write attribute or dataset
+    template < typename In_Data_Storage, typename ...Args >
+    void write(const std::string& loc_full_name, bool as_ds, const In_Data_Storage& in, Args&& ...args) const
+    {
+        assert(is_open());
+        assert(is_rw());
+        assert(not loc_full_name.empty() and loc_full_name[0] == '/');
+        assert(not exists(loc_full_name));
+        std::string loc_path;
+        std::string loc_name;
+        std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+        detail::HDF_Object_Holder grp_id_holder;
+        if (group_exists(loc_path))
+        {
+            grp_id_holder.load(
+                H5Oopen(_file_id, loc_path.c_str(), H5P_DEFAULT),
+                H5Oclose,
+                "error in H5Oopen",
+                "error in H5Oclose");
+        }
+        else
+        {
+            detail::HDF_Object_Holder lcpl_id_holder(
+                H5Pcreate(H5P_LINK_CREATE),
+                H5Pclose,
+                "error in H5Pcreate",
+                "error in H5Pclose");
+            auto status = H5Pset_create_intermediate_group(lcpl_id_holder.id, 1);
+            if (status < 0) throw Exception(_file_name + ": error in H5Pset_create_intermediate_group");
+            grp_id_holder.load(
+                H5Gcreate2(_file_id, loc_path.c_str(), lcpl_id_holder.id, H5P_DEFAULT, H5P_DEFAULT),
+                H5Gclose,
+                "error in H5Gcreate2",
+                "error in H5Gclose");
+        }
+        detail::Writer< In_Data_Storage >()(grp_id_holder.id, loc_name, as_ds, in, std::forward< Args >(args)...);
+    }
+    template < typename In_Data_Storage, typename ...Args >
+    void write_dataset(const std::string& loc_full_name, const In_Data_Storage& in, Args&& ...args) const
+    {
+        write(loc_full_name, true, in, std::forward< Args >(args)...);
+    }
+    template < typename In_Data_Storage, typename ...Args >
+    void write_attribute(const std::string& loc_full_name, const In_Data_Storage& in, Args&& ...args) const
+    {
+        write(loc_full_name, false, in, std::forward< Args >(args)...);
+    }
+
     /// Return a list of names (groups/datasets) in the given group
     std::vector< std::string > list_group(const std::string& group_full_name) const
     {
@@ -933,6 +1293,7 @@ public:
 private:
     std::string _file_name;
     hid_t _file_id;
+    bool _rw;
 
     /// Split a full name into path and name
     static std::pair< std::string, std::string > split_full_name(const std::string& full_name)
@@ -988,7 +1349,7 @@ private:
         // check link exists
         hid_t status = H5Lexists(_file_id, loc_full_name.c_str(), H5P_DEFAULT);
         if (status < 0) throw Exception(loc_full_name + ": error in H5Lexists");
-        if (not status) return false;
+        if (loc_full_name != "/" and not status) return false;
         // check object exists
         status = H5Oexists_by_name(_file_id, loc_full_name.c_str(), H5P_DEFAULT);
         if (status < 0) throw Exception(loc_full_name + ": error in H5Oexists_by_name");
@@ -1005,7 +1366,7 @@ private:
         if (status < 0) throw Exception(loc_full_name + ": error in H5Oget_info");
         return o_info.type == type_id;
     }
-}; // class File_Reader
+}; // class File
 
 } // namespace hdf5_tools
 

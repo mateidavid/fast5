@@ -8,6 +8,7 @@
 #define __HDF5_TOOLS_HPP
 
 #include <cassert>
+#include <cstring>
 #include <exception>
 #include <functional>
 #include <fstream>
@@ -17,6 +18,7 @@
 #include <tuple>
 #include <vector>
 #include <deque>
+#include <set>
 #include <map>
 #include <limits>
 #include <type_traits>
@@ -35,8 +37,13 @@ class Exception
     : public std::exception
 {
 public:
-    Exception(const std::string& msg) : _msg(msg) {}
+    Exception(const std::string& msg) : _msg(active_path() + ": " + msg) {}
     const char* what() const noexcept { return _msg.c_str(); }
+    static std::string& active_path()
+    {
+        static thread_local std::string _active_path;
+        return _active_path;
+    }
 private:
     std::string _msg;
 }; // class Exception
@@ -46,6 +53,13 @@ class Compound_Map;
 
 namespace detail
 {
+
+/// Compute offset of a struct member from a member pointer (runtime version).
+template < typename T, typename U >
+std::size_t offset_of(U T::* mem_ptr)
+{
+    return reinterpret_cast< std::size_t >(&(((T*)0)->*mem_ptr));
+}
 
 /// TempMetaFunc: Given destination type, deduce memory type to be used in hdf5 read operation.
 /// Only useful for numeric types.
@@ -113,89 +127,31 @@ struct mem_type_class< std::string >
     static const int value = 3;
 };
 
-/// Compute offset of a struct member from a member pointer (runtime version).
-template < typename T, typename U >
-std::size_t offset_of(U T::* mem_ptr)
-{
-    return reinterpret_cast< std::size_t >(&(((T*)0)->*mem_ptr));
-}
-
-/// Description of a member inside a compound
-/// Only works with numeric, string, and struct types.
-struct Compound_Member_Description
-{
-public:
-    Compound_Member_Description(const std::string& _name, size_t _offset, hid_t _numeric_type_id)
-        : name(_name), offset(_offset), numeric_type_id(_numeric_type_id)
-    {
-        type = numeric;
-    }
-    Compound_Member_Description(const std::string& _name, size_t _offset, size_t _char_array_size)
-        : name(_name), offset(_offset), char_array_size(_char_array_size)
-    {
-        type = char_array;
-    }
-    Compound_Member_Description(const std::string& _name, size_t _offset)
-        : name(_name), offset(_offset)
-    {
-        type = string;
-    }
-    Compound_Member_Description(const std::string& _name, size_t _offset, const Compound_Map* _compound_map_ptr)
-        : name(_name), offset(_offset), compound_map_ptr(_compound_map_ptr)
-    {
-        type = compound;
-    }
-
-    bool is_numeric() const { return type == numeric; }
-    bool is_char_array() const { return type == char_array; }
-    bool is_string() const { return type == string; }
-    bool is_compound() const { return type == compound; }
-
-    std::string name;
-    size_t offset;
-    union
-    {
-        hid_t numeric_type_id;
-        size_t char_array_size;
-        const Compound_Map* compound_map_ptr;
-    };
-
-private:
-    enum member_type
-    {
-        numeric,
-        char_array,
-        string,
-        compound
-    };
-    member_type type;
-}; // Compound_Member_Description
-
 // Struct whose purpuse is to destroy the HDF object during destruction
 struct HDF_Object_Holder
 {
     int id;
     std::function< herr_t(hid_t) > dtor;
-    std::string dtor_message;
     HDF_Object_Holder()
         : id(0) {}
     HDF_Object_Holder(const HDF_Object_Holder&) = delete;
     HDF_Object_Holder(HDF_Object_Holder&& other)
         : id(0)
     {
-        *this = std::move(other);
+        load(std::move(other));
     }
-    HDF_Object_Holder(int _id, std::function< herr_t(hid_t) > _dtor,
-                      const std::string& _ctor_message, const std::string& _dtor_message)
+    HDF_Object_Holder(int _id, std::function< herr_t(hid_t) > _dtor)
     {
-        load(_id, _dtor, _ctor_message, _dtor_message);
+        load(_id, _dtor);
     }
     ~HDF_Object_Holder() noexcept(false)
     {
         if (id > 0)
         {
-            int status = dtor(id);
-            if (status < 0 and not std::uncaught_exception()) throw Exception(dtor_message);
+            if (dtor)
+            {
+                dtor(id);
+            }
             id = 0;
         }
     }
@@ -206,17 +162,17 @@ struct HDF_Object_Holder
         {
             std::swap(id, other.id);
             std::swap(dtor, other.dtor);
-            std::swap(dtor_message, other.dtor_message);
         }
         return *this;
     }
-    void load(int _id, std::function< herr_t(hid_t) > _dtor,
-              const std::string& _ctor_message, const std::string& _dtor_message)
+    void load(int _id, std::function< herr_t(hid_t) > _dtor)
     {
-        if (_id < 0) throw Exception(_ctor_message);
         id = _id;
         dtor = _dtor;
-        dtor_message = _dtor_message;
+    }
+    void load(HDF_Object_Holder&& other)
+    {
+        *this = std::move(other);
     }
 }; // struct HDF_Object_Holder
 
@@ -230,15 +186,388 @@ struct Util
     {
         assert(sz != 0);
         HDF_Object_Holder res(
-            H5Tcopy(H5T_C_S1),
-            H5Tclose,
-            "error in H5Tcopy",
-            "error in H5Tclose");
-        auto status = H5Tset_size(res.id, sz < 0? H5T_VARIABLE : sz);
-        if (status < 0) throw Exception("error in H5Tset_size");
+            wrap(H5Tcopy, H5T_C_S1),
+            wrapped_closer(H5Tclose));
+        size_t tmp = sz < 0? H5T_VARIABLE : sz;
+        wrap(H5Tset_size, res.id, tmp);
+        return res;
+    } // make_str_type
+
+    /**
+     * Get name and return value checker for hdf5 function.
+     */
+    static const std::pair< const char *, std::function< bool(void *) > >&
+    get_fcn_info(void * fcn_ptr)
+    {
+        static const std::map< void *, std::pair< const char *, std::function< bool(void *) > > > fcn_info_m =
+            {
+                { (void*)&H5Aclose,
+                  { "H5Aclose",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Acreate2,
+                  { "H5Acreate2",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Aexists_by_name,
+                  { "H5Aexists_by_name",
+                    [] (void * vp) { return *reinterpret_cast< htri_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Aget_name_by_idx,
+                  { "H5Aget_name_by_idx",
+                    [] (void * vp) { return *reinterpret_cast< ssize_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Aget_space,
+                  { "H5Aget_space",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Aget_type,
+                  { "H5Aget_type",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Aopen,
+                  { "H5Aopen",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Aopen_by_name,
+                  { "H5Aopen_by_name",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Aread,
+                  { "H5Aread",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Awrite,
+                  { "H5Awrite",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+
+                { (void*)&H5Dclose,
+                  { "H5Dclose",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Dcreate2,
+                  { "H5Dcreate2",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Dget_space,
+                  { "H5Dget_space",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Dget_type,
+                  { "H5Dget_type",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Dopen,
+                  { "H5Dopen",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Dread,
+                  { "H5Dread",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Dvlen_reclaim,
+                  { "H5Dvlen_reclaim",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Dwrite,
+                  { "H5Dwrite",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+
+                { (void*)&H5Gclose,
+                  { "H5Gclose",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Gcreate2,
+                  { "H5Gcreate2",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Gget_info,
+                  { "H5Gget_info",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Gopen2,
+                  { "H5Gopen2",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+
+                { (void*)&H5Lexists,
+                  { "H5Lexists",
+                    [] (void * vp) { return *reinterpret_cast< htri_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Lget_name_by_idx,
+                  { "H5Lget_name_by_idx",
+                    [] (void * vp) { return *reinterpret_cast< ssize_t * >(vp) >= 0; }
+                  }
+                },
+
+                { (void*)&H5Oclose,
+                  { "H5Oclose",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Oexists_by_name,
+                  { "H5Oexists_by_name",
+                    [] (void * vp) { return *reinterpret_cast< htri_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Oget_info,
+                  { "H5Oget_info",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Oopen,
+                  { "H5Oopen",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+
+                { (void*)&H5Pclose,
+                  { "H5Pclose",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Pcreate,
+                  { "H5Pcreate",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Pset_create_intermediate_group,
+                  { "H5Pset_create_intermediate_group",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+
+                { (void*)&H5Sclose,
+                  { "H5Sclose",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Screate,
+                  { "H5Screate",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Screate_simple,
+                  { "H5Screate_simple",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Sget_simple_extent_dims,
+                  { "H5Sget_simple_extent_dims",
+                    [] (void * vp) { return *reinterpret_cast< int * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Sget_simple_extent_ndims,
+                  { "H5Sget_simple_extent_ndims",
+                    [] (void * vp) { return *reinterpret_cast< int * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Sget_simple_extent_type,
+                  { "H5Sget_simple_extent_type",
+                    [] (void * vp) { return *reinterpret_cast< H5S_class_t * >(vp) != H5S_NO_CLASS; }
+                  }
+                },
+
+                { (void*)&H5Tclose,
+                  { "H5Tclose",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Tcopy,
+                  { "H5Tcopy",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Tcreate,
+                  { "H5Tcreate",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Tget_class,
+                  { "H5Tget_class",
+                    [] (void * vp) { return *reinterpret_cast< H5T_class_t * >(vp) != H5T_NO_CLASS; }
+                  }
+                },
+                { (void*)&H5Tget_member_index,
+                  { "H5Tget_member_index",
+                    [] (void * vp) { return *reinterpret_cast< int * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Tget_member_name,
+                  { "H5Tget_member_name",
+                    [] (void * vp) { return *reinterpret_cast< char* * >(vp) != nullptr; }
+                  }
+                },
+                { (void*)&H5Tget_member_type,
+                  { "H5Tget_member_type",
+                    [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Tget_nmembers,
+                  { "H5Tget_nmembers",
+                    [] (void * vp) { return *reinterpret_cast< int * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Tget_sign,
+                  { "H5Tget_sign",
+                    [] (void * vp) { return *reinterpret_cast< H5T_sign_t * >(vp) != H5T_SGN_ERROR; }
+                  }
+                },
+                { (void*)&H5Tget_size,
+                  { "H5Tget_size",
+                    [] (void * vp) { return *reinterpret_cast< size_t * >(vp) > 0; }
+                  }
+                },
+                { (void*)&H5Tinsert,
+                  { "H5Tinsert",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Tis_variable_str,
+                  { "H5Tis_variable_str",
+                    [] (void * vp) { return *reinterpret_cast< htri_t * >(vp) >= 0; }
+                  }
+                },
+                { (void*)&H5Tset_size,
+                  { "H5Tset_size",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
+                  }
+                },
+            };
+        return fcn_info_m.at(fcn_ptr);
+    }
+
+    /**
+     * General-purpose wrapper of hdf5 calls that checks return value for validity.
+     */
+    template < typename Function, typename... Args >
+    static typename std::result_of< Function(Args...) >::type
+    wrap(Function&& f, Args&& ...args)
+    {
+        auto res = f(args...);
+        const auto& f_info = get_fcn_info((void*)&f);
+        if (not f_info.second((void*)&res)) throw Exception(std::string("error in ") + f_info.first);
         return res;
     }
+
+    /**
+     * Wrap closer function.
+     */
+    template < typename Function >
+    static std::function< herr_t(hid_t) > wrapped_closer(Function&& f)
+    {
+        return [&] (hid_t id) { return wrap(f, id); };
+    }
 }; // struct Util
+
+/// Description of a member inside a compound
+/// Only works with numeric, string, and struct types.
+struct Compound_Member_Description
+{
+public:
+    Compound_Member_Description(const std::string& _name, size_t _offset, hid_t _numeric_type_id)
+        : type(numeric),
+          name(_name),
+          offset(_offset),
+          numeric_type_id(_numeric_type_id) {}
+    Compound_Member_Description(const std::string& _name, size_t _offset, size_t _char_array_size)
+        : type(char_array),
+          name(_name),
+          offset(_offset),
+          char_array_size(_char_array_size) {}
+    Compound_Member_Description(const std::string& _name, size_t _offset)
+        : type(string),
+          name(_name),
+          offset(_offset) {}
+    Compound_Member_Description(const std::string& _name, size_t _offset,
+                                const Compound_Map* _compound_map_ptr, size_t _compound_size)
+        : type(compound),
+          name(_name),
+          offset(_offset),
+          compound_map_ptr(_compound_map_ptr),
+          compound_size(_compound_size) {}
+
+    bool is_numeric()    const { return type == numeric;    }
+    bool is_char_array() const { return type == char_array; }
+    bool is_string()     const { return type == string;     }
+    bool is_compound()   const { return type == compound;   }
+
+    HDF_Object_Holder get_type() const
+    {
+        assert(not is_compound());
+        HDF_Object_Holder res;
+        if (is_numeric())
+        {
+            res.load(numeric_type_id, nullptr);
+        }
+        else if (is_char_array())
+        {
+            res.load(Util::make_str_type(char_array_size));
+        }
+        else if (is_string())
+        {
+            res.load(Util::make_str_type(-1));
+        }
+        return res;
+    }
+
+    friend std::ostream& operator << (std::ostream& os, const Compound_Member_Description& e)
+    {
+        os << "(&=" << (void*)&e
+           << ",name=\"" << e.name
+           << "\",type=" << (e.is_numeric()
+                             ? "numeric"
+                             : (e.is_char_array()
+                                ? "char_array"
+                                : (e.is_string()
+                                   ? "string" : "compound")))
+           << ",offset=" << e.offset << ")";
+        return os;
+    }
+
+    enum member_type
+    {
+        numeric,
+        char_array,
+        string,
+        compound
+    };
+    member_type type;
+    std::string name;
+    size_t offset;
+    union
+    {
+        hid_t numeric_type_id;
+        size_t char_array_size;
+        const Compound_Map* compound_map_ptr;
+    };
+    size_t compound_size;
+}; // Compound_Member_Description
 
 } // namespace detail
 
@@ -259,7 +588,7 @@ public:
         static_assert(detail::mem_type_class< U >::value == 1
                       or detail::mem_type_class< U >::value == 2
                       or detail::mem_type_class< U >::value == 3,
-                      "add_member(name, mem_ptr) overload expects numerical or string types only ");
+                      "add_member(name, mem_ptr) overload expects numerical or string types only");
         if (detail::mem_type_class< U >::value == 1)
         {
             _members.emplace_back(name, detail::offset_of(mem_ptr), detail::get_mem_type< U >::id());
@@ -277,13 +606,158 @@ public:
     template < typename T, typename U >
     void add_member(const std::string& name, U T::* mem_ptr, const Compound_Map* compound_map_ptr)
     {
-        assert(false); // not currently implemented
         static_assert(detail::mem_type_class< U >::value == 4,
-                      "add_member(name, mem_ptr, compound_map_ptr) overload expects class types only ");
-        _members.emplace_back(name, detail::offset_of(mem_ptr), compound_map_ptr);
+                      "add_member(name, mem_ptr, compound_map_ptr) overload expects class types only");
+        _members.emplace_back(name, detail::offset_of(mem_ptr), compound_map_ptr, sizeof(U));
     }
 
     const std::vector< detail::Compound_Member_Description >& members() const { return _members; }
+
+    /**
+     * Get list of non-compound member types.
+     * @return A list of pairs; first: list of member ptrs followed; second: absolute offset.
+     */
+    typedef std::deque< std::pair< std::deque< const detail::Compound_Member_Description* >,
+                                   size_t > > member_ptr_list_type;
+    member_ptr_list_type get_member_ptr_list() const
+    {
+        member_ptr_list_type res;
+        for (const auto& e : members())
+        {
+            member_ptr_list_type::value_type p;
+            if (not e.is_compound())
+            {
+                member_ptr_list_type::value_type p;
+                p.first = { &e };
+                p.second = e.offset;
+                res.emplace_back(std::move(p));
+            }
+            else
+            {
+                auto tmp = e.compound_map_ptr->get_member_ptr_list();
+                for (auto& tmp_p : tmp)
+                {
+                    member_ptr_list_type::value_type p;
+                    p.first = std::move(tmp_p.first);
+                    p.first.push_front(&e);
+                    p.second = tmp_p.second + e.offset;
+                    res.emplace_back(std::move(p));
+                }
+            }
+        }
+        return res;
+    }
+
+    /**
+     * Produce hdf5 compound datatype for this map.
+     * @param compound_size Extrenally-tracked compound size
+     * @param selector If empty, use all elements; if not empty, use only elements that pass selection.
+     * @fill If true, type offsets follow compound map offsets, allowing for gaps;
+     * if false: type offsets are minimal values required to fit members.
+     */
+    detail::HDF_Object_Holder build_type(
+        size_t compound_size,
+        std::function< bool(const detail::Compound_Member_Description&) > selector = nullptr,
+        bool fill = true) const
+    {
+        //std::clog << "===== build_type (" << (void*)this << ") start" << std::endl;
+        std::deque< std::tuple< std::string, detail::HDF_Object_Holder, size_t > > stype_id_holder_l;
+        size_t compressed_size = 0;
+        for (const auto& e : members())
+        {
+            detail::HDF_Object_Holder stype_id_holder;
+            if (selector and not e.is_compound() and not selector(e)) continue;
+            if (not e.is_compound())
+            {
+                stype_id_holder = e.get_type();
+            }
+            else
+            {
+                stype_id_holder = e.compound_map_ptr->build_type(e.compound_size, selector, fill);
+            }
+            if (stype_id_holder.id > 0)
+            {
+                stype_id_holder_l.emplace_back(
+                    std::string(e.name),
+                    std::move(stype_id_holder),
+                    fill? e.offset : compressed_size);
+                compressed_size += H5Tget_size(std::get<1>(stype_id_holder_l.back()).id);
+            }
+        }
+        if (stype_id_holder_l.empty())
+        {
+            //std::clog << "===== build_type (" << (void*)this << ") empty" << std::endl;
+            return detail::HDF_Object_Holder();
+        }
+        //std::clog << "===== build_type (" << (void*)this << ") compound size: " << (fill? compound_size : compressed_size) << std::endl;
+        detail::HDF_Object_Holder res(
+            detail::Util::wrap(H5Tcreate, H5T_COMPOUND, fill? compound_size : compressed_size),
+            detail::Util::wrapped_closer(H5Tclose));
+        for (const auto& t : stype_id_holder_l)
+        {
+            //std::clog << "===== build_type (" << (void*)this << ") adding name=\"" << std::get<0>(t) << "\", offset=" << std::get<2>(t) << std::endl;
+            detail::Util::wrap(H5Tinsert, res.id, std::get<0>(t).c_str(), std::get<2>(t), std::get<1>(t).id);
+        }
+        //std::clog << "===== build_type (" << (void*)this << ") end" << std::endl;
+        return res;
+    }
+
+    static detail::HDF_Object_Holder build_flat_type(
+        const member_ptr_list_type::value_type::first_type& l, hid_t id = 0)
+    {
+        detail::HDF_Object_Holder res;
+        size_t sz = 0;
+        for (auto it = l.rbegin(); it != l.rend(); ++it)
+        {
+            const detail::Compound_Member_Description& e = **it;
+            assert((it == l.rbegin()) == (not e.is_compound()));
+            assert((it == l.rbegin()) == (res.id == 0));
+            assert((it == l.rbegin()) == (sz == 0));
+            if (it == l.rbegin())
+            {
+                if (id == 0)
+                {
+                    res.load(e.get_type());
+                }
+                else
+                {
+                    res.load(
+                        detail::Util::wrap(H5Tcopy, id),
+                        detail::Util::wrapped_closer(H5Tclose));
+                }
+                sz = detail::Util::wrap(H5Tget_size, res.id);
+            }
+            detail::HDF_Object_Holder tmp(
+                detail::Util::wrap(H5Tcreate, H5T_COMPOUND, sz),
+                detail::Util::wrapped_closer(H5Tclose));
+            detail::Util::wrap(H5Tinsert, tmp.id, e.name.c_str(), 0, res.id);
+            std::swap(res, tmp);
+        }
+        return res;
+    }
+
+    /**
+     * Get compound member from an existing compound type.
+     */
+    static detail::HDF_Object_Holder get_compound_member(
+        hid_t id, const member_ptr_list_type::value_type::first_type& l)
+    {
+        detail::HDF_Object_Holder res(
+            detail::Util::wrap(H5Tcopy, id),
+            detail::Util::wrapped_closer(H5Tclose));
+        for (auto it = l.begin(); it != l.end(); ++it)
+        {
+            const detail::Compound_Member_Description& e = **it;
+            assert(detail::Util::wrap(H5Tget_class, res.id) == H5T_COMPOUND);
+            unsigned idx = detail::Util::wrap(H5Tget_member_index, res.id, e.name.c_str());
+            detail::HDF_Object_Holder tmp(
+                detail::Util::wrap(H5Tget_member_type, res.id, idx),
+                detail::Util::wrapped_closer(H5Tclose));
+            std::swap(res, tmp);
+        }
+        assert(detail::Util::wrap(H5Tget_class, res.id) != H5T_COMPOUND);
+        return res;
+    }
 
 private:
     std::vector< detail::Compound_Member_Description > _members;
@@ -292,476 +766,373 @@ private:
 namespace detail
 {
 
-// TempSpec: reading numerics
-template < typename Out_Data_Type, typename Out_Data_Storage >
-struct Extent_Atomic_Reader
+// open object to be read, return dspace_id, file_dtype_id, reader fcn, reader fcn name, and is_ds
+struct Reader_Base
 {
-    void operator () (const std::string& loc_full_name, Out_Data_Storage& dest,
-                      const Compound_Map*, hid_t obj_id, hid_t,
-                      const std::string&, std::function< hid_t(hid_t) >,
-                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
+    Reader_Base(hid_t grp_id, const std::string& name)
     {
-        hid_t mem_type_id = get_mem_type< Out_Data_Type >::id();
-        assert(mem_type_id != -1);
-        int status = read_fcn(obj_id, mem_type_id, static_cast< void* >(dest.data()));
-        if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
-    }
-}; // struct Extent_Atomic_Reader
-
-// TempSpec: for reading strings
-// Note: allow reading singed/unsigned integers and floats as strings, using operator <<
-template < typename Out_Data_Storage >
-struct Extent_Atomic_Reader< std::string, Out_Data_Storage >
-{
-    void operator () (const std::string& loc_full_name, Out_Data_Storage& dest,
-                      const Compound_Map*, hid_t obj_id, hid_t obj_space_id,
-                      const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
-                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
-    {
-        int status;
-        HDF_Object_Holder file_type_id_holder(
-            get_type_fcn(obj_id),
-            H5Tclose,
-            loc_full_name + ": error in " + get_type_fcn_name,
-            loc_full_name + ": error in H5Tclose(file_type)");
-        int is_vlen_str = H5Tis_variable_str(file_type_id_holder.id);
-        if (is_vlen_str < 0) throw Exception(loc_full_name + ": error in H5Tis_variable_str");
-        if (is_vlen_str) // stored as variable-length string
+        int status = Util::wrap(H5Aexists_by_name, grp_id, ".", name.c_str(), H5P_DEFAULT);
+        is_ds = status == 0;
+        if (is_ds)
         {
-            // compute mem_type
-            HDF_Object_Holder mem_type_id_holder(Util::make_str_type(-1));
-            // prepare buffer to receive data
-            std::vector< char* > char_p_buff(dest.size(), nullptr);
-            // perform the read
-            status = read_fcn(obj_id, mem_type_id_holder.id, static_cast< void* >(char_p_buff.data()));
-            if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
-            // transfer strings to destination
-            for (size_t i = 0; i < dest.size(); ++i)
-            {
-                if (not char_p_buff[i]) throw Exception(loc_full_name + ": " + read_fcn_name + " did not fill buffer");
-                dest[i] = char_p_buff[i];
-            }
-            // reclaim memory allocated by libhdf5
-            status = H5Dvlen_reclaim(mem_type_id_holder.id, obj_space_id, H5P_DEFAULT, char_p_buff.data());
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Dvlen_reclaim");
+            obj_id_holder.load(
+                Util::wrap(H5Dopen, grp_id, name.c_str(), H5P_DEFAULT),
+                Util::wrapped_closer(H5Dclose));
+            dspace_id_holder.load(
+                Util::wrap(H5Dget_space, obj_id_holder.id),
+                Util::wrapped_closer(H5Sclose));
+            file_dtype_id_holder.load(
+                Util::wrap(H5Dget_type, obj_id_holder.id),
+                Util::wrapped_closer(H5Tclose));
+            reader = [&] (hid_t mem_dtype_id, void* dest) {
+                return Util::wrap(H5Dread, obj_id_holder.id, mem_dtype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, dest);
+            };
         }
-        else if (H5Tget_class(file_type_id_holder.id) == H5T_STRING) // stored as fixed-length string
+        else
         {
-            // compute mem_type
-            size_t sz = H5Tget_size(file_type_id_holder.id);
-            if (sz == 0) throw Exception(loc_full_name + ": H5Tget_size returned 0; is this an error?!");
-            HDF_Object_Holder mem_type_id_holder(Util::make_str_type(sz + 1));
-            // prepare buffer to receieve data
-            std::vector< char > char_buff(dest.size() * (sz + 1), '\0');
-            // perform the read
-            status = read_fcn(obj_id, mem_type_id_holder.id, static_cast< void* >(char_buff.data()));
-            if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
-            // transfer strings to destination
-            for (size_t i = 0; i < dest.size(); ++i)
+            obj_id_holder.load(
+                Util::wrap(H5Aopen, grp_id, name.c_str(), H5P_DEFAULT),
+                Util::wrapped_closer(H5Aclose));
+            dspace_id_holder.load(
+                Util::wrap(H5Aget_space, obj_id_holder.id),
+                Util::wrapped_closer(H5Sclose));
+            file_dtype_id_holder.load(
+                Util::wrap(H5Aget_type, obj_id_holder.id),
+                Util::wrapped_closer(H5Tclose));
+            reader = [&] (hid_t mem_dtype_id, void* dest) {
+                return Util::wrap(H5Aread, obj_id_holder.id, mem_dtype_id, dest);
+            };
+        }
+        // dataspace class and size
+        dspace_class = Util::wrap(H5Sget_simple_extent_type, dspace_id_holder.id);
+        if (dspace_class == H5S_SCALAR)
+        {
+            dspace_size = 1;
+        }
+        else if (dspace_class == H5S_SIMPLE)
+        {
+            auto ndims = Util::wrap(H5Sget_simple_extent_ndims, dspace_id_holder.id);
+            if (ndims != 1) throw Exception("reading multi-dimensional extents is not supported");
+            hsize_t tmp;
+            Util::wrap(H5Sget_simple_extent_dims, dspace_id_holder.id, &tmp, nullptr);
+            dspace_size = tmp;
+        }
+        else
+        {
+            throw Exception("reading dataspaces other than SCALAR and SIMPLE is not supported");
+        }
+        // datatype class
+        file_dtype_class = Util::wrap(H5Tget_class, file_dtype_id_holder.id);
+        if (file_dtype_class == H5T_STRING)
+        {
+            file_dtype_is_vlen_str = Util::wrap(H5Tis_variable_str, file_dtype_id_holder.id);
+        }
+        else
+        {
+            file_dtype_is_vlen_str = false;
+        }
+        file_dtype_size = Util::wrap(H5Tget_size, file_dtype_id_holder.id);
+    }
+    HDF_Object_Holder obj_id_holder;
+    HDF_Object_Holder dspace_id_holder;
+    HDF_Object_Holder file_dtype_id_holder;
+    std::function< void(hid_t, void*) > reader;
+    H5S_class_t dspace_class;
+    size_t dspace_size;
+    H5T_class_t file_dtype_class;
+    htri_t file_dtype_is_vlen_str;
+    size_t file_dtype_size;
+    bool is_ds;
+}; // struct Reader_Base
+
+struct String_reader
+{
+    std::vector< std::string > operator () (
+        Reader_Base& reader_base,
+        const Compound_Map::member_ptr_list_type::value_type::first_type* mptr_l_ptr = nullptr) const
+    {
+        std::vector< std::string > res(reader_base.dspace_size);
+        assert((mptr_l_ptr != nullptr) == (reader_base.file_dtype_class == H5T_COMPOUND));
+        HDF_Object_Holder file_stype_id_holder;
+        hid_t file_stype_id = 0;
+        if (reader_base.file_dtype_class == H5T_COMPOUND)
+        {
+            file_stype_id_holder = Compound_Map::get_compound_member(
+                reader_base.file_dtype_id_holder.id,
+                *mptr_l_ptr);
+            file_stype_id = file_stype_id_holder.id;
+        }
+        else
+        {
+            file_stype_id = reader_base.file_dtype_id_holder.id;
+        }
+        auto mem_type_wrapper = [&] (HDF_Object_Holder&& id_holder) {
+            HDF_Object_Holder tmp(std::move(id_holder));
+            return (mptr_l_ptr != nullptr
+                    ? Compound_Map::build_flat_type(*mptr_l_ptr, tmp.id)
+                    : std::move(tmp));
+        };
+        assert(Util::wrap(H5Tget_class, file_stype_id) != H5T_COMPOUND);
+        auto file_stype_class = Util::wrap(H5Tget_class, file_stype_id);
+        HDF_Object_Holder mem_dtype_id_holder;
+        if (file_stype_class == H5T_STRING) // stored as a string
+        {
+            if (Util::wrap(H5Tis_variable_str, file_stype_id)) // stored as a varlen string
             {
-                dest[i] = std::string(&char_buff[i * (sz + 1)], sz);
-                // trim trailing '\0'-s
-                while (not dest[i].empty() and dest[i].back() == '\0')
+                // compute mem_type
+                mem_dtype_id_holder = mem_type_wrapper(Util::make_str_type(-1));
+                // prepare buffer to receive data
+                std::vector< char * > charptr_buff(res.size(), nullptr);
+                // perform the read
+                reader_base.reader(mem_dtype_id_holder.id, charptr_buff.data());
+                // transfer strings to destination
+                for (size_t i = 0; i < res.size(); ++i)
                 {
-                    dest[i].resize(dest[i].size() - 1);
+                    if (not charptr_buff[i]) throw Exception("read did not fill buffer");
+                    res[i] = charptr_buff[i];
+                }
+                // reclaim memory allocated by libhdf5
+                Util::wrap(H5Dvlen_reclaim, mem_dtype_id_holder.id, reader_base.dspace_id_holder.id,
+                           H5P_DEFAULT, charptr_buff.data());
+            }
+            else // stored as a fixlen string
+            {
+                // compute mem_type
+                size_t file_stype_size = Util::wrap(H5Tget_size, file_stype_id);
+                mem_dtype_id_holder = mem_type_wrapper(Util::make_str_type(file_stype_size + 1));
+                // prepare buffer to receieve data
+                std::vector< char > char_buff(res.size() * (file_stype_size + 1), '\0');
+                // perform the read
+                reader_base.reader(mem_dtype_id_holder.id, char_buff.data());
+                // transfer strings to destination
+                for (size_t i = 0; i < res.size(); ++i)
+                {
+                    res[i] = std::string(&char_buff[i * (file_stype_size + 1)], file_stype_size);
+                    // trim trailing '\0'-s
+                    while (not res[i].empty() and res[i].back() == '\0')
+                    {
+                        res[i].resize(res[i].size() - 1);
+                    }
                 }
             }
         }
-        else if (H5Tget_class(file_type_id_holder.id) == H5T_INTEGER) // stored as an integer
+        else if (file_stype_class == H5T_INTEGER) // stored as an integer
         {
-            if (H5Tget_sign(file_type_id_holder.id) == H5T_SGN_NONE) // stored as an unsigned integer
+            if (Util::wrap(H5Tget_sign, file_stype_id) == H5T_SGN_NONE) // stored as an unsigned integer
             {
                 // compute mem_type
-                hid_t mem_type_id = get_mem_type< unsigned long long >::id();
+                mem_dtype_id_holder = mem_type_wrapper(
+                    HDF_Object_Holder(get_mem_type< unsigned long long >::id(), nullptr));
                 // prepare buffer to read data
-                std::vector< unsigned long long > buff(dest.size());
+                std::vector< unsigned long long > ull_buff(res.size());
                 // perform the read
-                status = read_fcn(obj_id, mem_type_id, static_cast< void* >(buff.data()));
-                if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
+                reader_base.reader(mem_dtype_id_holder.id, ull_buff.data());
                 // transfer to destination
-                for (size_t i = 0; i < dest.size(); ++i)
+                for (size_t i = 0; i < res.size(); ++i)
                 {
                     std::ostringstream oss;
-                    oss << buff[i];
-                    dest[i] = oss.str();
+                    oss << ull_buff[i];
+                    res[i] = oss.str();
                 }
             }
             else // stored as a signed integer
             {
                 // compute mem_type
-                hid_t mem_type_id = get_mem_type< long long >::id();
+                mem_dtype_id_holder = mem_type_wrapper(
+                    HDF_Object_Holder(get_mem_type< long long >::id(), nullptr));
                 // prepare buffer to read data
-                std::vector< long long > buff(dest.size());
+                std::vector< long long > ll_buff(res.size());
                 // perform the read
-                status = read_fcn(obj_id, mem_type_id, static_cast< void* >(buff.data()));
-                if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
+                reader_base.reader(mem_dtype_id_holder.id, ll_buff.data());
                 // transfer to destination
-                for (size_t i = 0; i < dest.size(); ++i)
+                for (size_t i = 0; i < res.size(); ++i)
                 {
                     std::ostringstream oss;
-                    oss << buff[i];
-                    dest[i] = oss.str();
+                    oss << ll_buff[i];
+                    res[i] = oss.str();
                 }
             }
         }
-        else if (H5Tget_class(file_type_id_holder.id) == H5T_FLOAT) // stored as a float
+        else if (file_stype_class == H5T_FLOAT) // stored as a float
         {
             // compute mem_type
-            hid_t mem_type_id = get_mem_type< double >::id();
+            mem_dtype_id_holder = mem_type_wrapper(
+                HDF_Object_Holder(get_mem_type< double >::id(), nullptr));
             // prepare buffer to read data
-            std::vector< double > buff(dest.size());
+            std::vector< double > d_buff(res.size());
             // perform the read
-            status = read_fcn(obj_id, mem_type_id, static_cast< void* >(buff.data()));
-            if (status < 0) throw Exception(loc_full_name + ": error in " + read_fcn_name);
+            reader_base.reader(mem_dtype_id_holder.id, d_buff.data());
             // transfer to destination
-            for (size_t i = 0; i < dest.size(); ++i)
+            for (size_t i = 0; i < res.size(); ++i)
             {
                 std::ostringstream oss;
-                oss << buff[i];
-                dest[i] = oss.str();
+                oss << d_buff[i];
+                res[i] = oss.str();
+            }
+        }
+        return res;
+    }
+};
+
+// Reader_helper
+//  Branch on memory type classes
+template < int, typename >
+struct Reader_helper;
+// numeric
+template < typename Data_Type >
+struct Reader_helper< 1, Data_Type >
+{
+    void operator () (Reader_Base& reader_base, Data_Type * out) const
+    {
+        assert(std::is_integral< Data_Type >::value or std::is_floating_point< Data_Type >::value);
+        hid_t mem_dtype_id = get_mem_type< Data_Type >::id();
+        reader_base.reader(mem_dtype_id, out);
+    }
+};
+// char array
+template < typename Data_Type >
+struct Reader_helper< 2, Data_Type >
+{
+    void operator () (Reader_Base& reader_base, Data_Type * out) const
+    {
+        if (reader_base.file_dtype_class == H5T_STRING
+            and not reader_base.file_dtype_is_vlen_str)
+        {
+            HDF_Object_Holder mem_dtype_id_holder(Util::make_str_type(sizeof(Data_Type)));
+            reader_base.reader(mem_dtype_id_holder.id, out);
+        }
+        else // conversion needed
+        {
+            auto tmp = String_reader()(reader_base);
+            for (size_t i = 0; i < tmp.size(); ++i)
+            {
+                std::memset(&out[i][0], '\0', sizeof(Data_Type));
+                std::memcpy(&out[i][0], tmp[i].data(), std::min(tmp[i].size(), sizeof(Data_Type) - 1));
             }
         }
     }
-}; // struct Extent_Atomic_Reader< std::string >
-
-template < typename Out_Data_Type, typename Out_Data_Storage >
-struct Extent_Compound_Reader
+};
+// string
+template < typename Data_Type >
+struct Reader_helper< 3, Data_Type >
 {
-    void operator () (const std::string& loc_full_name, Out_Data_Storage& dest,
-                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t,
-                      const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
-                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
+    void operator () (Reader_Base& reader_base, Data_Type * out) const
     {
-        int status;
-        assert(compound_map_ptr);
-        HDF_Object_Holder file_type_id_holder(
-            get_type_fcn(obj_id),
-            H5Tclose,
-            loc_full_name + ": error in " + get_type_fcn_name,
-            loc_full_name + ": error in H5Tclose(file_type)");
-
-        H5T_class_t file_type_class = H5Tget_class(file_type_id_holder.id);
-        if (file_type_class == H5T_NO_CLASS) throw Exception(loc_full_name + ": error in H5Tget_class(file_type)");
-        if (file_type_class != H5T_COMPOUND) throw Exception(loc_full_name + ": expected H5T_COMPOUND datatype");
-
-        // pass 1
-        //   read numeric and char_array members only
-        HDF_Object_Holder mem_type_id_holder(
-            H5Tcreate(H5T_COMPOUND, sizeof(Out_Data_Type)),
-            H5Tclose,
-            loc_full_name + ": error in H5Tcreate",
-            loc_full_name + ": error in H5Tclose(mem_type)");
-
-        std::deque< HDF_Object_Holder > mem_stype_id_holder_v;
-        for (const auto& e : compound_map_ptr->members())
+        static_assert(std::is_same< Data_Type, std::string >::value, "Data_Type not std::string");
+        auto tmp = String_reader()(reader_base);
+        for (size_t i = 0; i < tmp.size(); ++i)
         {
-            assert(not e.is_compound()); // not implemented yet
-            if (e.is_string()) continue;
-            int file_stype_idx = H5Tget_member_index(file_type_id_holder.id, e.name.c_str());
-            if (file_stype_idx < 0) throw Exception(loc_full_name + ": missing member \"" + e.name + "\"");
+            std::swap(out[i], tmp[i]);
+        }
+    }
+};
+// compound
+template < typename Data_Type >
+struct Reader_helper< 4, Data_Type >
+{
+    void operator () (Reader_Base& reader_base, Data_Type * out, const Compound_Map & cm) const
+    {
+        // get member list
+        auto mptr_l = cm.get_member_ptr_list();
+        // go through members, check they exist, decide if they need conversion
+        std::set< const detail::Compound_Member_Description * > conversion_needed_s;
+        for (const auto& p : mptr_l)
+        {
             HDF_Object_Holder file_stype_id_holder(
-                H5Tget_member_type(file_type_id_holder.id, file_stype_idx),
-                H5Tclose,
-                loc_full_name + ": error in H5Tget_member_type",
-                loc_full_name + ": member \"" + e.name + "\": error in H5Tclose(file_stype)");
-            H5T_class_t file_stype_class = H5Tget_class(file_stype_id_holder.id);
-            if (file_stype_class == H5T_NO_CLASS) throw Exception(loc_full_name + ": error in H5Tget_class(file_stype)");
-            if (e.is_numeric())
+                Compound_Map::get_compound_member(reader_base.file_dtype_id_holder.id, p.first));
+            if (p.first.back()->is_string()
+                or (p.first.back()->is_char_array()
+                    and Util::wrap(H5Tget_class, file_stype_id_holder.id) == H5T_STRING
+                    and Util::wrap(H5Tis_variable_str, file_stype_id_holder.id)))
             {
-                if (file_stype_class != H5T_INTEGER and file_stype_class != H5T_FLOAT)
-                    throw Exception(loc_full_name + ": member \"" + e.name + "\" is numeric, but file_stype is not numeric");
-                status = H5Tinsert(mem_type_id_holder.id, e.name.c_str(), e.offset, e.numeric_type_id);
-                if (status < 0) throw Exception(loc_full_name + ": error in H5Tinsert(\"" + e.name + "\")");
+                conversion_needed_s.insert(p.first.back());
             }
+        }
+        // read all members that do not need conversion all-at-once
+        auto implicit_conversion = [&] (const detail::Compound_Member_Description& e) {
+            return conversion_needed_s.count(&e) == 0;
+        };
+        HDF_Object_Holder mem_dtype_id_holder(cm.build_type(sizeof(Data_Type), implicit_conversion, true));
+        if (mem_dtype_id_holder.id > 0)
+        {
+            reader_base.reader(mem_dtype_id_holder.id, out);
+        }
+        // read members that need conversion one-by-one
+        for (const auto& p : mptr_l)
+        {
+            const detail::Compound_Member_Description& e = *p.first.back();
+            if (implicit_conversion(e)) continue;
+            // read member into vector of strings
+            auto tmp = String_reader()(reader_base, &p.first);
+            assert(tmp.size() == reader_base.dspace_size);
+            // write it to destination
+            assert(e.is_char_array() or e.is_string());
             if (e.is_char_array())
             {
-                if (file_stype_class != H5T_STRING)
-                    throw Exception(loc_full_name + ": member \"" + e.name + "\" is char_array, but file_stype is not H5T_STRING");
-                status = H5Tis_variable_str(file_stype_id_holder.id);
-                if (status < 0) throw Exception(loc_full_name + ": error in H5Tis_variable_str(\"" + e.name + "\")");
-                if (status) throw Exception(loc_full_name + ": member \"" + e.name + "\" is a char_array, but file_stype is a variable len string");
-                //size_t file_stype_size = H5Tget_size(file_stype_id);
-                //if (file_stype_size == 0) throw Exception(loc_full_name + ": H5Tget_size(\"" + e.name + "\") returned 0");
-                HDF_Object_Holder mem_stype_id_holder(Util::make_str_type(e.char_array_size));
-                status = H5Tinsert(mem_type_id_holder.id, e.name.c_str(), e.offset, mem_stype_id_holder.id);
-                if (status < 0) throw Exception(loc_full_name + ": error in H5Tinsert(\"" + e.name + "\")");
-                mem_stype_id_holder_v.emplace_back();
-                std::swap(mem_stype_id_holder_v.back(), mem_stype_id_holder);
-            }
-        }
-        // perform the actual read
-        status = read_fcn(obj_id, mem_type_id_holder.id, static_cast< void* >(dest.data()));
-        if (status < 0) throw Exception(loc_full_name + ": pass 1: error in " + read_fcn_name);
-
-        // pass 2
-        //   read strings
-        for (const auto& e : compound_map_ptr->members())
-        {
-            assert(not e.is_compound()); // not implemented yet
-            if (e.is_numeric() or e.is_char_array()) continue;
-            //TODO
-            assert(false);
-        }
-    }
-}; // struct Extent_Compound_Reader
-
-// TempSpec: read extent of atomic types
-template < typename Out_Data_Type, typename Out_Data_Storage, bool = true >
-struct Extent_Reader_as_atomic
-    : Extent_Atomic_Reader< Out_Data_Type, Out_Data_Storage >
-{};
-
-// TempSpec: read extent of compound types
-template < typename Out_Data_Type, typename Out_Data_Storage >
-struct Extent_Reader_as_atomic< Out_Data_Type, Out_Data_Storage, false >
-    : Extent_Compound_Reader< Out_Data_Type, Out_Data_Storage >
-{};
-
-// branch on atomic/compound destination
-template < typename Out_Data_Type, typename Out_Data_Storage >
-struct Extent_Reader
-    : public Extent_Reader_as_atomic< Out_Data_Type, Out_Data_Storage,
-                                      mem_type_class< Out_Data_Type >::value == 1
-                                      or mem_type_class< Out_Data_Type >::value == 2
-                                      or mem_type_class< Out_Data_Type >::value == 3 >
-{};
-
-template < typename, typename, bool >
-struct Object_Reader_impl;
-
-// TempSpec: reading scalars
-template < typename Out_Data_Type >
-struct Object_Reader_impl< Out_Data_Type, Out_Data_Type, true >
-{
-    void operator () (const std::string& loc_full_name, Out_Data_Type& dest,
-                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t obj_space_id,
-                      const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
-                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
-    {
-        H5S_class_t obj_class_t = H5Sget_simple_extent_type(obj_space_id);
-        if (obj_class_t == H5S_NO_CLASS) throw Exception(loc_full_name + ": error in H5Sget_simple_extent_type");
-        if (obj_class_t == H5S_SCALAR)
-        {
-            std::vector< Out_Data_Type > tmp(1);
-            Extent_Reader< Out_Data_Type, std::vector< Out_Data_Type > >()(
-                loc_full_name, tmp, compound_map_ptr, obj_id, obj_space_id,
-                get_type_fcn_name, get_type_fcn,
-                read_fcn_name, read_fcn);
-            dest = std::move(tmp[0]);
-        }
-        else
-        {
-            throw Exception(loc_full_name + ": cannot read as scalar: extent type not H5S_SCALAR");
-        }
-    }
-};
-
-// TempSpec: reading string scalars
-// Hack: allow reading an extent of single characters as a string, which is how ONT stores /Sequences/Meta
-template <>
-struct Object_Reader_impl< std::string, std::string, true >
-{
-    void operator () (const std::string& loc_full_name, std::string& dest,
-                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t obj_space_id,
-                      const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
-                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
-    {
-        H5S_class_t obj_class_t = H5Sget_simple_extent_type(obj_space_id);
-        if (obj_class_t == H5S_NO_CLASS) throw Exception(loc_full_name + ": error in H5Sget_simple_extent_type");
-        if (obj_class_t == H5S_SCALAR)
-        {
-            std::vector< std::string > tmp(1);
-            Extent_Reader< std::string, std::vector< std::string > >()(
-                loc_full_name, tmp, compound_map_ptr, obj_id, obj_space_id,
-                get_type_fcn_name, get_type_fcn,
-                read_fcn_name, read_fcn);
-            dest = std::move(tmp[0]);
-        }
-        else if (obj_class_t == H5S_SIMPLE)
-        {
-            HDF_Object_Holder file_type_id_holder(
-                get_type_fcn(obj_id),
-                H5Tclose,
-                loc_full_name + ": error in " + get_type_fcn_name,
-                loc_full_name + ": error in H5Tclose(file_type)");
-            if (H5Tget_class(file_type_id_holder.id) == H5T_STRING
-                and H5Tis_variable_str(file_type_id_holder.id) == 0
-                and H5Tget_size(file_type_id_holder.id) == 1)
-            {
-                int status = H5Sget_simple_extent_dims(obj_space_id, nullptr, nullptr);
-                if (status < 0) throw Exception(loc_full_name + ": error in H5Sget_simple_extent_dims");
-                if (status != 1) throw Exception(loc_full_name + ": expected extent of dimension 1");
-                hsize_t sz;
-                H5Sget_simple_extent_dims(obj_space_id, &sz, nullptr);
-                std::vector< std::string > tmp(sz);
-                Extent_Reader< std::string, std::vector< std::string > >()(
-                    loc_full_name, tmp, compound_map_ptr, obj_id, obj_space_id,
-                    get_type_fcn_name, get_type_fcn,
-                    read_fcn_name, read_fcn);
-                dest.clear();
-                for (hsize_t i = 0; i < sz; ++i)
+                for (size_t i = 0; i < tmp.size(); ++i)
                 {
-                    dest += tmp[i];
+                    std::memset(reinterpret_cast< char * >(&out[i]) + p.second, '\0', e.char_array_size);
+                    std::memcpy(reinterpret_cast< char * >(&out[i]) + p.second,
+                                tmp[i].data(),
+                                std::min(tmp[i].size(), e.char_array_size - 1));
                 }
             }
-            else
+            else if (e.is_string())
             {
-                throw Exception(loc_full_name + ": cannot read string as scalar: file type not single char");
+                for (size_t i = 0; i < tmp.size(); ++i)
+                {
+                    std::swap(
+                        *reinterpret_cast< std::string * >(reinterpret_cast< char * >(&out[i]) + p.second),
+                        tmp[i]);
+                }
             }
+        }
+    }
+};
+
+template < typename Data_Type >
+struct Reader
+{
+    template < typename ...Args >
+    void operator () (hid_t grp_id, const std::string& name,
+                      Data_Type & out, Args&& ...args) const
+    {
+        Reader_Base reader_base(grp_id, name);
+        if (reader_base.dspace_size == 1)
+        {
+            Reader_helper< mem_type_class< Data_Type >::value, Data_Type >()(
+                reader_base, &out, std::forward< Args >(args)...);
+        }
+        else if (std::is_same< Data_Type, std::string >::value
+                 and reader_base.file_dtype_class == H5T_STRING
+                 and not reader_base.file_dtype_is_vlen_str
+                 and reader_base.file_dtype_size == 1)
+        {
+            std::vector< char[1] > char_buff(reader_base.dspace_size);
+            Reader_helper< 2, char[1] >()(
+                reader_base, char_buff.data(), std::forward< Args >(args)...);
+            reinterpret_cast< std::string& >(out).assign(&char_buff[0][0], reader_base.dspace_size);
         }
         else
         {
-            throw Exception(loc_full_name + ": cannot read string as scalar: bad extent type");
+            throw Exception("reading scalar, but dataspace size is not 1");
         }
     }
 };
-
-// TempSpec: reading vectors
-template < typename Out_Data_Type, typename Out_Data_Storage >
-struct Object_Reader_impl< Out_Data_Type, Out_Data_Storage, false >
+template < typename Data_Type >
+struct Reader< std::vector< Data_Type > >
 {
-    void operator () (const std::string& loc_full_name, Out_Data_Storage& dest,
-                      const Compound_Map* compound_map_ptr, hid_t obj_id, hid_t obj_space_id,
-                      const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
-                      const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
+    template < typename ...Args >
+    void operator () (hid_t grp_id, const std::string& name,
+                      std::vector< Data_Type> & out, Args&& ...args) const
     {
-        H5S_class_t obj_class_t = H5Sget_simple_extent_type(obj_space_id);
-        if (obj_class_t == H5S_NO_CLASS) throw Exception(loc_full_name + ": error in H5Sget_simple_extent_type");
-        if (obj_class_t != H5S_SIMPLE)
-            throw Exception(loc_full_name + ": reading as vector, but dataspace not H5S_SIMPLE");
-        int status = H5Sget_simple_extent_dims(obj_space_id, nullptr, nullptr);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Sget_simple_extent_dims");
-        if (status != 1) throw Exception(loc_full_name + ": expected extent of dimension 1");
-        hsize_t sz;
-        H5Sget_simple_extent_dims(obj_space_id, &sz, nullptr);
-        dest.clear();
-        dest.resize(sz);
-        Extent_Reader< Out_Data_Type, Out_Data_Storage >()(
-            loc_full_name, dest, compound_map_ptr, obj_id, obj_space_id,
-            get_type_fcn_name, get_type_fcn,
-            read_fcn_name, read_fcn);
+        Reader_Base reader_base(grp_id, name);
+        out.clear();
+        out.resize(reader_base.dspace_size);
+        Reader_helper< mem_type_class< Data_Type >::value, Data_Type >()(
+            reader_base, out.data(), std::forward< Args >(args)...);
     }
 };
-
-// TempMetaFunc: split scalar & vector reading branches
-template < typename Out_Data_Type, typename Out_Data_Storage >
-struct Object_Reader
-    : public Object_Reader_impl< Out_Data_Type, Out_Data_Storage, std::is_same< Out_Data_Type, Out_Data_Storage >::value > {};
-
-// open object and object space, then delegate
-template < typename Out_Data_Type, typename Out_Data_Storage >
-void read_obj_helper(const std::string& loc_full_name, Out_Data_Storage& dest, const Compound_Map* compound_map_ptr,
-                     const std::string& open_fcn_name, std::function< hid_t(void) > open_fcn,
-                     const std::string& close_fcn_name, std::function< herr_t(hid_t) > close_fcn,
-                     const std::string& get_space_fcn_name, std::function< hid_t(hid_t) > get_space_fcn,
-                     const std::string& get_type_fcn_name, std::function< hid_t(hid_t) > get_type_fcn,
-                     const std::string& read_fcn_name, std::function< herr_t(hid_t, hid_t, void*) > read_fcn)
-{
-    // open object
-    HDF_Object_Holder obj_id_holder(
-        open_fcn(),
-        close_fcn,
-        loc_full_name + ": error in " + open_fcn_name,
-        loc_full_name + ": error in " + close_fcn_name);
-    // open object space, check reading mode matches storage mode (scalar/vector)
-    HDF_Object_Holder obj_space_id_holder(
-        get_space_fcn(obj_id_holder.id),
-        H5Sclose,
-        loc_full_name + ": error in " + get_space_fcn_name,
-        loc_full_name + ": error in H5Sclose");
-    // read object
-    Object_Reader< Out_Data_Type, Out_Data_Storage >()(
-        loc_full_name, dest, compound_map_ptr, obj_id_holder.id, obj_space_id_holder.id,
-        get_type_fcn_name, get_type_fcn,
-        read_fcn_name, read_fcn);
-}
-
-// determine if address is attribute or dataset, then delegate
-template < typename Out_Data_Type, typename Out_Data_Storage >
-void read_addr(hid_t root_id, const std::string& loc_path, const std::string& loc_name,
-               Out_Data_Storage& dest, const Compound_Map* compound_map_ptr)
-{
-    assert(root_id > 0);
-    std::string loc_full_name = loc_path + loc_name;
-    // determine if object is an attribute; otherwise, assume it's a dataset
-    int status;
-    status = H5Aexists_by_name(root_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT);
-    if (status < 0) throw Exception(loc_full_name + ": error in H5Aexists_by_name");
-    bool is_attr = status > 0;
-    if (is_attr)
-    {
-        read_obj_helper< Out_Data_Type, Out_Data_Storage >(
-            loc_full_name, dest, compound_map_ptr,
-            "H5Aopen_by_name",
-            [&root_id, &loc_path, &loc_name] ()
-            {
-                return H5Aopen_by_name(root_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT, H5P_DEFAULT);
-            },
-            "H5Aclose", &H5Aclose,
-            "H5Aget_space", &H5Aget_space,
-            "H5Aget_type", &H5Aget_type,
-            "H5Aread",
-            [] (hid_t id, hid_t mem_type_id, void* dest_p)
-            {
-                return H5Aread(id, mem_type_id, dest_p);
-            });
-    }
-    else
-    {
-        read_obj_helper< Out_Data_Type, Out_Data_Storage >(
-            loc_full_name, dest, compound_map_ptr,
-            "H5Dopen",
-            [&root_id, &loc_full_name] ()
-            {
-                return H5Dopen(root_id, loc_full_name.c_str(), H5P_DEFAULT);
-            },
-            "H5Dclose", &H5Dclose,
-            "H5Dget_space", &H5Dget_space,
-            "H5Dget_type", &H5Dget_type,
-            "H5Dread",
-            [] (hid_t id, hid_t mem_type_id, void* dest_p)
-            {
-                return H5Dread(id, mem_type_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, dest_p);
-            });
-    }
-} // read_addr
-
-// TempSpec: for atomic types
-template < typename Out_Data_Type, bool = true >
-struct Reader_as_atomic
-{
-    template < typename Out_Data_Storage >
-    void operator () (hid_t root_id, const std::string& loc_path, const std::string& loc_name,
-                      Out_Data_Storage& dest)
-    {
-        static_assert(mem_type_class< Out_Data_Type >::value == 1
-                      or mem_type_class< Out_Data_Type >::value == 2
-                      or mem_type_class< Out_Data_Type >::value == 3,
-                      "Reader_impl<Out_Data_Type,true>: expected a type readable as atomic");
-        read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_path, loc_name, dest, nullptr);
-    }
-};
-
-// TempSpec: for compound types
-template < typename Out_Data_Type >
-struct Reader_as_atomic< Out_Data_Type, false >
-{
-    template < typename Out_Data_Storage >
-    void operator () (hid_t root_id, const std::string& loc_path, const std::string& loc_name,
-                      Out_Data_Storage& dest, const Compound_Map* compound_map_ptr)
-    {
-        static_assert(mem_type_class< Out_Data_Type >::value == 4,
-                      "Reader_impl<Out_Data_Type,false>: expected a type readable as compound");
-        read_addr< Out_Data_Type, Out_Data_Storage >(root_id, loc_path, loc_name, dest, compound_map_ptr);
-    }
-};
-
-template < typename Out_Data_Type >
-struct Reader : public Reader_as_atomic< Out_Data_Type,
-                                         mem_type_class< Out_Data_Type >::value == 1
-                                         or mem_type_class< Out_Data_Type >::value == 2
-                                         or mem_type_class< Out_Data_Type >::value == 3 >
-{};
 
 // Writer_helper_base
 //   Common base for Write_helper atomic/compound
@@ -774,29 +1145,29 @@ struct Writer_helper_base
         if (as_ds)
         {
             obj_id_holder.load(
-                H5Dcreate2(grp_id, loc_name.c_str(), file_dtype_id, dspace_id,
+                Util::wrap(H5Dcreate2, grp_id, loc_name.c_str(), file_dtype_id, dspace_id,
                            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
-                H5Dclose,
-                "error in H5Dcreate2",
-                "error in H5Dclose");
+                Util::wrapped_closer(H5Dclose));
         }
         else
         {
             obj_id_holder.load(
-                H5Acreate2(grp_id, loc_name.c_str(), file_dtype_id, dspace_id,
+                Util::wrap(H5Acreate2, grp_id, loc_name.c_str(), file_dtype_id, dspace_id,
                            H5P_DEFAULT, H5P_DEFAULT),
-                H5Aclose,
-                "error in H5Acreate2",
-                "error in H5Aclose");
+                Util::wrapped_closer(H5Aclose));
         }
         return obj_id_holder;
     }
     static void write(hid_t obj_id, bool as_ds, hid_t mem_dtype_id, const void* in)
     {
-        auto status = as_ds
-            ? H5Dwrite(obj_id, mem_dtype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, in)
-            : H5Awrite(obj_id, mem_dtype_id, in);
-        if (status < 0) throw Exception("error in H5Dwrite/H5Awrite");
+        if (as_ds)
+        {
+            Util::wrap(H5Dwrite, obj_id, mem_dtype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, in);
+        }
+        else
+        {
+            Util::wrap(H5Awrite, obj_id, mem_dtype_id, in);
+        }
     }
     static void create_and_write(hid_t grp_id, const std::string& loc_name, bool as_ds,
                                  hid_t dspace_id, hid_t mem_dtype_id, hid_t file_dtype_id,
@@ -849,20 +1220,20 @@ struct Writer_helper< 2, In_Data_Type >
         const void * vptr_in = in;
         if (file_dtype_id >= 0)
         {
-            mem_dtype_id_holder = std::move(Util::make_str_type(sizeof(In_Data_Type)));
+            mem_dtype_id_holder = Util::make_str_type(sizeof(In_Data_Type));
             if (file_dtype_id == 0)
             {
                 file_dtype_id = mem_dtype_id_holder.id;
             }
             else // file_dtype_id > 0
             {
-                file_dtype_id_holder = std::move(Util::make_str_type(file_dtype_id));
+                file_dtype_id_holder = Util::make_str_type(file_dtype_id);
                 file_dtype_id = file_dtype_id_holder.id;
             }
         }
         else // file_dtype_id < 0: write as varlen strings
         {
-            mem_dtype_id_holder = std::move(Util::make_str_type(-1));
+            mem_dtype_id_holder = Util::make_str_type(-1);
             file_dtype_id = mem_dtype_id_holder.id;
             // prepare array of pointers
             charptr_buff.resize(sz);
@@ -894,7 +1265,7 @@ struct Writer_helper< 3, std::string >
         const void * vptr_in;
         if (file_dtype_id == -1) // varlen to varlen
         {
-            mem_dtype_id_holder = std::move(Util::make_str_type(-1));
+            mem_dtype_id_holder = Util::make_str_type(-1);
             charptr_buff.resize(sz);
             for (hsize_t i = 0; i < sz; ++i)
             {
@@ -907,7 +1278,7 @@ struct Writer_helper< 3, std::string >
             assert(file_dtype_id > 0 or sz == 1); // file_dtype_id == 0 only allowed for single strings
             size_t slen = file_dtype_id > 0 ? file_dtype_id : in[0].size() + 1;
             assert(slen <= std::numeric_limits< long >::max());
-            mem_dtype_id_holder = std::move(Util::make_str_type(slen));
+            mem_dtype_id_holder = Util::make_str_type(slen);
             char_buff.resize(sz * slen);
             for (hsize_t i = 0; i < sz; ++i)
             {
@@ -932,42 +1303,60 @@ struct Writer_helper< 4, In_Data_Type >
     : public Writer_helper_base
 {
     void operator () (hid_t grp_id, const std::string& loc_name, bool as_ds,
-                      hid_t dspace_id, size_t,
+                      hid_t dspace_id, size_t sz,
                       const In_Data_Type * in, const Compound_Map& cm) const
     {
-        // create the file type
-        HDF_Object_Holder file_dtype_id_holder(
-            H5Tcreate(H5T_COMPOUND, sizeof(In_Data_Type)),
-            H5Tclose,
-            "error in H5Tcopy",
-            "error in H5Tclose");
-        std::map< const Compound_Member_Description*, HDF_Object_Holder > file_stype_id_holder_m;
-        int status;
-        for (const auto& e : cm.members())
+        HDF_Object_Holder obj_id_holder;
+        // create object
         {
-            assert(not e.is_compound()); // not implemented
-            assert(not e.is_string()); // not implemented
-            if (e.is_numeric())
+            // create the file type
+            HDF_Object_Holder file_dtype_id_holder(
+                cm.build_type(sizeof(In_Data_Type), nullptr, false));
+            obj_id_holder = Writer_helper_base::create(
+                grp_id, loc_name, as_ds,
+                dspace_id, file_dtype_id_holder.id);
+        }
+        // define functor that selects members which can be written with implicit conversion
+        auto implicit_conversion = [] (const detail::Compound_Member_Description& e) {
+            return (e.is_numeric()
+                    or e.is_char_array());
+        };
+        // write fields which do not need conversion, all-in-one
+        {
+            HDF_Object_Holder mem_dtype_id_holder(
+                cm.build_type(sizeof(In_Data_Type), implicit_conversion, true));
+            Writer_helper_base::write(obj_id_holder.id, as_ds, mem_dtype_id_holder.id, in);
+        }
+        // write fields which need conversion, one-by-one
+        {
+            auto mptr_l = cm.get_member_ptr_list();
+            for (const auto& p : mptr_l)
             {
-                status = H5Tinsert(file_dtype_id_holder.id, e.name.c_str(), e.offset, e.numeric_type_id);
-                if (status < 0) throw Exception("error in H5Tinsert");
-            }
-            else if (e.is_char_array())
-            {
-                HDF_Object_Holder stype_holder(Util::make_str_type(e.char_array_size));
-                std::pair< const Compound_Member_Description*, HDF_Object_Holder > p;
-                p = std::make_pair(std::move(&e), std::move(stype_holder));
-                file_stype_id_holder_m.emplace(std::move(p));
-                status = H5Tinsert(file_dtype_id_holder.id, e.name.c_str(), e.offset, file_stype_id_holder_m[&e].id);
+                const detail::Compound_Member_Description& e = *p.first.back();
+                if (implicit_conversion(e)) continue;
+                if (not as_ds) throw Exception("string in compound is supported in datasets, but not attributes");
+                size_t mem_offset = p.second;
+                if (e.is_string())
+                {
+                    // prepare memory vector of char*
+                    std::vector< const char * > charptr_buff(sz);
+                    for (size_t i = 0; i < sz; ++i)
+                    {
+                        charptr_buff[i] = reinterpret_cast< const std::string * >(
+                            reinterpret_cast< const char * >(&in[i]) + mem_offset)->data();
+                    }
+                    // create flat hdf5 type
+                    //HDF_Object_Holder mem_dtype_id_holder(Compound_Map::build_flat_type(p.first));
+                    HDF_Object_Holder mem_dtype_id_holder(
+                        cm.build_type(sizeof(In_Data_Type),
+                                      [&e] (const detail::Compound_Member_Description& _e) {
+                                          return &_e == &e;
+                                      },
+                                      false));
+                    Writer_helper_base::write(obj_id_holder.id, as_ds, mem_dtype_id_holder.id, charptr_buff.data());
+                }
             }
         }
-        // create object
-        HDF_Object_Holder obj_id_holder(
-            Writer_helper_base::create(
-                grp_id, loc_name, as_ds,
-                dspace_id, file_dtype_id_holder.id));
-        // write all-in-one
-        Writer_helper_base::write(obj_id_holder.id, as_ds, file_dtype_id_holder.id, in);
     }
 };
 
@@ -984,10 +1373,8 @@ struct Writer
     {
         // create dataspace
         HDF_Object_Holder dspace_id_holder(
-            H5Screate(H5S_SCALAR),
-            H5Sclose,
-            "error in H5Screate",
-            "error in H5Sclose");
+            Util::wrap(H5Screate, H5S_SCALAR),
+            Util::wrapped_closer(H5Sclose));
         Writer_helper< mem_type_class< In_Data_Type >::value, In_Data_Type >()(
             grp_id, loc_name, as_ds,
             dspace_id_holder.id, 1,
@@ -1007,10 +1394,8 @@ struct Writer< std::vector< In_Data_Type > >
         // create dataspace
         hsize_t sz = in.size();
         HDF_Object_Holder dspace_id_holder(
-            H5Screate_simple(1, &sz, nullptr),
-            H5Sclose,
-            "error in H5Screate_simple",
-            "error in H5Sclose");
+            Util::wrap(H5Screate_simple, 1, &sz, nullptr),
+            Util::wrapped_closer(H5Sclose));
         Writer_helper< mem_type_class< In_Data_Type >::value, In_Data_Type >()(
             grp_id, loc_name, as_ds,
             dspace_id_holder.id, sz,
@@ -1089,6 +1474,7 @@ public:
         std::string loc_name;
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
         // check all path elements exist, except for what is to the right of the last '/'
+        // sets active path
         if (not path_exists(loc_path)) return false;
         return check_object_type(loc_full_name, H5O_TYPE_GROUP);
     }
@@ -1101,6 +1487,7 @@ public:
         std::string loc_name;
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
         // check all path elements exist, except for what is to the right of the last '/'
+        // sets active path
         if (not path_exists(loc_path)) return false;
         return check_object_type(loc_full_name, H5O_TYPE_DATASET);
     }
@@ -1114,10 +1501,11 @@ public:
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
         int status;
         // check all path elements exist, except for what is to the right of the last '/'
+        // sets active path
         if (not path_exists(loc_path)) return false;
         // check if target is an attribute
         status = H5Aexists_by_name(_file_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Aexists_by_name");
+        if (status < 0) throw Exception("error in H5Aexists_by_name");
         return status > 0;
     }
     bool exists(const std::string& loc_full_name) const
@@ -1126,15 +1514,20 @@ public:
     }
 
     /// Read attribute or dataset at address
-    template < typename Out_Data_Type, typename ...Args >
-    void read(const std::string& loc_full_name, Args&& ...args) const
+    template < typename Data_Storage, typename ...Args >
+    void read(const std::string& loc_full_name, Data_Storage& out, Args&& ...args) const
     {
         assert(is_open());
         assert(not loc_full_name.empty() and loc_full_name[0] == '/');
         std::string loc_path;
         std::string loc_name;
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
-        detail::Reader< Out_Data_Type >()(_file_id, loc_path, loc_name, std::forward< Args >(args)...);
+        Exception::active_path() = loc_full_name;
+        detail::HDF_Object_Holder grp_id_holder(
+            detail::Util::wrap(H5Oopen, _file_id, loc_path.c_str(), H5P_DEFAULT),
+            detail::Util::wrapped_closer(H5Oclose));
+        detail::Reader< Data_Storage >()(grp_id_holder.id, loc_name,
+                                         out, std::forward< Args >(args)...);
     }
     /// Write attribute or dataset
     template < typename In_Data_Storage, typename ...Args >
@@ -1147,29 +1540,23 @@ public:
         std::string loc_path;
         std::string loc_name;
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+        Exception::active_path() = loc_full_name;
         detail::HDF_Object_Holder grp_id_holder;
         if (group_exists(loc_path))
         {
             grp_id_holder.load(
-                H5Oopen(_file_id, loc_path.c_str(), H5P_DEFAULT),
-                H5Oclose,
-                "error in H5Oopen",
-                "error in H5Oclose");
+                detail::Util::wrap(H5Oopen, _file_id, loc_path.c_str(), H5P_DEFAULT),
+                detail::Util::wrapped_closer(H5Oclose));
         }
         else
         {
             detail::HDF_Object_Holder lcpl_id_holder(
-                H5Pcreate(H5P_LINK_CREATE),
-                H5Pclose,
-                "error in H5Pcreate",
-                "error in H5Pclose");
-            auto status = H5Pset_create_intermediate_group(lcpl_id_holder.id, 1);
-            if (status < 0) throw Exception(_file_name + ": error in H5Pset_create_intermediate_group");
+                detail::Util::wrap(H5Pcreate, H5P_LINK_CREATE),
+                detail::Util::wrapped_closer(H5Pclose));
+            detail::Util::wrap(H5Pset_create_intermediate_group, lcpl_id_holder.id, 1);
             grp_id_holder.load(
-                H5Gcreate2(_file_id, loc_path.c_str(), lcpl_id_holder.id, H5P_DEFAULT, H5P_DEFAULT),
-                H5Gclose,
-                "error in H5Gcreate2",
-                "error in H5Gclose");
+                detail::Util::wrap(H5Gcreate2, _file_id, loc_path.c_str(), lcpl_id_holder.id, H5P_DEFAULT, H5P_DEFAULT),
+                detail::Util::wrapped_closer(H5Gclose));
         }
         detail::Writer< In_Data_Storage >()(grp_id_holder.id, loc_name, as_ds, in, std::forward< Args >(args)...);
     }
@@ -1188,25 +1575,23 @@ public:
     std::vector< std::string > list_group(const std::string& group_full_name) const
     {
         std::vector< std::string > res;
+        Exception::active_path() = group_full_name;
         assert(group_exists(group_full_name));
         detail::HDF_Object_Holder g_id_holder(
-            H5Gopen1(_file_id, group_full_name.c_str()),
-            H5Gclose,
-            group_full_name + ": error in H5Gopen",
-            group_full_name + ": error in H5Gclose");
+            detail::Util::wrap(H5Gopen2, _file_id, group_full_name.c_str(), H5P_DEFAULT),
+            detail::Util::wrapped_closer(H5Gclose));
         H5G_info_t g_info;
-        hid_t status = H5Gget_info(g_id_holder.id, &g_info);
-        if (status < 0) throw Exception(group_full_name + ": error in H5Gget_info");
+        detail::Util::wrap(H5Gget_info, g_id_holder.id, &g_info);
         res.resize(g_info.nlinks);
         for (unsigned i = 0; i < res.size(); ++i)
         {
             // find size first
-            long sz = H5Lget_name_by_idx(_file_id, group_full_name.c_str(), H5_INDEX_NAME, H5_ITER_NATIVE, i, nullptr, 0, H5P_DEFAULT);
-            if (sz < 0) throw Exception(group_full_name + ": error in H5Lget_name_by_idx");
-            res[i].resize(sz);
-            long sz2 = H5Lget_name_by_idx(_file_id, group_full_name.c_str(), H5_INDEX_NAME, H5_ITER_NATIVE, i, &res[i][0], sz+1, H5P_DEFAULT);
-            if (sz2 < 0) throw Exception(group_full_name + ": error in H5Lget_name_by_idx");
-            if (sz != sz2) throw Exception(group_full_name + ": error in H5Lget_name_by_idx: sz!=sz2");
+            long sz1 = detail::Util::wrap(H5Lget_name_by_idx, _file_id, group_full_name.c_str(),
+                                          H5_INDEX_NAME, H5_ITER_NATIVE, i, nullptr, 0, H5P_DEFAULT);
+            res[i].resize(sz1);
+            long sz2 = detail::Util::wrap(H5Lget_name_by_idx, _file_id, group_full_name.c_str(),
+                                          H5_INDEX_NAME, H5_ITER_NATIVE, i, &res[i][0], sz1+1, H5P_DEFAULT);
+            if (sz1 != sz2) throw Exception("error in H5Lget_name_by_idx: sz1!=sz2");
         }
         return res;
     } // list_group
@@ -1214,27 +1599,22 @@ public:
     std::vector< std::string > get_attr_list(const std::string& loc_full_name) const
     {
         std::vector< std::string > res;
+        Exception::active_path() = loc_full_name;
         assert(group_exists(loc_full_name) or dataset_exists(loc_full_name));
-        detail::HDF_Object_Holder id_holder;
-        id_holder.load(
-            H5Oopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT),
-            H5Oclose,
-            loc_full_name + ": error in H5Oopen",
-            loc_full_name + ": error in H5Oclose");
+        detail::HDF_Object_Holder id_holder(
+            detail::Util::wrap(H5Oopen, _file_id, loc_full_name.c_str(), H5P_DEFAULT),
+            detail::Util::wrapped_closer(H5Oclose));
         H5O_info_t info;
-        auto status = H5Oget_info(id_holder.id, &info);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Oget_info");
+        detail::Util::wrap(H5Oget_info, id_holder.id, &info);
         // num_attrs in info.num_attrs
         for (unsigned i = 0; i < (unsigned)info.num_attrs; ++i)
         {
-            status = H5Aget_name_by_idx(id_holder.id, ".", H5_INDEX_NAME, H5_ITER_NATIVE, i,
-                                        nullptr, 0, H5P_DEFAULT);
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Aget_name_by_idx");
-            std::string tmp(status, '\0');
-            status = H5Aget_name_by_idx(id_holder.id, ".", H5_INDEX_NAME, H5_ITER_NATIVE, i,
-                                        &tmp[0], status + 1, H5P_DEFAULT);
-            if (status < 0) throw Exception(loc_full_name + ": error in H5Aget_name_by_idx");
-            res.emplace_back(move(tmp));
+            int name_sz = detail::Util::wrap(H5Aget_name_by_idx, id_holder.id, ".",
+                                             H5_INDEX_NAME, H5_ITER_NATIVE, i, nullptr, 0, H5P_DEFAULT);
+            std::string tmp(name_sz, '\0');
+            detail::Util::wrap(H5Aget_name_by_idx, id_holder.id, ".",
+                               H5_INDEX_NAME, H5_ITER_NATIVE, i, &tmp[0], name_sz + 1, H5P_DEFAULT);
+            res.emplace_back(std::move(tmp));
         }
         return res;
     } // get_attr_list
@@ -1242,6 +1622,7 @@ public:
     std::vector< std::string > get_struct_members(const std::string& loc_full_name) const
     {
         std::vector< std::string > res;
+        Exception::active_path() = loc_full_name;
         assert(attribute_exists(loc_full_name) or dataset_exists(loc_full_name));
         detail::HDF_Object_Holder attr_id_holder;
         detail::HDF_Object_Holder ds_id_holder;
@@ -1252,37 +1633,29 @@ public:
             std::string loc_name;
             std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
             attr_id_holder.load(
-                H5Aopen_by_name(_file_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT, H5P_DEFAULT),
-                H5Aclose,
-                loc_full_name + ": error in H5Aopen_by_name",
-                loc_full_name + ": error in H5Aclose");
+                detail::Util::wrap(H5Aopen_by_name, _file_id, loc_path.c_str(), loc_name.c_str(),
+                                   H5P_DEFAULT, H5P_DEFAULT),
+                detail::Util::wrapped_closer(H5Aclose));
             type_id_holder.load(
-                H5Aget_type(attr_id_holder.id),
-                H5Tclose,
-                loc_full_name + ": error in H5Aget_type",
-                loc_full_name + ": error in H5Tclose");
+                detail::Util::wrap(H5Aget_type, attr_id_holder.id),
+                detail::Util::wrapped_closer(H5Tclose));
         }
         else
         {
             ds_id_holder.load(
-                H5Oopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT),
-                H5Oclose,
-                loc_full_name + ": error in H5Oopen",
-                loc_full_name + ": error in H5Oclose");
+                detail::Util::wrap(H5Oopen, _file_id, loc_full_name.c_str(), H5P_DEFAULT),
+                detail::Util::wrapped_closer(H5Oclose));
             type_id_holder.load(
-                H5Dget_type(ds_id_holder.id),
-                H5Tclose,
-                loc_full_name + ": error in H5Dget_type",
-                loc_full_name + ": error in H5Tclose");
+                detail::Util::wrap(H5Dget_type, ds_id_holder.id),
+                detail::Util::wrapped_closer(H5Tclose));
         }
-        if (H5Tget_class(type_id_holder.id) == H5T_COMPOUND)
+        if (detail::Util::wrap(H5Tget_class, type_id_holder.id) == H5T_COMPOUND)
         {
             // type is indeed a struct
-            int nmem = H5Tget_nmembers(type_id_holder.id);
-            if (nmem < 0) throw Exception(loc_full_name + ": error in H5Tget_nmembers");
+            int nmem = detail::Util::wrap(H5Tget_nmembers, type_id_holder.id);
             for (int i = 0; i < nmem; ++i)
             {
-                char* s = H5Tget_member_name(type_id_holder.id, i);
+                char* s = detail::Util::wrap(H5Tget_member_name, type_id_holder.id, i);
                 res.emplace_back(s);
                 free(s);
             }
@@ -1311,7 +1684,7 @@ private:
         assert(not full_path_name.empty()
                and full_path_name[0] == '/'
                and full_path_name[full_path_name.size() - 1] == '/');
-        int status;
+        Exception::active_path() = full_path_name;
         // check all path elements exist, except for what is to the right of the last '/'
         size_t pos = 0;
         while (true)
@@ -1321,23 +1694,16 @@ private:
             if (pos == std::string::npos) break;
             std::string tmp = full_path_name.substr(0, pos);
             // check link exists
-            status = H5Lexists(_file_id, tmp.c_str(), H5P_DEFAULT);
-            if (status < 0) throw Exception(full_path_name + ": error in H5Lexists");
-            if (not status) return false;
+            if (not detail::Util::wrap(H5Lexists, _file_id, tmp.c_str(), H5P_DEFAULT)) return false;
             // check object exists
-            status = H5Oexists_by_name(_file_id, tmp.c_str(), H5P_DEFAULT);
-            if (status < 0) throw Exception(full_path_name + ": error in H5Oexists_by_name");
-            if (not status) return false;
+            if (not detail::Util::wrap(H5Oexists_by_name, _file_id, tmp.c_str(), H5P_DEFAULT)) return false;
             // open object in order to check type
             detail::HDF_Object_Holder o_id_holder(
-                H5Oopen(_file_id, tmp.c_str(), H5P_DEFAULT),
-                H5Oclose,
-                full_path_name + ": error in H5Oopen",
-                full_path_name + ": error in H5Oclose");
+                detail::Util::wrap(H5Oopen, _file_id, tmp.c_str(), H5P_DEFAULT),
+                detail::Util::wrapped_closer(H5Oclose));
             // check object is a group
             H5O_info_t o_info;
-            status = H5Oget_info(o_id_holder.id, &o_info);
-            if (status < 0) throw Exception(full_path_name + ": error in H5Oget_info");
+            detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info);
             if (o_info.type != H5O_TYPE_GROUP) return false;
         }
         return true;
@@ -1347,23 +1713,17 @@ private:
     bool check_object_type(const std::string& loc_full_name, H5O_type_t type_id) const
     {
         // check link exists
-        hid_t status = H5Lexists(_file_id, loc_full_name.c_str(), H5P_DEFAULT);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Lexists");
-        if (loc_full_name != "/" and not status) return false;
+        if (loc_full_name != "/"
+            and not detail::Util::wrap(H5Lexists, _file_id, loc_full_name.c_str(), H5P_DEFAULT)) return false;
         // check object exists
-        status = H5Oexists_by_name(_file_id, loc_full_name.c_str(), H5P_DEFAULT);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Oexists_by_name");
-        if (not status) return false;
+        if (not detail::Util::wrap(H5Oexists_by_name, _file_id, loc_full_name.c_str(), H5P_DEFAULT)) return false;
         // open object in order to check type
         detail::HDF_Object_Holder o_id_holder(
-            H5Oopen(_file_id, loc_full_name.c_str(), H5P_DEFAULT),
-            H5Oclose,
-            loc_full_name + ": error in H5Oopen",
-            loc_full_name + ": error in H5Oclose");
+            detail::Util::wrap(H5Oopen, _file_id, loc_full_name.c_str(), H5P_DEFAULT),
+            detail::Util::wrapped_closer(H5Oclose));
         // check object is a group
         H5O_info_t o_info;
-        status = H5Oget_info(o_id_holder.id, &o_info);
-        if (status < 0) throw Exception(loc_full_name + ": error in H5Oget_info");
+        detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info);
         return o_info.type == type_id;
     }
 }; // class File

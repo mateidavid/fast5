@@ -168,7 +168,7 @@ public:
     {
         std::string res;
         assert(Base::exists(file_version_path()));
-        Base::read< std::string >(file_version_path(), res);
+        Base::read(file_version_path(), res);
         return res;
     }
 
@@ -185,11 +185,11 @@ public:
     Channel_Id_Parameters get_channel_id_params() const
     {
         Channel_Id_Parameters res;
-        Base::read< decltype(res.channel_number) >(channel_id_path() + "/channel_number", res.channel_number);
-        Base::read< decltype(res.digitisation) >(channel_id_path() + "/digitisation", res.digitisation);
-        Base::read< decltype(res.offset) >(channel_id_path() + "/offset", res.offset);
-        Base::read< decltype(res.range) >(channel_id_path() + "/range", res.range);
-        Base::read< decltype(res.sampling_rate) >(channel_id_path() + "/sampling_rate", res.sampling_rate);
+        Base::read(channel_id_path() + "/channel_number", res.channel_number);
+        Base::read(channel_id_path() + "/digitisation", res.digitisation);
+        Base::read(channel_id_path() + "/offset", res.offset);
+        Base::read(channel_id_path() + "/range", res.range);
+        Base::read(channel_id_path() + "/sampling_rate", res.sampling_rate);
         return res;
     }
     /**
@@ -266,11 +266,11 @@ public:
     {
         Raw_Samples_Parameters res;
         std::string p = raw_samples_params_path(rn);
-        Base::read< decltype(res.read_id) >(p + "/read_id", res.read_id);
-        Base::read< decltype(res.read_number) >(p + "/read_number", res.read_number);
-        Base::read< decltype(res.start_mux) >(p + "/start_mux", res.start_mux);
-        Base::read< decltype(res.start_time) >(p + "/start_time", res.start_time);
-        Base::read< decltype(res.duration) >(p + "/duration", res.duration);
+        Base::read(p + "/read_id", res.read_id);
+        Base::read(p + "/read_number", res.read_number);
+        Base::read(p + "/start_mux", res.start_mux);
+        Base::read(p + "/start_time", res.start_time);
+        Base::read(p + "/duration", res.duration);
         return res;
     }
     /**
@@ -287,7 +287,7 @@ public:
     {
         // get raw samples
         std::vector< uint16_t > raw_samples;
-        Base::read< uint16_t >(raw_samples_path(rn), raw_samples);
+        Base::read(raw_samples_path(rn), raw_samples);
         // get scaling parameters
         auto channel_id_params = get_channel_id_params();
         // decode levels
@@ -380,19 +380,19 @@ public:
         auto p = eventdetection_event_params_path(ed_gr, rn);
         auto a_v = Base::get_attr_list(p);
         std::set< std::string > a_s(a_v.begin(), a_v.end());
-        Base::read< decltype(res.read_number) >(p + "/read_number", res.read_number);
-        Base::read< decltype(res.scaling_used) >(p + "/scaling_used", res.scaling_used);
-        Base::read< decltype(res.start_mux) >(p + "/start_mux", res.start_mux);
-        Base::read< decltype(res.start_time) >(p + "/start_time", res.start_time);
-        Base::read< decltype(res.duration) >(p + "/duration", res.duration);
+        Base::read(p + "/read_number", res.read_number);
+        Base::read(p + "/scaling_used", res.scaling_used);
+        Base::read(p + "/start_mux", res.start_mux);
+        Base::read(p + "/start_time", res.start_time);
+        Base::read(p + "/duration", res.duration);
         // optional fields
         if (a_s.count("read_id"))
         {
-            Base::read< decltype(res.read_id) >(p + "/read_id", res.read_id);
+            Base::read(p + "/read_id", res.read_id);
         }
         if (a_s.count("median_before"))
         {
-            Base::read< decltype(res.median_before) >(p + "/median_before", res.median_before);
+            Base::read(p + "/median_before", res.median_before);
         }
         else
         {
@@ -400,7 +400,7 @@ public:
         }
         if (a_s.count("abasic_found"))
         {
-            Base::read< decltype(res.abasic_found) >(p + "/abasic_found", res.abasic_found);
+            Base::read(p + "/abasic_found", res.abasic_found);
         }
         else
         {
@@ -455,7 +455,7 @@ public:
             // must have stdv or variance
             abort();
         }
-        Base::read< EventDetection_Event_Entry >(p, res, &m);
+        Base::read(p, res, m);
         if (not have_stdv)
         {
             // have read variances
@@ -524,7 +524,7 @@ public:
     {
         std::string res;
         std::string path = basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/Log";
-        Base::read< std::string >(path, res);
+        Base::read(path, res);
         return res;
     }
     /**
@@ -555,7 +555,7 @@ public:
     std::string get_basecall_fastq(const std::string& bc_gr, unsigned st) const
     {
         std::string res;
-        Base::read< std::string >(basecall_fastq_path(bc_gr, st), res);
+        Base::read(basecall_fastq_path(bc_gr, st), res);
         return res;
     }
     /**
@@ -635,7 +635,7 @@ public:
     {
         std::string res;
         assert(Base::exists(basecall_model_file_path(bc_gr, st)));
-        Base::read< std::string >(basecall_model_file_path(bc_gr, st), res);
+        Base::read(basecall_model_file_path(bc_gr, st), res);
         return res;
     }
     /**
@@ -652,12 +652,12 @@ public:
     {
         Model_Parameters res;
         std::string p = basecall_model_path(bc_gr, st);
-        Base::read< double >(p + "/drift", res.drift);
-        Base::read< double >(p + "/scale", res.scale);
-        Base::read< double >(p + "/scale_sd", res.scale_sd);
-        Base::read< double >(p + "/shift", res.shift);
-        Base::read< double >(p + "/var", res.var);
-        Base::read< double >(p + "/var_sd", res.var_sd);
+        Base::read(p + "/drift", res.drift);
+        Base::read(p + "/scale", res.scale);
+        Base::read(p + "/scale_sd", res.scale_sd);
+        Base::read(p + "/shift", res.shift);
+        Base::read(p + "/var", res.var);
+        Base::read(p + "/var_sd", res.var_sd);
         return res;
     }
     /**
@@ -679,7 +679,7 @@ public:
         m.add_member("level_stdv", &Model_Entry::level_stdv);
         m.add_member("sd_mean", &Model_Entry::sd_mean);
         m.add_member("sd_stdv", &Model_Entry::sd_stdv);
-        Base::read< Model_Entry >(basecall_model_path(bc_gr, st), res, &m);
+        Base::read(basecall_model_path(bc_gr, st), res, m);
         return res;
     }
     /**
@@ -717,7 +717,7 @@ public:
         m.add_member("length", &Event_Entry::length);
         m.add_member("model_state", &Event_Entry::model_state);
         m.add_member("move", &Event_Entry::move);
-        Base::read< Event_Entry >(basecall_events_path(bc_gr, st), res, &m);
+        Base::read(basecall_events_path(bc_gr, st), res, m);
         return res;
     }
     /**
@@ -766,7 +766,7 @@ public:
         m.add_member("template", &Event_Alignment_Entry::template_index);
         m.add_member("complement", &Event_Alignment_Entry::complement_index);
         m.add_member("kmer", &Event_Alignment_Entry::kmer);
-        Base::read< Event_Alignment_Entry >(basecall_event_alignment_path(bc_gr), res, &m);
+        Base::read(basecall_event_alignment_path(bc_gr), res, m);
         return res;
     }
 
@@ -849,7 +849,7 @@ private:
         for (const auto& a : a_list)
         {
             std::string tmp;
-            Base::read< std::string >(path + "/" + a, tmp);
+            Base::read(path + "/" + a, tmp);
             res[a] = tmp;
         }
         return res;

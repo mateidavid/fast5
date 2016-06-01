@@ -1542,10 +1542,11 @@ public:
         std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
         Exception::active_path() = loc_full_name;
         detail::HDF_Object_Holder grp_id_holder;
-        if (group_exists(loc_path))
+        std::string grp_path = loc_path != "/"? loc_path.substr(0, loc_path.size() - 1) : "/";
+        if (group_exists(grp_path) or dataset_exists(grp_path))
         {
             grp_id_holder.load(
-                detail::Util::wrap(H5Oopen, _file_id, loc_path.c_str(), H5P_DEFAULT),
+                detail::Util::wrap(H5Oopen, _file_id, grp_path.c_str(), H5P_DEFAULT),
                 detail::Util::wrapped_closer(H5Oclose));
         }
         else
@@ -1555,7 +1556,7 @@ public:
                 detail::Util::wrapped_closer(H5Pclose));
             detail::Util::wrap(H5Pset_create_intermediate_group, lcpl_id_holder.id, 1);
             grp_id_holder.load(
-                detail::Util::wrap(H5Gcreate2, _file_id, loc_path.c_str(), lcpl_id_holder.id, H5P_DEFAULT, H5P_DEFAULT),
+                detail::Util::wrap(H5Gcreate2, _file_id, grp_path.c_str(), lcpl_id_holder.id, H5P_DEFAULT, H5P_DEFAULT),
                 detail::Util::wrapped_closer(H5Gclose));
         }
         detail::Writer< In_Data_Storage >()(grp_id_holder.id, loc_name, as_ds, in, std::forward< Args >(args)...);

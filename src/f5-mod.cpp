@@ -65,6 +65,16 @@ int main(int argc, char* argv[])
             vector< fast5::Event_Entry > ev(3, {55.0, 1.0, 0.05, 0.01, .5, .5, .7, .1, .1, .1, 0,
                         array< char, 8 >{"ACGTA"}, array< char, 8 >{"CGTAC"}});
             f.add_basecall_events(test_bc_grp_prefix + test_bc_grp_suffix, 0, ev);
+            //
+            // add basecall pore model
+            //
+            vector< fast5::Model_Entry > mod(3, {0, 56.0, 1.0, 42.0, 1.0, 5.0, array< char, 8 >{"ACGTA"}});
+            f.add_basecall_model(test_bc_grp_prefix + test_bc_grp_suffix, 0, mod);
+            //
+            // add basecall pore model params
+            //
+            fast5::Model_Parameters params{1.0, 0.0, 0.0, 1.0, .9, .9};
+            f.add_basecall_model_params(test_bc_grp_prefix + test_bc_grp_suffix, 0, params);
         }
         catch (hdf5_tools::Exception& e)
         {

@@ -87,11 +87,11 @@ struct Model_Entry
 //
 struct Model_Parameters
 {
-    double drift;
     double scale;
-    double scale_sd;
     double shift;
+    double drift;
     double var;
+    double scale_sd;
     double var_sd;
 }; // struct Model_Parameters
 
@@ -660,7 +660,8 @@ public:
         Base::read(path + "/var_sd", res.var_sd);
         return res;
     }
-    void add_basecall_model_params(const std::string& bc_gr, unsigned st, const Model_Parameters& params) const
+    template < typename T >
+    void add_basecall_model_params(const std::string& bc_gr, unsigned st, const T& params) const
     {
         std::string path = basecall_model_path(bc_gr, st);
         Base::write(path + "/scale", false, params.scale);

@@ -723,15 +723,16 @@ public:
     /**
      * Add Basecall events
      */
-    void add_basecall_events(const std::string& bc_gr, unsigned st, const std::vector< Event_Entry >& ev) const
+    template < typename T >
+    void add_basecall_events(const std::string& bc_gr, unsigned st, const std::vector< T >& ev) const
     {
         hdf5_tools::Compound_Map cm;
-        cm.add_member("mean", &Event_Entry::mean);
-        cm.add_member("start", &Event_Entry::start);
-        cm.add_member("stdv", &Event_Entry::stdv);
-        cm.add_member("length", &Event_Entry::length);
-        cm.add_member("model_state", &Event_Entry::model_state);
-        cm.add_member("move", &Event_Entry::move);
+        cm.add_member("mean", &T::mean);
+        cm.add_member("start", &T::start);
+        cm.add_member("stdv", &T::stdv);
+        cm.add_member("length", &T::length);
+        cm.add_member("model_state", &T::model_state);
+        cm.add_member("move", &T::move);
         Base::write(basecall_events_path(bc_gr, st), true, ev, cm);
     }
     /**

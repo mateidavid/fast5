@@ -97,7 +97,7 @@ struct Model_Parameters
 
 //
 // This struct represents an observed event.
-// The members of the struct are the same as 
+// The members of the struct are the same as
 // the fields encoded in the FAST5 file.
 //
 struct Event_Entry
@@ -651,14 +651,24 @@ public:
     Model_Parameters get_basecall_model_params(const std::string& bc_gr, unsigned st) const
     {
         Model_Parameters res;
-        std::string p = basecall_model_path(bc_gr, st);
-        Base::read(p + "/drift", res.drift);
-        Base::read(p + "/scale", res.scale);
-        Base::read(p + "/scale_sd", res.scale_sd);
-        Base::read(p + "/shift", res.shift);
-        Base::read(p + "/var", res.var);
-        Base::read(p + "/var_sd", res.var_sd);
+        std::string path = basecall_model_path(bc_gr, st);
+        Base::read(path + "/scale", res.scale);
+        Base::read(path + "/shift", res.shift);
+        Base::read(path + "/drift", res.drift);
+        Base::read(path + "/var", res.var);
+        Base::read(path + "/scale_sd", res.scale_sd);
+        Base::read(path + "/var_sd", res.var_sd);
         return res;
+    }
+    void add_basecall_model_params(const std::string& bc_gr, unsigned st, const Model_Parameters& params) const
+    {
+        std::string path = basecall_model_path(bc_gr, st);
+        Base::write(path + "/scale", false, params.scale);
+        Base::write(path + "/shift", false, params.shift);
+        Base::write(path + "/drift", false, params.drift);
+        Base::write(path + "/var", false, params.var);
+        Base::write(path + "/scale_sd", false, params.scale_sd);
+        Base::write(path + "/var_sd", false, params.var_sd);
     }
     /**
      * Get Basecall model for first Basecall group for given strand.
@@ -681,6 +691,20 @@ public:
         m.add_member("sd_stdv", &Model_Entry::sd_stdv);
         Base::read(basecall_model_path(bc_gr, st), res, m);
         return res;
+    }
+    /**
+     * Add Basecall model
+     */
+    template < typename T >
+    void add_basecall_model(const std::string& bc_gr, unsigned st, const std::vector< T >& m) const
+    {
+        hdf5_tools::Compound_Map cm;
+        cm.add_member("kmer", &T::kmer);
+        cm.add_member("level_mean", &T::level_mean);
+        cm.add_member("level_stdv", &T::level_stdv);
+        cm.add_member("sd_mean", &T::sd_mean);
+        cm.add_member("sd_stdv", &T::sd_stdv);
+        Base::write(basecall_model_path(bc_gr, st), true, m, cm);
     }
     /**
      * Check if Basecall events exist for first Basecall group for given strand.

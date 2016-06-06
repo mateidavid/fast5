@@ -1108,8 +1108,8 @@ struct Reader
                  and not reader_base.file_dtype_is_vlen_str
                  and reader_base.file_dtype_size == 1)
         {
-            std::vector< char[1] > char_buff(reader_base.dspace_size);
-            Reader_helper< 2, char[1] >()(
+            std::vector< std::array< char, 1 > > char_buff(reader_base.dspace_size);
+            Reader_helper< 2, std::array< char, 1 > >()(
                 reader_base, char_buff.data(), std::forward< Args >(args)...);
             reinterpret_cast< std::string& >(out).assign(&char_buff[0][0], reader_base.dspace_size);
         }

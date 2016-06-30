@@ -168,7 +168,10 @@ int main(int argc, char* argv[])
                     cout << "  (mean=" << e.mean
                          << ", stdv=" << e.stdv
                          << ", start=" << e.start
-                         << ", length=" << e.length << ")" << endl;
+                         << ", length=" << e.length
+                         << ", model_state=" << string(e.model_state.begin(), e.model_state.end())
+                         << ", p_model_state=" << e.p_model_state
+                         << ", move=" << e.move << ")" << endl;
                 }
                 // basecall event alignment
                 if (st == 2 and f.have_basecall_event_alignment())

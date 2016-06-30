@@ -740,6 +740,7 @@ public:
         m.add_member("start", &Event_Entry::start);
         m.add_member("stdv", &Event_Entry::stdv);
         m.add_member("length", &Event_Entry::length);
+        m.add_member("p_model_state", &Event_Entry::p_model_state);
         m.add_member("model_state", &Event_Entry::model_state);
         m.add_member("move", &Event_Entry::move);
         Base::read(basecall_events_path(bc_gr, st), res, m);
@@ -756,6 +757,7 @@ public:
         cm.add_member("start", &T::start);
         cm.add_member("stdv", &T::stdv);
         cm.add_member("length", &T::length);
+        cm.add_member("p_model_state", &T::p_model_state);
         cm.add_member("model_state", &T::model_state);
         cm.add_member("move", &T::move);
         Base::write(basecall_events_path(bc_gr, st), true, ev, cm);

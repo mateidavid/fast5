@@ -197,263 +197,263 @@ struct Util
      * Get name and return value checker for hdf5 function.
      */
     static const std::pair< const char *, std::function< bool(void *) > >&
-    get_fcn_info(void * fcn_ptr)
+    get_fcn_info(void (*fcn_ptr)())
     {
-        static const std::map< void *, std::pair< const char *, std::function< bool(void *) > > > fcn_info_m =
+        static const std::map< void (*)(), std::pair< const char *, std::function< bool(void *) > > > fcn_info_m =
             {
-                { (void*)&H5Aclose,
+                { (void(*)())&H5Aclose,
                   { "H5Aclose",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Acreate2,
+                { (void(*)())&H5Acreate2,
                   { "H5Acreate2",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Aexists_by_name,
+                { (void(*)())&H5Aexists_by_name,
                   { "H5Aexists_by_name",
                     [] (void * vp) { return *reinterpret_cast< htri_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Aget_name_by_idx,
+                { (void(*)())&H5Aget_name_by_idx,
                   { "H5Aget_name_by_idx",
                     [] (void * vp) { return *reinterpret_cast< ssize_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Aget_space,
+                { (void(*)())&H5Aget_space,
                   { "H5Aget_space",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Aget_type,
+                { (void(*)())&H5Aget_type,
                   { "H5Aget_type",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Aopen,
+                { (void(*)())&H5Aopen,
                   { "H5Aopen",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Aopen_by_name,
+                { (void(*)())&H5Aopen_by_name,
                   { "H5Aopen_by_name",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Aread,
+                { (void(*)())&H5Aread,
                   { "H5Aread",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Awrite,
+                { (void(*)())&H5Awrite,
                   { "H5Awrite",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
 
-                { (void*)&H5Dclose,
+                { (void(*)())&H5Dclose,
                   { "H5Dclose",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Dcreate2,
+                { (void(*)())&H5Dcreate2,
                   { "H5Dcreate2",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Dget_space,
+                { (void(*)())&H5Dget_space,
                   { "H5Dget_space",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Dget_type,
+                { (void(*)())&H5Dget_type,
                   { "H5Dget_type",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Dopen,
+                { (void(*)())&H5Dopen,
                   { "H5Dopen",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Dread,
+                { (void(*)())&H5Dread,
                   { "H5Dread",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Dvlen_reclaim,
+                { (void(*)())&H5Dvlen_reclaim,
                   { "H5Dvlen_reclaim",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Dwrite,
+                { (void(*)())&H5Dwrite,
                   { "H5Dwrite",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
 
-                { (void*)&H5Gclose,
+                { (void(*)())&H5Gclose,
                   { "H5Gclose",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Gcreate2,
+                { (void(*)())&H5Gcreate2,
                   { "H5Gcreate2",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Gget_info,
+                { (void(*)())&H5Gget_info,
                   { "H5Gget_info",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Gopen2,
+                { (void(*)())&H5Gopen2,
                   { "H5Gopen2",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
 
-                { (void*)&H5Lexists,
+                { (void(*)())&H5Lexists,
                   { "H5Lexists",
                     [] (void * vp) { return *reinterpret_cast< htri_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Lget_name_by_idx,
+                { (void(*)())&H5Lget_name_by_idx,
                   { "H5Lget_name_by_idx",
                     [] (void * vp) { return *reinterpret_cast< ssize_t * >(vp) >= 0; }
                   }
                 },
 
-                { (void*)&H5Oclose,
+                { (void(*)())&H5Oclose,
                   { "H5Oclose",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Oexists_by_name,
+                { (void(*)())&H5Oexists_by_name,
                   { "H5Oexists_by_name",
                     [] (void * vp) { return *reinterpret_cast< htri_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Oget_info,
+                { (void(*)())&H5Oget_info,
                   { "H5Oget_info",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Oopen,
+                { (void(*)())&H5Oopen,
                   { "H5Oopen",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
 
-                { (void*)&H5Pclose,
+                { (void(*)())&H5Pclose,
                   { "H5Pclose",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Pcreate,
+                { (void(*)())&H5Pcreate,
                   { "H5Pcreate",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Pset_create_intermediate_group,
+                { (void(*)())&H5Pset_create_intermediate_group,
                   { "H5Pset_create_intermediate_group",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
 
-                { (void*)&H5Sclose,
+                { (void(*)())&H5Sclose,
                   { "H5Sclose",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Screate,
+                { (void(*)())&H5Screate,
                   { "H5Screate",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Screate_simple,
+                { (void(*)())&H5Screate_simple,
                   { "H5Screate_simple",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Sget_simple_extent_dims,
+                { (void(*)())&H5Sget_simple_extent_dims,
                   { "H5Sget_simple_extent_dims",
                     [] (void * vp) { return *reinterpret_cast< int * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Sget_simple_extent_ndims,
+                { (void(*)())&H5Sget_simple_extent_ndims,
                   { "H5Sget_simple_extent_ndims",
                     [] (void * vp) { return *reinterpret_cast< int * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Sget_simple_extent_type,
+                { (void(*)())&H5Sget_simple_extent_type,
                   { "H5Sget_simple_extent_type",
                     [] (void * vp) { return *reinterpret_cast< H5S_class_t * >(vp) != H5S_NO_CLASS; }
                   }
                 },
 
-                { (void*)&H5Tclose,
+                { (void(*)())&H5Tclose,
                   { "H5Tclose",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Tcopy,
+                { (void(*)())&H5Tcopy,
                   { "H5Tcopy",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Tcreate,
+                { (void(*)())&H5Tcreate,
                   { "H5Tcreate",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Tget_class,
+                { (void(*)())&H5Tget_class,
                   { "H5Tget_class",
                     [] (void * vp) { return *reinterpret_cast< H5T_class_t * >(vp) != H5T_NO_CLASS; }
                   }
                 },
-                { (void*)&H5Tget_member_index,
+                { (void(*)())&H5Tget_member_index,
                   { "H5Tget_member_index",
                     [] (void * vp) { return *reinterpret_cast< int * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Tget_member_name,
+                { (void(*)())&H5Tget_member_name,
                   { "H5Tget_member_name",
                     [] (void * vp) { return *reinterpret_cast< char* * >(vp) != nullptr; }
                   }
                 },
-                { (void*)&H5Tget_member_type,
+                { (void(*)())&H5Tget_member_type,
                   { "H5Tget_member_type",
                     [] (void * vp) { return *reinterpret_cast< hid_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Tget_nmembers,
+                { (void(*)())&H5Tget_nmembers,
                   { "H5Tget_nmembers",
                     [] (void * vp) { return *reinterpret_cast< int * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Tget_sign,
+                { (void(*)())&H5Tget_sign,
                   { "H5Tget_sign",
                     [] (void * vp) { return *reinterpret_cast< H5T_sign_t * >(vp) != H5T_SGN_ERROR; }
                   }
                 },
-                { (void*)&H5Tget_size,
+                { (void(*)())&H5Tget_size,
                   { "H5Tget_size",
                     [] (void * vp) { return *reinterpret_cast< size_t * >(vp) > 0; }
                   }
                 },
-                { (void*)&H5Tinsert,
+                { (void(*)())&H5Tinsert,
                   { "H5Tinsert",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Tis_variable_str,
+                { (void(*)())&H5Tis_variable_str,
                   { "H5Tis_variable_str",
                     [] (void * vp) { return *reinterpret_cast< htri_t * >(vp) >= 0; }
                   }
                 },
-                { (void*)&H5Tset_size,
+                { (void(*)())&H5Tset_size,
                   { "H5Tset_size",
                     [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
@@ -470,7 +470,7 @@ struct Util
     wrap(Function&& f, Args&& ...args)
     {
         auto res = f(args...);
-        const auto& f_info = get_fcn_info((void*)&f);
+        const auto& f_info = get_fcn_info((void(*)())&f);
         if (not f_info.second((void*)&res)) throw Exception(std::string("error in ") + f_info.first);
         return res;
     }

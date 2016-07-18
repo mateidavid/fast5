@@ -14,3 +14,6 @@ clean:
 
 %: %.cpp fast5.hpp hdf5_tools.hpp
 	g++ -std=c++11 -O0 -g3 -ggdb -fno-eliminate-unused-debug-types -Wall -Wextra -pedantic -I ${HDF5_ROOT}/include -o $@ $< -L ${HDF5_ROOT}/lib -Wl,--rpath=${HDF5_ROOT}/lib -lhdf5 -lpthread -lz -ldl
+
+fast5.so: fast5.cpp fast5.hpp hdf5_tools.hpp
+	g++ -std=c++11 -O0 -g3 -ggdb -fno-eliminate-unused-debug-types -Wall -Wextra -pedantic -I ${HDF5_ROOT}/include -isystem /usr/include/python3.4m -shared -fPIC -Wl,-soname,$@ -o $@ fast5.cpp -lpython3.4m -L ${HDF5_ROOT}/lib -Wl,--rpath=${HDF5_ROOT}/lib -lboost_python-py34 -lhdf5 -lpthread -lz -ldl

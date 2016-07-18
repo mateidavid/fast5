@@ -178,8 +178,8 @@ int main(int argc, char* argv[])
                 cout << endl;
                 for (unsigned st = 0; st < 3; ++st)
                 {
-                    auto bc_st_gr_list = f.get_basecall_group_list(st);
-                    cout << "basecall_group_list(" << st << ")=";
+                    auto bc_st_gr_list = f.get_basecall_strand_group_list(st);
+                    cout << "basecall_strand_group_list(" << st << ")=";
                     print_vector(cout, bc_st_gr_list, ",");
                     cout << endl;
                 }
@@ -217,7 +217,7 @@ int main(int argc, char* argv[])
                              << "basecall(" << st << ")/model/size=" << m.size() << endl;
                         for (const auto& e : m)
                         {
-                            cout << "  (kmer=" << e.kmer.data()
+                            cout << "  (kmer=" << e.get_kmer()
                                  << ", level_mean=" << e.level_mean
                                  << ", level_stdv=" << e.level_stdv << ")" << endl;
                             break;
@@ -235,7 +235,7 @@ int main(int argc, char* argv[])
                                  << ", stdv=" << e.stdv
                                  << ", start=" << e.start
                                  << ", length=" << e.length
-                                 << ", model_state=" << string(e.model_state.begin(), e.model_state.end())
+                                 << ", model_state=" << e.get_model_state()
                                  << ", p_model_state=" << e.p_model_state
                                  << ", move=" << e.move << ")" << endl;
                             break;
@@ -253,7 +253,7 @@ int main(int argc, char* argv[])
                             {
                                 cout << "  (template_index=" << e.template_index
                                      << ", complement_index=" << e.complement_index
-                                     << ", kmer=" << e.kmer.data() << ")" << endl;
+                                     << ", kmer=" << e.get_kmer() << ")" << endl;
                                 break;
                             }
                         }

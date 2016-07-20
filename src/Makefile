@@ -30,4 +30,4 @@ check_hdf5:
 	@[ -f "${HDF5_LIB_DIR}/lib${HDF5_LIB}.so" ] || [ -f "${HDF5_LIB_DIR}/lib${HDF5_LIB}.a" ] || { echo "HDF5 library not found" >&2; exit 1; }
 
 %: %.cpp fast5.hpp hdf5_tools.hpp check_hdf5
-	g++ -std=c++11 -O0 -g3 -ggdb -fno-eliminate-unused-debug-types -Wall -Wextra -pedantic -I${HDF5_INCLUDE_DIR} -o $@ $< -L${HDF5_LIB_DIR} -Wl,--rpath=${HDF5_LIB_DIR} -l${HDF5_LIB} -lpthread -lz -ldl
+	${CXX} -std=c++11 -O0 -g3 -ggdb -fno-eliminate-unused-debug-types -Wall -Wextra -pedantic -I${HDF5_INCLUDE_DIR} -o $@ $< -L${HDF5_LIB_DIR} -Wl,--rpath=${HDF5_LIB_DIR} -l${HDF5_LIB} -lpthread -lz -ldl

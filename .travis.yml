@@ -1,0 +1,12 @@
+# travis.yml for github.com/mateidavid/fast5
+
+dist: trusty
+sudo: required
+language: cpp
+
+before_install:
+    - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    - sudo apt-get update -qq
+    - sudo apt-get install -qq build-essential g++-4.9 libhdf5-dev
+
+script: cd src && make CXX=g++-4.9 HDF5_DIR=/usr

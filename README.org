@@ -12,6 +12,21 @@ This is a header-only library, so you only need to copy [[src/fast5.hpp]] and [[
 
 See [[src/f5dump.cpp]] for an example.
 
+*** Python Wrapper
+
+To install a python wrapper for this library:
+
+#+BEGIN_EXAMPLE
+cd python
+HDF5_DIR=/usr/local BOOST_DIR=/usr/local make develop-user
+#+END_EXAMPLE
+
+Notes:
+
+- HDF5 and Boost.Python must be available, and their locations can be passed on to the Python setup process using the environment variables =HDF5_DIR= and =BOOST_DIR=. Alternatively, the include directory, library directory, and library name may be specified explicitly with, e.g. =HDF5_INCLUDE_DIR=, =HDF5_LIB_DIR=, and =HDF5_LIB=. For details, see [[file:python/setup.py][python/setup.py]].
+
+- To install =fast5= as a package in a virtualenv, use the target =develop=. To install as a user package, use the target =develop-user=. For details, see [[file:python/Makefile][python/Makefile]].
+
 *** License
 
 [[LICENSE][MIT License]].

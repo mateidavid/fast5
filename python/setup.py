@@ -34,54 +34,55 @@ if (not os.path.isfile(os.path.join(boost_lib_dir, 'lib' + boost_python_lib + '.
     and not os.path.isfile(os.path.join(boost_lib_dir, 'lib' + boost_python_lib + '.a'))):
     sys.exit(boost_lib_dir + ': could not find Boost Python library file; use BOOST_DIR or BOOST_LIB_DIR/BOOST_PYTHON_LIB')
 
-fast5_dir = os.environ.get('FAST5_DIR', '../src')
+fast5_dir = os.environ.get('FAST5_DIR', os.path.join('..', 'src'))
 
 compile_args = ['-std=c++11', '-Wall', '-Wextra', '-pedantic']
-#compile_args += ['-O3', '-NDEBUG']
-compile_args += ['-O0', '-g3', '-ggdb', '-fno-eliminate-unused-debug-types']
+#compile_args += ['-O0', '-g3', '-ggdb', '-fno-eliminate-unused-debug-types']
 
 extensions = [
-    Extension('fast5.fast5',
-              include_dirs=[
-                  hdf5_include_dir,
-                  boost_include_dir,
-                  fast5_dir,
-              ],
-              sources=[
-                  os.path.join('fast5', 'source', 'fast5.cpp'),
-              ],
-              depends=[
-                  os.path.join(fast5_dir, fn)
-                  for fn in ['fast5.hpp', 'hdf5_tools.hpp']
-              ],
-              extra_compile_args=compile_args,
-              library_dirs=[
-                  hdf5_lib_dir,
-                  boost_lib_dir,
-              ],
-              runtime_library_dirs=[
-                  hdf5_lib_dir,
-                  boost_lib_dir,
-              ],
-              libraries=[
-                  hdf5_lib,
-                  boost_python_lib,
-              ],
-          ),
+    Extension(
+        'fast5.fast5',
+        include_dirs=[
+            hdf5_include_dir,
+            boost_include_dir,
+            fast5_dir,
+        ],
+        sources=[
+            os.path.join('fast5', 'source', 'fast5.cpp'),
+        ],
+        depends=[
+            os.path.join(fast5_dir, fn)
+            for fn in ['fast5.hpp', 'hdf5_tools.hpp']
+        ],
+        extra_compile_args=compile_args,
+        library_dirs=[
+            hdf5_lib_dir,
+            boost_lib_dir,
+        ],
+        runtime_library_dirs=[
+            hdf5_lib_dir,
+            boost_lib_dir,
+        ],
+        libraries=[
+            hdf5_lib,
+            boost_python_lib,
+        ],
+    ),
 ]
 
-setup(name='fast5',
-      description='Fast5 file interface.',
-      version=__version__,
-      #long_description=open('README.md').read(),
-      author='Matei David, Ontario Institute for Cancer Research',
-      author_email='matei.david@oicr.on.ca',
-      license="MIT",
-      url='https://github.com/mateidavid/fast5',
-      packages=['fast5'],
-      exclude_package_data={
-          '': ['*.c', '*.cpp', '*.h', '*.hpp'],
-      },
-      ext_modules=extensions,
-      scripts=[],
+setup(
+    name='fast5',
+    description='Fast5 file interface.',
+    version=__version__,
+    #long_description=open('README').read(),
+    author='Matei David, Ontario Institute for Cancer Research',
+    author_email='matei.david at oicr.on.ca',
+    license='MIT',
+    url='https://github.com/mateidavid/fast5',
+    packages=['fast5'],
+    exclude_package_data={
+        '': ['*.c', '*.cpp', '*.h', '*.hpp'],
+    },
+    ext_modules=extensions,
+    scripts=[],
 )

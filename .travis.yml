@@ -15,11 +15,9 @@ install:
 
 script:
     - env | grep PATH
-    - find /usr -name 'libhdf5*'
-    - find /usr -name 'libboost_python*'
-    - ldd src/f5dump
+    - find /usr -regextype posix-egrep -regex '.*/lib(boost_python|hdf5).*\.(so|a)' -print0 | xargs -0 -n1 ls -l | awk '{print $9, $10, $11}' || true
+    - ldd src/f5dump python/fast5/fast5.so
     - readelf -a src/f5dump | grep PATH
-    - ldd python/fast5/fast5.so
     - readelf -a python/fast5/fast5.so | grep PATH
     - src/hdf5-mod -f file.000.fast5 && src/f5-mod file.000.fast5 && src/f5dump file.000.fast5 && src/f5dump-full file.000.fast5
     - pip list | grep fast5

@@ -7,11 +7,20 @@ language: cpp
 before_install:
     - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
     - sudo apt-get update -qq
-    - sudo apt-get install -qq build-essential g++-4.9 libhdf5-dev libboost1.55-dev libboost-python1.55-dev python2.7-minimal libpython2.7-dev
+    - sudo apt-get install -qq build-essential g++-4.9 libhdf5-dev libboost1.55-dev libboost-python1.55-dev python2.7-minimal python-pkg-resources python-setuptools
 
 install:
     - make -C src CXX=g++-4.9 HDF5_INCLUDE_DIR=/usr/include HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu
     - make -C python CC=gcc-4.9 CXX=g++-4.9 HDF5_INCLUDE_DIR=/usr/include HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu BOOST_INCLUDE_DIR=/usr/include BOOST_LIB_DIR=/usr/lib/x86_64-linux-gnu develop-user
+
+before_script:
+    - env | grep PATH
+    - find /usr -name 'libhdf5*'
+    - find /usr -name 'libboost_python*'
+    - ldd src/f5dump
+    - readelf -a src/f5dump | grep PATH
+    - ldd python/fast5/fast5.so
+    - readelf -a python/fast5/fast5.so | grep PATH
 
 script:
     - src/hdf5-mod -f file.000.fast5 && src/f5-mod file.000.fast5 && src/f5dump file.000.fast5 && src/f5dump-full file.000.fast5

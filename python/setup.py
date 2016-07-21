@@ -41,8 +41,10 @@ extra_compile_args = [
     '-Wall', '-Wextra', '-Wpedantic',
     '-isystem', hdf5_include_dir,
     '-isystem', boost_include_dir,
+    '-v',
 ]
 #extra_compile_args += ['-O0', '-g3', '-ggdb', '-fno-eliminate-unused-debug-types']
+extra_link_args = ['-v']
 
 extensions = [
     Extension(
@@ -58,6 +60,7 @@ extensions = [
             for fn in ['fast5.hpp', 'hdf5_tools.hpp']
         ],
         extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
         library_dirs=[
             hdf5_lib_dir,
             boost_lib_dir,

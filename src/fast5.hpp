@@ -374,7 +374,17 @@ public:
      */
     bool have_eventdetection_events(const std::string& _ed_gr = std::string()) const
     {
-        const std::string& ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
+        std::string ed_gr;
+        if (_ed_gr.empty())
+        {
+            auto ed_gr_l = get_eventdetection_group_list();
+            if (ed_gr_l.empty()) return false;
+            ed_gr = ed_gr_l.front();
+        }
+        else
+        {
+            ed_gr = _ed_gr;
+        }
         return not get_eventdetection_read_name_list(ed_gr).empty();
     }
     /**
@@ -599,6 +609,11 @@ public:
         assert(Base::exists(basecall_model_file_path(bc_gr, st)));
         Base::read(basecall_model_file_path(bc_gr, st), res);
         return res;
+    }
+    void add_basecall_model_file(unsigned st, const std::string& bc_gr, const std::string& file_name) const
+    {
+        std::string path = basecall_model_file_path(bc_gr, st);
+        Base::write(path, false, file_name);
     }
     /**
      * Get Basecall model parameters for given Basecall group and given strand.

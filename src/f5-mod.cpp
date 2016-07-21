@@ -75,6 +75,10 @@ int main(int argc, char* argv[])
             //
             fast5::Model_Parameters params{1.0, 0.0, 0.0, 1.0, .9, .9};
             f.add_basecall_model_params(0, test_bc_grp_prefix + test_bc_grp_suffix, params);
+            //
+            // add basecall model file
+            //
+            f.add_basecall_model_file(0, test_bc_grp_prefix + test_bc_grp_suffix, "/dev/null");
         }
         catch (hdf5_tools::Exception& e)
         {

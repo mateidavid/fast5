@@ -36,15 +36,18 @@ if (not os.path.isfile(os.path.join(boost_lib_dir, 'lib' + boost_python_lib + '.
 
 fast5_dir = os.environ.get('FAST5_DIR', os.path.join('..', 'src'))
 
-compile_args = ['-std=c++11', '-Wall', '-Wextra', '-pedantic']
-#compile_args += ['-O0', '-g3', '-ggdb', '-fno-eliminate-unused-debug-types']
+extra_compile_args = [
+    '-std=c++11',
+    '-Wall', '-Wextra', '-Wpedantic',
+    '-isystem', hdf5_include_dir,
+    '-isystem', boost_include_dir,
+]
+#extra_compile_args += ['-O0', '-g3', '-ggdb', '-fno-eliminate-unused-debug-types']
 
 extensions = [
     Extension(
         'fast5.fast5',
         include_dirs=[
-            hdf5_include_dir,
-            boost_include_dir,
             fast5_dir,
         ],
         sources=[
@@ -54,7 +57,7 @@ extensions = [
             os.path.join(fast5_dir, fn)
             for fn in ['fast5.hpp', 'hdf5_tools.hpp']
         ],
-        extra_compile_args=compile_args,
+        extra_compile_args=extra_compile_args,
         library_dirs=[
             hdf5_lib_dir,
             boost_lib_dir,

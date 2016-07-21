@@ -7,6 +7,8 @@ language: cpp
 before_install:
     - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
     - sudo apt-get update -qq
-    - sudo apt-get install -qq build-essential g++-4.9 libhdf5-dev
+    - sudo apt-get install -qq build-essential g++-4.9 libhdf5-dev libboost1.55-dev libboost-python1.55-dev
 
-script: cd src && make CXX=g++-4.9 HDF5_INCLUDE_DIR=/usr/include HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu && ./hdf5-mod -f file.000.fast5 >/dev/null && ./f5-mod file.000.fast5 >/dev/null && ./f5dump file.000.fast5 && ./f5dump-full file.000.fast5
+script:
+    - cd src && make CXX=g++-4.9 HDF5_INCLUDE_DIR=/usr/include HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu && ./hdf5-mod -f file.000.fast5 && ./f5-mod file.000.fast5 && ./f5dump file.000.fast5 && ./f5dump-full file.000.fast5
+    - cd python && make CC=gcc-4.9 CXX=g++-4.9 HDF5_INCLUDE_DIR=/usr/include HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu BOOST_INCLUDE_DIR=/usr/include BOOST_LIB_DIR=/usr/lib/x86_64-linux-gnu develop-user

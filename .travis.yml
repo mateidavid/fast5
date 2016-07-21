@@ -15,7 +15,7 @@ install:
 
 script:
     - env | grep PATH
-    - find /usr -regextype posix-egrep -regex '.*/lib(boost_python|hdf5).*\.(so|a)' -print0 | xargs -0 -n1 ls -l | awk '{print $9, $10, $11}' || true
+    - find /usr -regextype posix-egrep \( -regex '.*/lib(boost_python|hdf5).*\.(so|a)' -o -regex '.*/boost.*/python\.hpp' \) -print0 | xargs -0 -n1 ls -l | awk '{print $9, $10, $11}' | sort || true
     - ldd src/f5dump python/fast5/fast5.so
     - readelf -a src/f5dump | grep PATH
     - readelf -a python/fast5/fast5.so | grep PATH

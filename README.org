@@ -18,7 +18,7 @@ See [[file:src/f5dump.cpp][src/f5dump.cpp]] for an example.
 
 *** Python Wrapper
 
-An optional python wrapper for this library is available through Boost.Python.
+An optional python wrapper for this library is available through Boost.Python. The wrapper currently implements only read-only access.
 
 **** Installation
 

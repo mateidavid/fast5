@@ -130,7 +130,7 @@ struct mem_type_class< std::string >
 // Struct whose purpuse is to destroy the HDF object during destruction
 struct HDF_Object_Holder
 {
-    int id;
+    hid_t id;
     std::function< herr_t(hid_t) > dtor;
     HDF_Object_Holder()
         : id(0) {}
@@ -140,7 +140,7 @@ struct HDF_Object_Holder
     {
         load(std::move(other));
     }
-    HDF_Object_Holder(int _id, std::function< herr_t(hid_t) > _dtor)
+    HDF_Object_Holder(hid_t _id, std::function< herr_t(hid_t) > _dtor)
     {
         load(_id, _dtor);
     }
@@ -165,7 +165,7 @@ struct HDF_Object_Holder
         }
         return *this;
     }
-    void load(int _id, std::function< herr_t(hid_t) > _dtor)
+    void load(hid_t _id, std::function< herr_t(hid_t) > _dtor)
     {
         id = _id;
         dtor = _dtor;

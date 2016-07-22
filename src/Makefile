@@ -2,7 +2,7 @@
 MAKEFLAGS += -r
 SHELL := /bin/bash
 .DELETE_ON_ERROR:
-.PHONY: all help list clean
+.PHONY: all help list clean check_hdf5
 
 HDF5_DIR = /usr/local
 HDF5_INCLUDE_DIR = ${HDF5_DIR}/include
@@ -29,5 +29,5 @@ check_hdf5:
 	@[ -f "${HDF5_INCLUDE_DIR}/H5pubconf.h" ] || { echo "HDF5 headers not found" >&2; exit 1; }
 	@[ -f "${HDF5_LIB_DIR}/lib${HDF5_LIB}.so" ] || [ -f "${HDF5_LIB_DIR}/lib${HDF5_LIB}.a" ] || { echo "HDF5 library not found" >&2; exit 1; }
 
-%: %.cpp fast5.hpp hdf5_tools.hpp check_hdf5
+%: %.cpp fast5.hpp hdf5_tools.hpp | check_hdf5
 	${CXX} -std=c++11 -O0 -g3 -ggdb -fno-eliminate-unused-debug-types -Wall -Wextra -Wpedantic -isystem ${HDF5_INCLUDE_DIR} -o $@ $< -L${HDF5_LIB_DIR} -Wl,--rpath=${HDF5_LIB_DIR} -l${HDF5_LIB} -lpthread -lz -ldl

@@ -1,0 +1,36 @@
+FROM debian:unstable
+MAINTAINER Matei David <matei.david.at.oicr.on.ca>
+
+# use host timezone
+ENV TZ=${TZ}
+RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
+
+# install prerequisites
+RUN apt-get update && \
+    apt-get install -y \
+        build-essential \
+        libhdf5-dev \
+        libboost-dev \
+        libboost-python-dev \
+        python2.7-minimal \
+        python-setuptools \
+        python-virtualenv
+
+# expose prerequisites settings
+ENV HDF5_INCLUDE_DIR=/usr/include/hdf5/serial
+ENV HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu/hdf5/serial
+ENV BOOST_INCLUDE_DIR=/usr/include
+ENV BOOST_LIB_DIR=/usr/lib/x86_64-linux-gnu
+
+# if necessary, specify compiler
+#RUN apt-get install -y g++-4.9 g++-5 g++-6
+#ENV CC=gcc-4.9
+#ENV CXX=g++-4.9
+
+# use host id
+RUN groupadd --gid ${GROUP_ID} ${GROUP_NAME}
+RUN useradd --create-home --uid ${USER_ID} --gid ${GROUP_ID} ${USER_NAME}
+USER ${USER_NAME}
+
+VOLUME /data
+WORKDIR /data

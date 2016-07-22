@@ -23,7 +23,7 @@ list:
 	@echo "TARGETS=${TARGETS}"
 
 clean:
-	@rm -f ${TARGETS}
+	rm -rf ${TARGETS}
 
 check_hdf5:
 	@[ -f "${HDF5_INCLUDE_DIR}/H5pubconf.h" ] || { echo "HDF5 headers not found" >&2; exit 1; }

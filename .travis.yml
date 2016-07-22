@@ -6,11 +6,11 @@ services:
     - docker
 
 before_install:
-    - TZ=$(cat /etc/timezone) USER_ID=$(id -u) USER_NAME=${USER} envsubst <.travis.Dockerfile | docker build -t fast5 -
+    - TZ=$(cat /etc/timezone) USER_ID=$(id -u) USER_NAME=$(id -un) GROUP_ID=$(id -g) GROUP_NAME=$(id -gn) envsubst <.travis.Dockerfile.in | docker build -t fast5 -
 
 install:
-    - docker run --rm -v $PWD:/data fast5 make -C src CXX=g++-4.9 HDF5_INCLUDE_DIR=/usr/include HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu
-    - docker run --rm -v $PWD:/data fast5 bash -c 'virtualenv build-venv && source build-venv/bin/activate && make -C python CC=gcc-4.9 CXX=g++-4.9 HDF5_INCLUDE_DIR=/usr/include HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu BOOST_INCLUDE_DIR=/usr/include BOOST_LIB_DIR=/usr/lib/x86_64-linux-gnu develop'
+    - docker run --rm -v $PWD:/data fast5 make -C src -e
+    - docker run --rm -v $PWD:/data fast5 bash -c 'virtualenv build-venv && source build-venv/bin/activate && make -C python -e develop'
 
 script:
     - docker run --rm -v $PWD:/data fast5 bash -c 'src/hdf5-mod -f file.000.fast5 && src/f5-mod file.000.fast5 && src/f5dump file.000.fast5 && src/f5dump-full file.000.fast5'

@@ -6,17 +6,21 @@
 
 A lightweight C++11 library to read raw signal data from Oxford Nanopore's Fast5 files.
 
-*** Installation Instructions
+*** C++
 
-This is a header-only library, so you only need to copy [[src/fast5.hpp]] and [[src/hdf5_tools.hpp]] into your project.
+**** Installation
 
-*** Usage Instructions
+This is a header-only library. You only need to copy [[file:src/fast5.hpp][src/fast5.hpp]] and [[file:src/hdf5_tools.hpp][src/hdf5_tools.hpp]] into your C++ project.
 
-See [[src/f5dump.cpp]] for an example.
+**** Usage
+
+See [[file:src/f5dump.cpp][src/f5dump.cpp]] for an example.
 
 *** Python Wrapper
 
-Optionally, a python wrapper package for this library may be installed with:
+An optional python wrapper for this library is available through Boost.Python.
+
+**** Installation
 
 #+BEGIN_EXAMPLE
 cd python
@@ -25,11 +29,20 @@ HDF5_DIR=/usr/local BOOST_DIR=/usr/local make develop-user
 
 Notes:
 
-- HDF5 and Boost.Python must be available, and their locations can be passed on to the Python setup process using the environment variables =HDF5_DIR= and =BOOST_DIR=. Alternatively, the respective include directories, library directories, and library names may be specified explicitly with: =HDF5_INCLUDE_DIR=, =HDF5_LIB_DIR=, =HDF5_LIB=, =BOOST_INCLUDE_DIR=, =BOOST_LIB_DIR=, =BOOST_PYTHON_LIB=. For details, see [[file:python/setup.py][python/setup.py]].
+- HDF5 and Boost.Python must be available, and their locations can be passed on to the Python setup process using the environment variables =HDF5_DIR= and =BOOST_DIR=. Alternatively, the respective include directories, library directories, and library names may be specified explicitly with: =HDF5_INCLUDE_DIR=, =HDF5_LIB_DIR=, =HDF5_LIB=, =BOOST_INCLUDE_DIR=, =BOOST_LIB_DIR=, =BOOST_PYTHON_LIB=. For details, see [[file:python/setup.py][python/setup.py]] and [[file:.travis.yml][.travis.yml]].
 
 - To install =fast5= as a package in a virtualenv, use the target =develop=. To install as a user package, use the target =develop-user=. For details, see [[file:python/Makefile][python/Makefile]].
 
+**** Usage
+
+#+BEGIN_EXAMPLE
+import fast5
+f = fast5.File("file.000.fast5")
+print(f.file_version())
+print(f.have_eventdetection_events())
+#+END_EXAMPLE
+
 *** License
 
-[[LICENSE][MIT License]].
+[[file:LICENSE][MIT License]].
 

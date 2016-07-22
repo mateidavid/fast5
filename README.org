@@ -2,6 +2,8 @@
 
 ** Fast5 Library
 
+[[http://travis-ci.org/mateidavid/fast5][http://travis-ci.org/mateidavid/fast5.svg?branch=master]]
+
 A lightweight C++11 library to read raw signal data from Oxford Nanopore's Fast5 files.
 
 *** Installation Instructions

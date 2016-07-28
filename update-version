@@ -15,3 +15,4 @@ which git >/dev/null 2>&1 || crash "git not found"
 
 echo "$1" >"$_prog_dir/VERSION"
 echo "__version__ = '$1'" >"$_prog_dir/python/fast5/version.py"
+echo VERSION python/fast5/version.py

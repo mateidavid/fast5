@@ -39,9 +39,13 @@ fast5_dir = os.environ.get('FAST5_DIR', os.path.join('..', 'src'))
 extra_compile_args = [
     '-std=c++11',
     '-Wall', '-Wextra', '-Wpedantic',
-    '-isystem', hdf5_include_dir,
-    '-isystem', boost_include_dir,
 ]
+# don't indiscriminately add /usr/include to work around bug:
+# https://lists.fedoraproject.org/archives/list/devel@lists.fedoraproject.org/thread/Q5SWCUUMWQ4EMS7CU2CBOZHV3WZYOOTT/
+for d in [hdf5_include_dir, boost_include_dir]:
+    if d != '/usr/include':
+        extra_compile_args += ['-isystem', d]
+
 #extra_compile_args += ['-O0', '-g3', '-ggdb', '-fno-eliminate-unused-debug-types', '-v']
 extra_link_args = []
 #extra_link_args += ['-v']

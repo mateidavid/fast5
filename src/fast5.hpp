@@ -748,6 +748,25 @@ public:
         return fq.substr(nl1_pos + 1, nl2_pos - nl1_pos - 1);
     }
 
+    /**
+     * Access alternate 1d basecall group.
+     */
+    static bool have_basecall_alt_1d_group(const std::string& bc_gr)
+    {
+        return bc_gr.substr(0, 3) == "2D_";
+    }
+    static std::string get_basecall_alt_1d_group(const std::string& bc_gr)
+    {
+        if (have_basecall_alt_1d_group(bc_gr))
+        {
+            return std::string("1D_") + bc_gr.substr(3);
+        }
+        else
+        {
+            return bc_gr;
+        }
+    }
+
 private:
     void detect_raw_samples_read_name_list()
     {

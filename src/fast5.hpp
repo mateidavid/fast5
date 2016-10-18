@@ -597,7 +597,8 @@ public:
     {
         if (_bc_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
         const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
-        return Base::dataset_exists(basecall_model_path(bc_gr, st));
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        return Base::dataset_exists(basecall_model_path(bc_gr_1d, st));
     }
     /**
      * Get Basecall model file name for given Basecall group and given strand.
@@ -606,13 +607,15 @@ public:
     {
         std::string res;
         const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
-        assert(Base::exists(basecall_model_file_path(bc_gr, st)));
-        Base::read(basecall_model_file_path(bc_gr, st), res);
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        assert(Base::exists(basecall_model_file_path(bc_gr_1d, st)));
+        Base::read(basecall_model_file_path(bc_gr_1d, st), res);
         return res;
     }
     void add_basecall_model_file(unsigned st, const std::string& bc_gr, const std::string& file_name) const
     {
-        std::string path = basecall_model_file_path(bc_gr, st);
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        std::string path = basecall_model_file_path(bc_gr_1d, st);
         Base::write(path, false, file_name);
     }
     /**
@@ -622,7 +625,8 @@ public:
     {
         Model_Parameters res;
         const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
-        std::string path = basecall_model_path(bc_gr, st);
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        std::string path = basecall_model_path(bc_gr_1d, st);
         Base::read(path + "/scale", res.scale);
         Base::read(path + "/shift", res.shift);
         Base::read(path + "/drift", res.drift);
@@ -634,7 +638,8 @@ public:
     template < typename T >
     void add_basecall_model_params(unsigned st, const std::string& bc_gr, const T& params) const
     {
-        std::string path = basecall_model_path(bc_gr, st);
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        std::string path = basecall_model_path(bc_gr_1d, st);
         Base::write(path + "/scale", false, params.scale);
         Base::write(path + "/shift", false, params.shift);
         Base::write(path + "/drift", false, params.drift);
@@ -655,7 +660,8 @@ public:
         m.add_member("level_stdv", &Model_Entry::level_stdv);
         m.add_member("sd_mean", &Model_Entry::sd_mean);
         m.add_member("sd_stdv", &Model_Entry::sd_stdv);
-        Base::read(basecall_model_path(bc_gr, st), res, m);
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        Base::read(basecall_model_path(bc_gr_1d, st), res, m);
         return res;
     }
     /**
@@ -670,7 +676,8 @@ public:
         cm.add_member("level_stdv", &T::level_stdv);
         cm.add_member("sd_mean", &T::sd_mean);
         cm.add_member("sd_stdv", &T::sd_stdv);
-        Base::write(basecall_model_path(bc_gr, st), true, m, cm);
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        Base::write(basecall_model_path(bc_gr_1d, st), true, m, cm);
     }
     /**
      * Check if Basecall events exist for given Basecall group and given strand.
@@ -679,7 +686,8 @@ public:
     {
         if (_bc_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
         const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
-        return Base::dataset_exists(basecall_events_path(bc_gr, st));
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        return Base::dataset_exists(basecall_events_path(bc_gr_1d, st));
     }
     /**
      * Get Basecall events for given Basecall group and given strand.
@@ -696,7 +704,8 @@ public:
         m.add_member("p_model_state", &Event_Entry::p_model_state);
         m.add_member("model_state", &Event_Entry::model_state);
         m.add_member("move", &Event_Entry::move);
-        Base::read(basecall_events_path(bc_gr, st), res, m);
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        Base::read(basecall_events_path(bc_gr_1d, st), res, m);
         return res;
     }
     /**
@@ -713,7 +722,8 @@ public:
         cm.add_member("p_model_state", &T::p_model_state);
         cm.add_member("model_state", &T::model_state);
         cm.add_member("move", &T::move);
-        Base::write(basecall_events_path(bc_gr, st), true, ev, cm);
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        Base::write(basecall_events_path(bc_gr_1d, st), true, ev, cm);
     }
     /**
      * Check if Basecall event alignment exist for given Basecall group.
@@ -746,25 +756,6 @@ public:
         size_t nl2_pos = fq.find_first_of('\n', nl1_pos + 1);
         if (nl2_pos == std::string::npos) return std::string();
         return fq.substr(nl1_pos + 1, nl2_pos - nl1_pos - 1);
-    }
-
-    /**
-     * Access alternate 1d basecall group.
-     */
-    static bool have_basecall_alt_1d_group(const std::string& bc_gr)
-    {
-        return bc_gr.substr(0, 3) == "2D_";
-    }
-    static std::string get_basecall_alt_1d_group(const std::string& bc_gr)
-    {
-        if (have_basecall_alt_1d_group(bc_gr))
-        {
-            return std::string("1D_") + bc_gr.substr(3);
-        }
-        else
-        {
-            return bc_gr;
-        }
     }
 
 private:
@@ -954,6 +945,23 @@ private:
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(2) + "/Alignment";
+    }
+    std::string get_basecall_group_1d(const std::string& bc_gr) const
+    {
+        std::string path = basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/basecall_1d";
+        if (Base::attribute_exists(path))
+        {
+            std::string tmp;
+            Base::read(path, tmp);
+            auto tmp1 = tmp.substr(0, 18);
+            auto tmp2 = tmp.substr(18);
+            if (tmp1 == "Analyses/Basecall_"
+                and Base::group_exists(basecall_root_path() + "/" + basecall_group_prefix() + tmp2))
+            {
+                return tmp2;
+            }
+        }
+        return bc_gr;
     }
 }; // class File
 

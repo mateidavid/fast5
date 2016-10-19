@@ -749,13 +749,54 @@ public:
         return res;
     }
 
+    /**
+     * Get basecall group holding 1d calls.
+     */
+    std::string get_basecall_group_1d(const std::string& bc_gr) const
+    {
+        std::string path = basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/basecall_1d";
+        if (Base::attribute_exists(path))
+        {
+            std::string tmp;
+            Base::read(path, tmp);
+            auto tmp1 = tmp.substr(0, 18);
+            auto tmp2 = tmp.substr(18);
+            if (tmp1 == "Analyses/Basecall_"
+                and Base::group_exists(basecall_root_path() + "/" + basecall_group_prefix() + tmp2))
+            {
+                return tmp2;
+            }
+        }
+        return bc_gr;
+    }
+
     static std::string fq2seq(const std::string& fq)
     {
-        size_t nl1_pos = fq.find_first_of('\n');
-        if (nl1_pos == std::string::npos) return std::string();
-        size_t nl2_pos = fq.find_first_of('\n', nl1_pos + 1);
-        if (nl2_pos == std::string::npos) return std::string();
-        return fq.substr(nl1_pos + 1, nl2_pos - nl1_pos - 1);
+        return split_fq(fq)[1];
+    }
+    static std::array< std::string, 4 > split_fq(const std::string& fq)
+    {
+        std::array< std::string, 4 > res = {{"", "", "", ""}};
+        size_t i = 0;
+        for (int k = 0; k < 4; ++k)
+        {
+            if (k % 2 == 0) ++i;
+            size_t j = fq.find_first_of('\n', i);
+            if (j == std::string::npos)
+            {
+                if (k == 3)
+                {
+                    j = fq.size();
+                }
+                else
+                {
+                    return {{"", "", "", ""}};
+                }
+            }
+            res[k] = fq.substr(i, j - i);
+            i = j + 1;
+        }
+        return res;
     }
 
 private:
@@ -945,23 +986,6 @@ private:
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(2) + "/Alignment";
-    }
-    std::string get_basecall_group_1d(const std::string& bc_gr) const
-    {
-        std::string path = basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/basecall_1d";
-        if (Base::attribute_exists(path))
-        {
-            std::string tmp;
-            Base::read(path, tmp);
-            auto tmp1 = tmp.substr(0, 18);
-            auto tmp2 = tmp.substr(18);
-            if (tmp1 == "Analyses/Basecall_"
-                and Base::group_exists(basecall_root_path() + "/" + basecall_group_prefix() + tmp2))
-            {
-                return tmp2;
-            }
-        }
-        return bc_gr;
     }
 }; // class File
 

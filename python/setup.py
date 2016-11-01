@@ -16,7 +16,7 @@ exec(open('fast5/version.py').read())
 hdf5_dir = os.environ.get('HDF5_DIR', '/usr')
 hdf5_include_dir = os.environ.get('HDF5_INCLUDE_DIR', os.path.join(hdf5_dir, 'include'))
 hdf5_lib_dir = os.environ.get('HDF5_LIB_DIR', os.path.join(hdf5_dir, 'lib'))
-hdf5_lib = os.environ.get('HDF_LIB', 'hdf5')
+hdf5_lib = os.environ.get('HDF5_LIB', 'hdf5')
 if not os.path.isfile(os.path.join(hdf5_include_dir, 'H5pubconf.h')):
     sys.exit(hdf5_include_dir + ': could not find HDF5 header files; use HDF5_DIR or HDF5_INCLUDE_DIR')
 if (not os.path.isfile(os.path.join(hdf5_lib_dir, 'lib' + hdf5_lib + '.so'))

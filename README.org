@@ -48,7 +48,7 @@ The program =f5dump= can be used to list and extract some of the contents of =fa
 
 **** Installation
 
-In addition to this =fast5= repository, you will need HDF5 (headers and libraries), as well the the header-only libraries [[https://github.com/mateidavid/tclap.git][TCLAP]] and [[https://github.com/mateidavid/hpptools.git][HPPTOOLS]]. To build =f5dump=, run =make f5dump [VAR1=VALUE1] ...=, where =VAR=-s are used to instruct the [[file:Makefile][Makefile]] where to find various dependencies.
+In addition to this =fast5= repository, you will need HDF5 (headers and libraries), as well the the header-only libraries [[https://github.com/mateidavid/tclap.git][TCLAP]] and [[https://github.com/mateidavid/hpptools.git][HPPTOOLS]]. To build =f5dump=, run =make f5dump [VAR1=VALUE1] ...=, where =VAR=-s are used to instruct the [[file:src/Makefile][Makefile]] where to find various dependencies.
 
 **** Usage
 

@@ -56,7 +56,7 @@ In each run, =f5dump= requires exactly one command among: =--ls/--id/--rw/--ed/-
 
 - In =--ls= mode, =f5dump= lists some of the contents of the file. Sample output:
 
-#+BEGIN_EXAMPLE
+  #+BEGIN_EXAMPLE
 rw      Read_1019
 ed      000     Read_1019
 ed      001     Read_1019

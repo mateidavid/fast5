@@ -42,6 +42,7 @@ typedef std::map< std::string, std::string > Tracking_Id_Parameters;
 typedef std::map< std::string, std::string > Sequences_Parameters;
 
 typedef float Raw_Samples_Entry;
+typedef int16_t Raw_Samples_Int_Entry;
 
 struct Raw_Samples_Parameters
 {
@@ -305,10 +306,24 @@ public:
     }
     /**
      * Check if raw samples exist.
+     * If _rn non-empty, check if raw samples exist for given read.
      */
-    bool have_raw_samples() const
+    bool have_raw_samples(const std::string& _rn = std::string()) const
     {
-        return have_channel_id_params() and not get_raw_samples_read_name_list().empty();
+        if (not have_channel_id_params())
+        {
+            return false;
+        }
+        auto rn_l = get_raw_samples_read_name_list();
+        if (_rn.empty())
+        {
+            return not rn_l.empty();
+        }
+        else
+        {
+            std::set< std::string > rn_d(rn_l.begin(), rn_l.end());
+            return rn_d.count(_rn) > 0;
+        }
     }
     /**
      * Get raw samples attributes for given read name (default: first read name).
@@ -326,20 +341,29 @@ public:
         return res;
     }
     /**
+     * Get raw samples for given read name as ints (default: first read name).
+     */
+    std::vector< Raw_Samples_Int_Entry > get_raw_samples_int(const std::string& _rn = std::string()) const
+    {
+        // get raw samples
+        std::vector< Raw_Samples_Int_Entry > res;
+        const std::string& rn = not _rn.empty()? _rn : get_raw_samples_read_name_list().front();
+        Base::read(raw_samples_path(rn), res);
+        return res;
+    }
+    /**
      * Get raw samples for given read name (default: first read name).
      */
     std::vector< Raw_Samples_Entry > get_raw_samples(const std::string& _rn = std::string()) const
     {
         // get raw samples
-        std::vector< uint16_t > raw_samples;
-        const std::string& rn = not _rn.empty()? _rn : get_raw_samples_read_name_list().front();
-        Base::read(raw_samples_path(rn), raw_samples);
+        auto raw_samples_int = get_raw_samples_int(_rn);
         // get scaling parameters
         auto channel_id_params = get_channel_id_params();
         // decode levels
         std::vector< Raw_Samples_Entry > res;
-        res.reserve(raw_samples.size());
-        for (auto int_level : raw_samples)
+        res.reserve(raw_samples_int.size());
+        for (auto int_level : raw_samples_int)
         {
             res.push_back((static_cast< float >(int_level) + channel_id_params.offset)
                           * channel_id_params.range / channel_id_params.digitisation);
@@ -370,9 +394,13 @@ public:
         return detect_eventdetection_read_name_list(ed_gr);
     }
     /**
-     * Check if EventDetection events exist for given EventDetection group (default: first EventDetection group).
+     * Check if EventDetection events exist.
+     * If _ed_gr given: check if events exist for given group; else: check first EventDetection group.
+     * If _rn given: check if events exist for given group and read name.
      */
-    bool have_eventdetection_events(const std::string& _ed_gr = std::string()) const
+    bool have_eventdetection_events(
+        const std::string& _ed_gr = std::string(),
+        const std::string& _rn = std::string()) const
     {
         std::string ed_gr;
         if (_ed_gr.empty())
@@ -385,7 +413,16 @@ public:
         {
             ed_gr = _ed_gr;
         }
-        return not get_eventdetection_read_name_list(ed_gr).empty();
+        auto rn_l = get_eventdetection_read_name_list(ed_gr);
+        if (_rn.empty())
+        {
+            return not rn_l.empty();
+        }
+        else
+        {
+            std::set< std::string > rn_d(rn_l.begin(), rn_l.end());
+            return rn_d.count(_rn) > 0;
+        }
     }
     /**
      * Get EventDetection params for given EventDetection group (default: first EventDetection group).
@@ -768,6 +805,30 @@ public:
             }
         }
         return bc_gr;
+    }
+    /**
+     * Get EventDetection group for given Basecall group, if available.
+     */
+    std::string get_basecall_eventdetection_group(const std::string& bc_gr) const
+    {
+        std::string path = basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/event_detection";
+        if (Base::attribute_exists(path))
+        {
+            std::string tmp;
+            Base::read(path, tmp);
+            auto pos = tmp.find(eventdetection_group_prefix());
+            if (pos != std::string::npos)
+            {
+                pos += eventdetection_group_prefix().size();
+                auto end_pos = tmp.find("/", pos);
+                if (end_pos == std::string::npos)
+                {
+                    end_pos = tmp.size();
+                }
+                return tmp.substr(pos, end_pos - pos);
+            }
+        }
+        return std::string();
     }
 
     static std::string fq2seq(const std::string& fq)

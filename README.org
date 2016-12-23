@@ -14,7 +14,7 @@ This is a header-only library. You only need to copy [[file:src/fast5.hpp][src/f
 
 **** Usage
 
-See [[file:src/f5dump.cpp][src/f5dump.cpp]] for an example.
+See [[file:src/f5ls.cpp][src/f5ls.cpp]] for an example.
 
 *** Python Wrapper
 

@@ -1,20 +1,40 @@
 #include <cassert>
 #include <iostream>
+#include <iomanip>
 #include <string>
+
+#include <tclap/CmdLine.h>
+#include "alg.hpp"
 
 #include "fast5.hpp"
 
 using namespace std;
 
-template < typename T >
-void print_vector(ostream& os, const vector< T >& v, const string& delim)
+
+namespace opts
 {
-    for (auto it = v.begin(); it != v.end(); ++it)
-    {
-        if (it != v.begin()) os << delim;
-        os << *it;
-    }
+    using namespace TCLAP;
+    string description = "Dump contents of ONT fast5 files.";
+    CmdLine cmd_parser(description);
+    //
+    ValueArg< unsigned > float_prec("", "float-prec", "Float precision.", false, 10, "int", cmd_parser);
+    SwitchArg rw_time("", "rw-time", "Add timepoints to raw data.", cmd_parser);
+    SwitchArg curr_int("", "curr-int", "Dump current data encoded as int (raw samples only).", cmd_parser);
+    SwitchArg time_int("", "time-int", "Dump start/length data encoded as int.", cmd_parser);
+    //
+    ValueArg< string > rn("", "rn", "Read name.", false, "", "Read_1015|...", cmd_parser);
+    ValueArg< unsigned > st("", "st", "Strand.", false, 0, "0|1|2", cmd_parser);
+    ValueArg< string > gr("", "gr", "Group name suffix.", false, "", "000|RNN_001|...", cmd_parser);
+    //
+    SwitchArg fq("", "fq", "Dump basecall fastq data.", cmd_parser);
+    SwitchArg ev("", "ev", "Dump basecall event data.", cmd_parser);
+    SwitchArg ed("", "ed", "Dump event detection data.", cmd_parser);
+    SwitchArg rw("", "rw", "Dump raw samples data.", cmd_parser);
+    SwitchArg id("", "id", "Dump channel/tracking id data.", cmd_parser);
+    SwitchArg ls("", "ls", "List groups/read names.", cmd_parser);
+    UnlabeledValueArg< string > input_fn("input", "Fast5 file.", true, "", "file", cmd_parser);
 }
+
 template < typename U, typename V >
 void print_map(ostream& os, const map< U, V >& m, const string& prefix)
 {
@@ -24,174 +44,218 @@ void print_map(ostream& os, const map< U, V >& m, const string& prefix)
     }
 }
 
-int main(int argc, char* argv[])
+unsigned time_int(double f, fast5::Channel_Id_Parameters const & channel_id_params)
 {
-    if (argc != 2)
+    return f * channel_id_params.sampling_rate;
+}
+
+void real_main()
+{
+    fast5::File f;
+    try
     {
-        cerr << "use: " << argv[0] << " <fast5_file>" << endl;
-        return EXIT_FAILURE;
-    }
-    string file_name(argv[1]);
-    //
-    // open the FAST5 file for reading
-    //
-    if (not fast5::File::is_valid_file(file_name))
-    {
-        cout << "not a fast5 file [" << file_name << "]" << endl;
-        return EXIT_SUCCESS;
-    }
-    {
-        fast5::File f;
+        // open file
+        f.open(opts::input_fn);
+        auto channel_id_params = f.get_channel_id_params();
         //
-        // All fast5 operations are performed inside a try-catch block. This should
-        // resist various hdf5 errors without leaking memory.
+        // list
         //
-        try
+        if (opts::ls)
         {
-            //
-            // open file
-            //
-            f.open(file_name);
-            assert(f.is_open());
-            //
-            // extract version information for the ONT software used to generate this dataset
-            //
-            cout << "file_version=" << f.file_version() << endl;
-            //
-            // inspect channel_id params
-            //
-            if (f.have_channel_id_params())
+            // rw
             {
-                auto channel_id_params = f.get_channel_id_params();
-                cout << "channel_id/channel_number=" << channel_id_params.channel_number << endl
-                     << "channel_id/digitisation=" << channel_id_params.digitisation << endl
-                     << "channel_id/offset=" << channel_id_params.offset << endl
-                     << "channel_id/range=" << channel_id_params.range << endl
-                     << "channel_id/sampling_rate=" << channel_id_params.sampling_rate << endl;
+                auto rn_l = f.get_raw_samples_read_name_list();
+                for (auto const & rn : rn_l)
+                {
+                    cout << "rw\t" << rn << endl;
+                }
             }
-            //
-            // inspect tracking_id params
-            //
+            // ed
+            {
+                auto gr_l = f.get_eventdetection_group_list();
+                for (auto const & gr : gr_l)
+                {
+                    auto rn_l = f.get_eventdetection_read_name_list(gr);
+                    cout << "ed\t" << gr << "\t" << alg::os_join(rn_l, ",") << endl;
+                }
+            }
+            // bc
+            {
+                for (auto st : vector< unsigned >({ 2, 0, 1 }))
+                {
+                    auto gr_l = f.get_basecall_strand_group_list(st);
+                    for (auto const & gr : gr_l)
+                    {
+                        int have_fastq = f.have_basecall_fastq(st, gr);
+                        int have_events = (st == 2
+                                           ? f.have_basecall_events(0, gr) and f.have_basecall_events(1, gr)
+                                           : f.have_basecall_events(st, gr));
+                        string link = (st == 2? f.get_basecall_group_1d(gr) : f.get_basecall_eventdetection_group(gr));
+                        cout
+                            << (st == 2? "bc2d" : "bc1d") << "\t"
+                            << gr << "\t"
+                            << st << "\t"
+                            << have_fastq << "\t"
+                            << have_events << "\t"
+                            << (not link.empty()? link : string(".")) << endl
+                            ;
+                    }
+                }
+            }
+        }
+        //
+        // id
+        //
+        if (opts::id)
+        {
+            cout
+                << "channel_id/channel_number=" << channel_id_params.channel_number << endl
+                << "channel_id/digitisation=" << channel_id_params.digitisation << endl
+                << "channel_id/offset=" << channel_id_params.offset << endl
+                << "channel_id/range=" << channel_id_params.range << endl
+                << "channel_id/sampling_rate=" << channel_id_params.sampling_rate << endl
+                ;
             if (f.have_tracking_id_params())
             {
                 auto tracking_id_params = f.get_tracking_id_params();
                 print_map(cout, tracking_id_params, "tracking_id/");
             }
-            //
-            // inspect sequences params
-            //
-            if (f.have_sequences_params())
-            {
-                auto sequences_params = f.get_sequences_params();
-                print_map(cout, sequences_params, "sequences/");
-            }
-            //
-            // inspect raw samples
-            //
-            if (f.have_raw_samples())
-            {
-                auto rs_params = f.get_raw_samples_params();
-                auto rs = f.get_raw_samples();
-                cout << "raw_samples/read_id=" << rs_params.read_id << endl
-                     << "raw_samples/read_number=" << rs_params.read_number << endl
-                     << "raw_samples/start_mux=" << rs_params.start_mux << endl
-                     << "raw_samples/start_time=" << rs_params.start_time << endl
-                     << "raw_samples/duration=" << rs_params.duration << endl
-                     << "raw_samples/size=" << rs.size() << endl;
-                const auto& e = rs.front();
-                cout << "  (" << e << ")" << endl;
-            }
-            //
-            // inspect eventdetection events
-            //
-            cout << "eventdetection_group_list=";
-            print_vector(cout, f.get_eventdetection_group_list(), ",");
-            cout << endl;
-            if (f.have_eventdetection_events())
-            {
-                auto ed_params = f.get_eventdetection_params();
-                print_map(cout, ed_params, "eventdetection/");
-                auto ed_ev_params = f.get_eventdetection_event_params();
-                auto ed_ev = f.get_eventdetection_events();
-                cout << "eventdetection/events/abasic_found=" << ed_ev_params.abasic_found << endl
-                     << "eventdetection/events/duration=" << ed_ev_params.duration << endl
-                     << "eventdetection/events/median_before=" << ed_ev_params.median_before << endl
-                     << "eventdetection/events/read_id=" << ed_ev_params.read_id << endl
-                     << "eventdetection/events/read_number=" << ed_ev_params.read_number << endl
-                     << "eventdetection/events/scaling_used=" << ed_ev_params.scaling_used << endl
-                     << "eventdetection/events/start_mux=" << ed_ev_params.start_mux << endl
-                     << "eventdetection/events/start_time=" << ed_ev_params.start_time << endl
-                     << "eventdetection/events/size=" << ed_ev.size() << endl;
-                const auto& e = ed_ev.front();
-                cout << "  (mean=" << e.mean
-                     << ", stdv=" << e.stdv
-                     << ", start=" << e.start
-                     << ", length=" << e.length << ")" << endl;
-            } // if have_eventdetection_events
-            //
-            // inspect basecall groups
-            //
-            for (unsigned st = 0; st < 3; ++st)
-            {
-                cout << "basecall(" << st << ")/group_list=";
-                print_vector(cout, f.get_basecall_strand_group_list(st), ",");
-                cout << endl;
-                // basecall sequence
-                if (f.have_basecall_seq(st))
-                {
-                    cout << "basecall(" << st << ")/seq_size=" << f.get_basecall_seq(st).size() << endl;
-                }
-                // basecall model
-                if (f.have_basecall_model(st))
-                {
-                    cout << "basecall(" << st << ")/model_file=" << f.get_basecall_model_file(st) << endl;
-                    auto m_params = f.get_basecall_model_params(st);
-                    auto m = f.get_basecall_model(st);
-                    cout << "basecall(" << st << ")/model/scale=" << m_params.scale << endl
-                         << "basecall(" << st << ")/model/shift=" << m_params.shift << endl
-                         << "basecall(" << st << ")/model/drift=" << m_params.drift << endl
-                         << "basecall(" << st << ")/model/var=" << m_params.var << endl
-                         << "basecall(" << st << ")/model/scale_sd=" << m_params.scale_sd << endl
-                         << "basecall(" << st << ")/model/var_sd=" << m_params.var_sd << endl
-                         << "basecall(" << st << ")/model/size=" << m.size() << endl;
-                    const auto& e = m.front();
-                    cout << "  (kmer=" << e.get_kmer()
-                         << ", level_mean=" << e.level_mean
-                         << ", level_stdv=" << e.level_stdv << ")" << endl;
-                }
-                // basecall events
-                if (f.have_basecall_events(st))
-                {
-                    auto ev = f.get_basecall_events(st);
-                    cout << "basecall(" << st << ")/events/size=" << ev.size() << endl;
-                    const auto& e = ev.front();
-                    cout << "  (mean=" << e.mean
-                         << ", stdv=" << e.stdv
-                         << ", start=" << e.start
-                         << ", length=" << e.length
-                         << ", model_state=" << e.get_model_state()
-                         << ", p_model_state=" << e.p_model_state
-                         << ", move=" << e.move << ")" << endl;
-                }
-                // basecall event alignment
-                if (st == 2 and f.have_basecall_event_alignment())
-                {
-                    auto al = f.get_basecall_event_alignment();
-                    cout << "basecall(2)/event_alignment/size=" << al.size() << endl;
-                    const auto& e = al.front();
-                    cout << "  (template_index=" << e.template_index
-                         << ", complement_index=" << e.complement_index
-                         << ", kmer=" << e.get_kmer() << ")" << endl;
-                }
-            } // for st
         }
-        catch (hdf5_tools::Exception& e)
+        //
+        // raw samples
+        //
+        if (opts::rw and f.have_raw_samples(opts::rn))
         {
-            cout << "hdf5 error: " << e.what() << endl;
-        }
+            auto rs_params = f.get_raw_samples_params(opts::rn);
+            cout
+                << "#read_id=" << rs_params.read_id << endl
+                << "#read_number=" << rs_params.read_number << endl
+                << "#start_mux=" << rs_params.start_mux << endl
+                << "#start_time=" << rs_params.start_time << endl
+                << "#duration=" << rs_params.duration << endl
+                ;
+            if (not opts::curr_int)
+            {
+                auto rs = f.get_raw_samples(opts::rn);
+                if (opts::rw_time)
+                {
+                    cout << "start\t";
+                }
+                cout << "curr_f" << endl;
+                for (unsigned i = 0; i < rs.size(); ++i)
+                {
+                    if (opts::rw_time)
+                    {
+                        cout << rs_params.start_time + i << "\t";
+                    }
+                    cout << rs[i] << endl;
+                }
+            }
+            else
+            {
+                auto rs_int = f.get_raw_samples_int(opts::rn);
+                if (opts::rw_time)
+                {
+                    cout << "start\t";
+                }
+                cout << "curr_i" << endl;
+                for (unsigned i = 0; i < rs_int.size(); ++i)
+                {
+                    if (opts::rw_time)
+                    {
+                        cout << rs_params.start_time + i << "\t";
+                    }
+                    cout << rs_int[i] << endl;
+                }
+            }
+        } // if opts::rw
         //
-        // fast5 file is closed by its destructor at the end of this scope
+        // event detection
         //
+        if (opts::ed and f.have_eventdetection_events(opts::gr, opts::rn))
+        {
+            auto ede_params = f.get_eventdetection_event_params(opts::gr, opts::rn);
+            cout
+                << "#read_id=" << ede_params.read_id << endl
+                << "#read_number=" << ede_params.read_number << endl
+                << "#start_mux=" << ede_params.start_mux << endl
+                << "#start_time=" << ede_params.start_time << endl
+                << "#duration=" << ede_params.duration << endl
+                << "#scaling_used=" << ede_params.scaling_used << endl
+                ;
+            auto ede = f.get_eventdetection_events(opts::gr, opts::rn);
+            cout
+                << "start\tlength\tmean\tstdv" << endl
+                << alg::os_join(ede, "\n", [] (fast5::EventDetection_Event_Entry const & e) {
+                        ostringstream oss;
+                        oss.precision(opts::float_prec);
+                        oss << e.start << "\t" << e.length << "\t" << e.mean << "\t" << e.stdv;
+                        return oss.str();
+                    })
+                << endl;
+        } // if opts::ed
+        //
+        // basecall events
+        //
+        if (opts::ev and f.have_basecall_events(opts::st, opts::gr))
+        {
+            auto bce = f.get_basecall_events(opts::st, opts::gr);
+            cout
+                << alg::os_join(bce, "\n", [&channel_id_params] (fast5::Event_Entry const & e) {
+                        ostringstream oss;
+                        oss.precision(opts::float_prec);
+                        if (not opts::time_int)
+                        {
+                            oss << e.start << "\t" << e.length << "\t";
+                        }
+                        else
+                        {
+                            oss
+                                << time_int(e.start, channel_id_params) << "\t"
+                                << time_int(e.length, channel_id_params) << "\t";
+                        }
+                        oss
+                            << e.mean << "\t"
+                            << e.stdv << "\t"
+                            << string(e.model_state.begin(), e.model_state.end()).data() << "\t"
+                            << e.move;
+                        return oss.str();
+                    })
+                << endl;
+        } // if opts::ev
+        //
+        // basecall fastq
+        //
+        if (opts::fq and f.have_basecall_fastq(opts::st, opts::gr))
+        {
+            auto fq = f.get_basecall_fastq(opts::st, opts::gr);
+            cout << fq << endl;
+        } // if opts::fq
     }
-    assert(fast5::File::get_object_count() == 0);
+    catch (hdf5_tools::Exception& e)
+    {
+        cerr << opts::input_fn.get() << ": HDF5 error: " << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+    f.close();
+} // real_main()
+
+int main(int argc, char * argv[])
+{
+    opts::cmd_parser.parse(argc, argv);
+    //clog
+    //    << "program: " << opts::cmd_parser.getProgramName() << endl
+    //    << "version: " << opts::cmd_parser.getVersion() << endl
+    //    << "args: " << opts::cmd_parser.getOrigArgv() << endl;
+    if (opts::ls + opts::id + opts::rw + opts::ed + opts::ev + opts::fq == 0)
+    {
+        opts::ls.set(true);
+    }
+    else if (opts::ls + opts::id + opts::rw + opts::ed + opts::ev + opts::fq > 1)
+    {
+        cerr << "at most one of --ls/--id/--rw/--ed/--ev/--fq must be given" << endl;
+        exit(EXIT_FAILURE);
+    }
+    cout.precision(opts::float_prec);
+    real_main();
 }

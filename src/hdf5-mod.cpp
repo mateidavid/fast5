@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
             assert(f.is_open());
             assert(f.is_rw());
             //
-            // write a /file_version to allow f5dump to work
+            // write a /file_version to allow f5ls to work
             //
             string file_version("42");
             f.write("/file_version", false, file_version);

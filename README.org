@@ -54,24 +54,24 @@ In addition to this =fast5= repository, you will need HDF5 (headers and librarie
 
 In each run, =f5dump= requires exactly one command among: =--ls/--id/--rw/--ed/--ev/--fq=. If no command is given, =--ls= is assumed. It also requires exactly one =fast5= file to inspect.
 
-- In =--ls= mode, =f5dump= list some of the contents of the file. Sample output:
-#+BEGIN_EXAMPLE
-rw      Read_1019
-ed      000     Read_1019
-ed      001     Read_1019
-bc2d    2D_000  2       1       1       1D_000
-bc1d    1D_000  0       1       1       001
-bc1d    1D_000  1       1       1       001
-#+END_EXAMPLE
+- In =--ls= mode, =f5dump= lists some of the contents of the file. Sample output:
+  #+BEGIN_EXAMPLE
+  rw      Read_1019
+  ed      000     Read_1019
+  ed      001     Read_1019
+  bc2d    2D_000  2       1       1       1D_000
+  bc1d    1D_000  0       1       1       001
+  bc1d    1D_000  1       1       1       001
+  #+END_EXAMPLE
   Explanations:
 
-  - =rw=: the file contains one raw samples data from one read, =Read_1019=.
+  - =rw=: the file contains raw samples from one read, =Read_1019=.
 
   - =ed=: the file contains 2 event-detection groups, =000= and =001=, both run on raw samples from =Read_1019=.
 
-  - =bc2d=: the file contains 1 basecall group with 2D data, =2D_000:2=; this group has both fastq data and events; its corresponding 1D basecall group is =1D_000=.
+  - =bc2d=: the file contains 1 basecall group =2D_000= with 2D data (=2=); this group has both fastq data and events (=1 1=); its corresponding 1D basecall group is =1D_000=.
 
-  - =bc1d=: the file contains 1 basecall group with 1D data for each strand (=1D_000:0= and =1D_000:1=); each contains fastq data and events; the corresponding event-detection group is =001=.
+  - =bc1d=: the file contains 1 basecall group =1D_000= with 1D data for each strand (=0= and =1=); each contains fastq data and events (=1 1=); its corresponding event-detection group is =001=.
 
   Notes:
 

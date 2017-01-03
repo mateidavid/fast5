@@ -4,12 +4,12 @@ SHELL := /bin/bash
 .DELETE_ON_ERROR:
 .PHONY: all help list clean check_hdf5
 
-HDF5_DIR = /usr/local
-HDF5_INCLUDE_DIR = ${HDF5_DIR}/include
-HDF5_LIB_DIR = ${HDF5_DIR}/lib
-HDF5_LIB = hdf5
-TCLAP_DIR = tclap
-HPPTOOLS_DIR = hpptools
+HDF5_DIR ?= /usr/local
+HDF5_INCLUDE_DIR ?= ${HDF5_DIR}/include
+HDF5_LIB_DIR ?= ${HDF5_DIR}/lib
+HDF5_LIB ?= hdf5
+TCLAP_DIR ?= tclap
+HPPTOOLS_DIR ?= hpptools
 
 TARGETS = f5ls f5ls-full hdf5-mod f5-mod
 

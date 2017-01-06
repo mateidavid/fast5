@@ -8,7 +8,9 @@
 namespace bp = boost::python;
 
 // member functions with default arguments
+BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(have_raw_samples_overloads, have_raw_samples, 0, 1)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_raw_samples_params_overloads, get_raw_samples_params, 0, 1)
+BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_raw_samples_int_overloads, get_raw_samples_int, 0, 1)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_raw_samples_overloads, get_raw_samples, 0, 1)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_eventdetection_read_name_list_overloads, get_eventdetection_read_name_list, 0, 1)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(have_eventdetection_events_overloads, have_eventdetection_events, 0, 1)
@@ -104,6 +106,9 @@ BOOST_PYTHON_MODULE(fast5)
     bp::class_<std::vector<std::string>>("Vec_Str")
         .def(bp::vector_indexing_suite<std::vector<std::string>>())
         ;
+    bp::class_<std::vector<fast5::Raw_Samples_Int_Entry>>("Vec_Raw_Samples_Int_Entry")
+        .def(bp::vector_indexing_suite<std::vector<fast5::Raw_Samples_Int_Entry>>())
+        ;
     bp::class_<std::vector<fast5::Raw_Samples_Entry>>("Vec_Raw_Samples_Entry")
         .def(bp::vector_indexing_suite<std::vector<fast5::Raw_Samples_Entry>>())
         ;
@@ -145,10 +150,21 @@ BOOST_PYTHON_MODULE(fast5)
         .def("have_sequences_params", &fast5::File::have_sequences_params)
         .def("get_sequences_params", &fast5::File::get_sequences_params)
         //
-        .def("get_raw_samples_read_name_list", &fast5::File::get_raw_samples_read_name_list, bp::return_value_policy<bp::copy_const_reference>())
-        .def("have_raw_samples", &fast5::File::have_raw_samples)
-        .def("get_raw_samples_params", &fast5::File::get_raw_samples_params, get_raw_samples_params_overloads())
-        .def("get_raw_samples", &fast5::File::get_raw_samples, get_raw_samples_overloads())
+        .def("get_raw_samples_read_name_list",
+             &fast5::File::get_raw_samples_read_name_list,
+             bp::return_value_policy<bp::copy_const_reference>())
+        .def("have_raw_samples",
+             &fast5::File::have_raw_samples,
+             have_raw_samples_overloads())
+        .def("get_raw_samples_params",
+             &fast5::File::get_raw_samples_params,
+             get_raw_samples_params_overloads())
+        .def("get_raw_samples_int",
+             &fast5::File::get_raw_samples_int,
+             get_raw_samples_int_overloads())
+        .def("get_raw_samples",
+             &fast5::File::get_raw_samples,
+             get_raw_samples_overloads())
         //
         .def("get_eventdetection_group_list", &fast5::File::get_eventdetection_group_list, bp::return_value_policy<bp::copy_const_reference>())
         .def("have_eventdetection_groups", &fast5::File::have_eventdetection_groups)

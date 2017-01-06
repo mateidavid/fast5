@@ -43,3 +43,5 @@ check_hpptools:
 f5dump: f5dump.cpp fast5.hpp hdf5_tools.hpp | check_hdf5 check_tclap check_hpptools
 	${CXX} -std=c++11 -O0 -g3 -ggdb -fno-eliminate-unused-debug-types -Wall -Wextra -Wpedantic -isystem ${HDF5_INCLUDE_DIR} -isystem ${TCLAP_DIR}/include -I ${HPPTOOLS_DIR}/include -o $@ $< -L${HDF5_LIB_DIR} -Wl,--rpath=${HDF5_LIB_DIR} -l${HDF5_LIB} -lpthread -lz -ldl
 
+f5pack: f5pack.cpp fast5.hpp hdf5_tools.hpp | check_hdf5 check_tclap check_hpptools
+	${CXX} -std=c++11 -O0 -g3 -ggdb -fno-eliminate-unused-debug-types -Wall -Wextra -Wpedantic -isystem ${HDF5_INCLUDE_DIR} -isystem ${TCLAP_DIR}/include -I ${HPPTOOLS_DIR}/include -o $@ $< -L${HDF5_LIB_DIR} -Wl,--rpath=${HDF5_LIB_DIR} -l${HDF5_LIB} -lpthread -lz -ldl

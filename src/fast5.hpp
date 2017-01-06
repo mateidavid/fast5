@@ -15,6 +15,7 @@
 #include <map>
 
 #include "hdf5_tools.hpp"
+#include "fast5_pack.hpp"
 #define MAX_K_LEN 8
 
 namespace
@@ -43,6 +44,14 @@ typedef std::map< std::string, std::string > Sequences_Parameters;
 
 typedef float Raw_Samples_Entry;
 typedef int16_t Raw_Samples_Int_Entry;
+
+struct Raw_Samples_Pack
+{
+    typedef std::vector< std::uint8_t > signal_type;
+    typedef std::map< std::string, std::string > signal_parameters_type;
+    signal_type signal;
+    signal_parameters_type signal_parameters;
+}; // struct Raw_Samples_Pack
 
 struct Raw_Samples_Parameters
 {
@@ -325,6 +334,14 @@ public:
             return rn_d.count(_rn) > 0;
         }
     }
+    bool have_raw_samples_unpack(std::string const & rn) const
+    {
+        return Base::dataset_exists(raw_samples_path(rn));
+    }
+    bool have_raw_samples_pack(std::string const & rn) const
+    {
+        return Base::group_exists(raw_samples_pack_path(rn));
+    }
     /**
      * Get raw samples attributes for given read name (default: first read name).
      */
@@ -348,7 +365,15 @@ public:
         // get raw samples
         std::vector< Raw_Samples_Int_Entry > res;
         const std::string& rn = not _rn.empty()? _rn : get_raw_samples_read_name_list().front();
-        Base::read(raw_samples_path(rn), res);
+        if (Base::dataset_exists(raw_samples_path(rn)))
+        {
+            Base::read(raw_samples_path(rn), res);
+        }
+        else
+        {
+            auto rsp = get_raw_samples_pack(rn);
+            res = unpack_rw(rsp);
+        }
         return res;
     }
     /**
@@ -369,6 +394,28 @@ public:
                           * channel_id_params.range / channel_id_params.digitisation);
         }
         return res;
+    }
+    Raw_Samples_Pack get_raw_samples_pack(std::string const & rn) const
+    {
+        Raw_Samples_Pack rsp;
+        Base::read(raw_samples_pack_path(rn) + "/Signal", rsp.signal);
+        rsp.signal_parameters = get_attr_map(raw_samples_pack_path(rn) + "/Signal");
+        return rsp;
+    }
+    /**
+     * Add raw samples.
+     */
+    void add_raw_samples_int(std::string const & rn, std::vector< Raw_Samples_Int_Entry > const & rs) const
+    {
+        Base::write_dataset(raw_samples_path(rn), rs);
+    }
+    /**
+     * Add packed raw smaples.
+     */
+    void add_raw_samples_pack(std::string const & rn, Raw_Samples_Pack const & rsp) const
+    {
+        Base::write_dataset(raw_samples_pack_path(rn) + "/Signal", rsp.signal);
+        add_attr_map(raw_samples_pack_path(rn) + "/Signal", rsp.signal_parameters);
     }
 
     /**
@@ -860,15 +907,47 @@ public:
         return res;
     }
 
+    /**
+     * Copy all attributes from one file to another.
+     */
+    static void copy_attributes(File const & src_f, File const & dst_f)
+    {
+        assert(src_f.is_open());
+        assert(dst_f.is_open());
+        assert(dst_f.is_rw());
+        rec_copy_attributes(src_f, dst_f, "");
+    }
+
+    /**
+     * Pack raw samples
+     */
+    static Raw_Samples_Pack pack_rw(std::vector< Raw_Samples_Int_Entry > const & rsi)
+    {
+        Raw_Samples_Pack rsp;
+        std::tie(rsp.signal, rsp.signal_parameters) = rw_coder().encode(rsi);
+        return rsp;
+    }
+
+    /**
+     * Unpack raw samples
+     */
+    static std::vector< Raw_Samples_Int_Entry > unpack_rw(Raw_Samples_Pack const & rsp)
+    {
+        return rw_coder().decode< Raw_Samples_Int_Entry >(rsp.signal, rsp.signal_parameters);
+    }
+
 private:
     void detect_raw_samples_read_name_list()
     {
         if (not Base::group_exists(raw_samples_root_path())) return;
         auto rn_list = Base::list_group(raw_samples_root_path());
-        for (const auto& rn : rn_list)
+        for (auto const & rn : rn_list)
         {
-            if (not Base::dataset_exists(raw_samples_path(rn))) continue;
-            _raw_samples_read_name_list.push_back(rn);
+            if (Base::dataset_exists(raw_samples_path(rn))
+                or Base::group_exists(raw_samples_pack_path(rn)))
+            {
+                _raw_samples_read_name_list.push_back(rn);
+            }
         }
     }
 
@@ -895,8 +974,11 @@ private:
         auto rn_list = Base::list_group(p);
         for (const auto& rn : rn_list)
         {
-            if (not Base::dataset_exists(p + "/" + rn + "/Events")) continue;
-            res.push_back(rn);
+            if (Base::dataset_exists(eventdetection_events_path(rn))
+                or Base::group_exists(eventdetection_events_pack_path(rn)))
+            {
+                res.push_back(rn);
+            }
         }
         return res;
     }
@@ -934,6 +1016,14 @@ private:
             res[a] = tmp;
         }
         return res;
+    }
+
+    void add_attr_map(std::string const & path, std::map< std::string, std::string > const & attr_m) const
+    {
+        for (auto const & p : attr_m)
+        {
+            Base::write_attribute(path + "/" + p.first, p.second);
+        }
     }
 
     // list of read names for which we have raw samples
@@ -978,6 +1068,10 @@ private:
     {
         return raw_samples_root_path() + "/" + rn + "/Signal";
     }
+    static std::string raw_samples_pack_path(const std::string& rn)
+    {
+        return raw_samples_root_path() + "/" + rn + "/Signal_Pack";
+    }
     static const std::string& sequences_path()
     {
         static const std::string _sequences_path = "/Sequences/Meta";
@@ -1004,6 +1098,10 @@ private:
     static std::string eventdetection_events_path(const std::string& ed_gr, const std::string& rn)
     {
         return eventdetection_root_path() + "/" + eventdetection_group_prefix() + ed_gr + "/Reads/" + rn + "/Events";
+    }
+    static std::string eventdetection_events_pack_path(const std::string& ed_gr, const std::string& rn)
+    {
+        return eventdetection_root_path() + "/" + eventdetection_group_prefix() + ed_gr + "/Reads/" + rn + "/Events_Pack";
     }
 
     static const std::string& basecall_root_path()
@@ -1047,6 +1145,44 @@ private:
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(2) + "/Alignment";
+    }
+
+    static void rec_copy_attributes(File const & src_f, File const & dst_f, std::string const & path)
+    {
+        Base const & src_fb = src_f;
+        Base const & dst_fb = dst_f;
+        auto a_l = src_fb.get_attr_list(not path.empty()? path : std::string("/"));
+        for (auto const & a : a_l)
+        {
+            Base::copy_attribute(src_fb, dst_fb, path + "/" + a);
+        }
+        auto sg_l = src_fb.list_group(not path.empty()? path : std::string("/"));
+        for (auto const & sg : sg_l)
+        {
+            if (src_fb.group_exists(path + "/" + sg))
+            {
+                rec_copy_attributes(src_f, dst_f, path + "/" + sg);
+            }
+            else
+            {
+                std::clog << "skipping dataset: " << path + "/" + sg << std::endl;
+            }
+        }
+    } // rec_copy_attributes()
+
+    static fast5_pack::Huffman_Diff_Coder & rw_coder()
+    {
+        static fast5_pack::Huffman_Diff_Coder _rw_coder;
+        static bool initialized = false;
+        if (not initialized)
+        {
+            std::vector< std::string > tmp =
+#include "fast5_cwmap_rw_1.inl"
+                ;
+            _rw_coder.load_codeword_map(tmp, "fast5_cwmap_rw_1.inl");
+            initialized = true;
+        }
+        return _rw_coder;
     }
 }; // class File
 

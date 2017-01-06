@@ -1664,6 +1664,124 @@ public:
         return res;
     } // get_struct_members
 
+    /*
+    static void copy(File & src_f, File & dst_f, std::string const & path, bool shallow = false)
+    {
+        assert(src_f.is_open());
+        assert(dst_f.is_open());
+        assert(dst_f.is_rw());
+        assert(src_f.group_exists(path) or src_f.dataset_exists(path));
+        assert(not (dst_f.group_exists(path) or dst_f.dataset_exists(path)));
+        detail::HDF_Object_Holder ocpypl_id_holder(
+            detail::Util::wrap(H5Pcreate, H5P_OBJECT_COPY),
+            detail::Util::wrapped_closer(H5Pclose));
+        auto status = hdf5::H5Pset_copy_object(ocpypl_id_holder.id, H5O_COPY_MERGE_COMMITTED_DTYPE_FLAG);
+        if (status < 0) throw Exception("error in H5Pset_copy_object");
+        if (shallow)
+        {
+            status = hdf5::H5Pset_copy_object(ocpypl_id_holder.id, H5O_COPY_SHALLOW_HIERARCHY_FLAG);
+            if (status < 0) throw Exception("error in H5Pset_copy_object");
+        }
+        auto res = hdf5::H5Ocopy(src_f._file_id, path.c_str(),
+                                 dst_f._file_id, path.c_str(),
+                                 ocpypl_id_holder.id, H5P_DEFAULT);
+        if (res < 0) throw Exception("error in H5Ocopy");
+    } // copy
+    */
+
+    static void copy_attribute(File const & src_f, File const & dst_f,
+                               std::string const & src_full_path, std::string const & _dst_full_path = std::string())
+    {
+        assert(src_f.is_open());
+        assert(dst_f.is_open());
+        assert(dst_f.is_rw());
+        std::string const & dst_full_path = (_dst_full_path.empty()? src_full_path : _dst_full_path);
+        assert(src_f.attribute_exists(src_full_path));
+        assert(not (dst_f.group_exists(dst_full_path)
+                    or dst_f.dataset_exists(dst_full_path)
+                    or dst_f.attribute_exists(dst_full_path)));
+        // compute paths
+        auto src_path = split_full_name(src_full_path);
+        auto dst_path = split_full_name(dst_full_path);
+        // open source attribute
+        detail::HDF_Object_Holder src_attr_id_holder(
+            detail::Util::wrap(H5Aopen_by_name, src_f._file_id, src_path.first.c_str(), src_path.second.c_str(),
+                               H5P_DEFAULT, H5P_DEFAULT),
+            detail::Util::wrapped_closer(H5Aclose));
+        // open source attribute datatype
+        detail::HDF_Object_Holder src_attr_dtype_id_holder(
+            detail::Util::wrap(H5Aget_type, src_attr_id_holder.id),
+            detail::Util::wrapped_closer(H5Tclose));
+        if (hdf5::H5Tget_class(src_attr_dtype_id_holder.id) == H5T_INTEGER)
+        {
+            if (hdf5::H5Tget_sign(src_attr_dtype_id_holder.id) == H5T_SGN_NONE)
+            {
+                unsigned long long tmp;
+                src_f.read(src_full_path, tmp);
+                dst_f.write_attribute(dst_full_path, tmp, src_attr_dtype_id_holder.id);
+            }
+            else if (hdf5::H5Tget_sign(src_attr_dtype_id_holder.id) == H5T_SGN_2)
+            {
+                long long tmp;
+                src_f.read(src_full_path, tmp);
+                dst_f.write_attribute(dst_full_path, tmp, src_attr_dtype_id_holder.id);
+            }
+            else
+            {
+                throw Exception("error in H5Tget_sign");
+            }
+        }
+        else if (hdf5::H5Tget_class(src_attr_dtype_id_holder.id) == H5T_FLOAT)
+        {
+            long double tmp;
+            src_f.read(src_full_path, tmp);
+            dst_f.write_attribute(dst_full_path, tmp, src_attr_dtype_id_holder.id);
+        }
+        else if (hdf5::H5Tget_class(src_attr_dtype_id_holder.id) == H5T_STRING)
+        {
+            std::string tmp;
+            src_f.read(src_full_path, tmp);
+            auto is_varlen = hdf5::H5Tis_variable_str(src_attr_dtype_id_holder.id);
+            if (is_varlen < 0) throw Exception("error in H5Tis_variable_str");
+            if (is_varlen)
+            {
+                dst_f.write_attribute(dst_full_path, tmp, -1);
+            }
+            else
+            {
+                // not varlen; now deal with array-of-size-1 chars
+                int sz = hdf5::H5Tget_size(src_attr_dtype_id_holder.id);
+                if (sz == 0) throw Exception("error in H5Tget_size");
+                detail::HDF_Object_Holder src_attr_dspace_id_holder(
+                    detail::Util::wrap(H5Aget_space, src_attr_id_holder.id),
+                    detail::Util::wrapped_closer(H5Sclose));
+                auto dspace_type = hdf5::H5Sget_simple_extent_type(src_attr_dspace_id_holder.id);
+                if (dspace_type == H5S_SCALAR)
+                {
+                    dst_f.write_attribute(dst_full_path, tmp, 0);
+                }
+                else if (dspace_type == H5S_SIMPLE)
+                {
+                    if (sz != 1) throw Exception("unsupported attribute type for copying: extent of string of size > 1");
+                    std::vector< char[1] > tmp_v(tmp.size());
+                    for (unsigned i = 0; i < tmp.size(); ++i)
+                    {
+                        tmp_v[i][0] = tmp[i];
+                    }
+                    dst_f.write_attribute(dst_full_path, tmp_v);
+                }
+                else
+                {
+                    throw Exception("error in H5Sget_simple_extent_type");
+                }
+            }
+        }
+        else
+        {
+            throw Exception("unsupported attribute type for copying");
+        }
+    } // copy_attribute
+
 private:
     std::string _file_name;
     hid_t _file_id;

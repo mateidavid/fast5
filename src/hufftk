@@ -45,6 +45,8 @@ def load_rw(args):
 def load_ed_len(args):
     val_d = {val: [1, None] for val in range(args.ed_len_range[0] - 1, args.ed_len_range[1] + 1)}
     #val_d[args.ed_len_range[0] - 1] = [1, None]
+    val_sum = 0
+    val_cnt = 0
     for fn in args.input:
         f = fast5.File(fn)
         if not f.have_eventdetection_events(args.gr):
@@ -52,11 +54,14 @@ def load_ed_len(args):
         d = f.get_eventdetection_events(args.gr)
         for e in d:
             val = e.length
+            val_sum += val
+            val_cnt += 1
             if args.ed_len_range[0] <= val and val <= args.ed_len_range[1]:
                 val_idx = val
             else:
                 val_idx = args.ed_len_range[0] - 1
             val_d[val_idx][0] += 1
+    logger.debug("mean val: " + str(float(val_sum)/val_cnt))
     return val_d
 
 def run_build_tree(val_d, rg):
@@ -86,8 +91,10 @@ def run_build_tree(val_d, rg):
     construct_codewords(val_d, cw_d, kw_l[0][1], "", rg)
     cw_key_l = cw_d.keys()
     cw_key_l.sort(lambda w0, w1: codeword_sort(cw_d[w0], cw_d[w1]))
+    print("{")
     for cw in cw_key_l:
-        print('%s\t%s' % (['.', cw][cw != rg[0] - 1], cw_d[cw]))
+        print('"%s", "%s",' % (['.', cw][cw != rg[0] - 1], cw_d[cw]))
+    print("}")
 
 if __name__ == "__main__":
     description = """

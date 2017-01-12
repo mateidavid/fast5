@@ -106,6 +106,55 @@ void do_copy_rw(fast5::File const & src_f, fast5::File const & dst_f)
     }
 }
 
+void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
+{
+    auto gr_l = src_f.get_eventdetection_group_list();
+    for (auto const & gr : gr_l)
+    {
+        auto rn_l = src_f.get_eventdetection_read_name_list(gr);
+        for (auto const & rn : rn_l)
+        {
+            auto ed = src_f.get_eventdetection_events(gr, rn);
+            auto p = src_f.pack_ed(ed);
+            dst_f.add_eventdetection_events_pack(gr, rn, p);
+        }
+    }
+}
+void do_unpack_ed(fast5::File const & src_f, fast5::File const & dst_f)
+{
+    auto gr_l = src_f.get_eventdetection_group_list();
+    for (auto const & gr : gr_l)
+    {
+        auto rn_l = src_f.get_eventdetection_read_name_list(gr);
+        for (auto const & rn : rn_l)
+        {
+            auto ed = src_f.get_eventdetection_events(gr, rn);
+            dst_f.add_eventdetection_events(gr, rn, ed);
+        }
+    }
+}
+void do_copy_ed(fast5::File const & src_f, fast5::File const & dst_f)
+{
+    auto gr_l = src_f.get_eventdetection_group_list();
+    for (auto const & gr : gr_l)
+    {
+        auto rn_l = src_f.get_eventdetection_read_name_list(gr);
+        for (auto const & rn : rn_l)
+        {
+            if (src_f.have_eventdetection_events_unpack(gr, rn))
+            {
+                auto ed = src_f.get_eventdetection_events(gr, rn);
+                dst_f.add_eventdetection_events(gr, rn, ed);
+            }
+            else if (src_f.have_eventdetection_events_pack(gr, rn))
+            {
+                auto p = src_f.get_eventdetection_events_pack(gr, rn);
+                dst_f.add_eventdetection_events_pack(gr, rn, p);
+            }
+        }
+    }
+}
+
 void real_main()
 {
     fast5::File src_f;
@@ -132,6 +181,19 @@ void real_main()
         else if (opts::rw_copy)
         {
             do_copy_rw(src_f, dst_f);
+        }
+        // process eventdetection events
+        if (opts::ed_pack)
+        {
+            do_pack_ed(src_f, dst_f);
+        }
+        else if (opts::ed_unpack)
+        {
+            do_unpack_ed(src_f, dst_f);
+        }
+        else if (opts::ed_copy)
+        {
+            do_copy_ed(src_f, dst_f);
         }
         // close files
         src_f.close();

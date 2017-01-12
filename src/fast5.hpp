@@ -45,14 +45,6 @@ typedef std::map< std::string, std::string > Sequences_Parameters;
 typedef float Raw_Samples_Entry;
 typedef int16_t Raw_Samples_Int_Entry;
 
-struct Raw_Samples_Pack
-{
-    typedef std::vector< std::uint8_t > signal_type;
-    typedef std::map< std::string, std::string > signal_parameters_type;
-    signal_type signal;
-    signal_parameters_type signal_parameters;
-}; // struct Raw_Samples_Pack
-
 struct Raw_Samples_Parameters
 {
     std::string read_id;
@@ -61,6 +53,14 @@ struct Raw_Samples_Parameters
     long long start_time;
     long long duration;
 }; // struct Raw_Samples_Parameters
+
+struct Raw_Samples_Pack
+{
+    typedef std::vector< std::uint8_t > signal_type;
+    typedef std::map< std::string, std::string > signal_parameters_type;
+    signal_type signal;
+    signal_parameters_type signal_parameters;
+}; // struct Raw_Samples_Pack
 
 struct EventDetection_Event_Entry
 {
@@ -88,6 +88,18 @@ struct EventDetection_Event_Parameters
     double median_before;
     unsigned abasic_found;
 }; // struct EventDetection_Event_Parameters
+
+struct EventDetection_Events_Pack
+{
+    typedef std::vector< std::uint8_t > skip_type;
+    typedef std::map< std::string, std::string > skip_parameters_type;
+    skip_type skip;
+    skip_parameters_type skip_parameters;
+    typedef std::vector< std::uint8_t > length_type;
+    typedef std::map< std::string, std::string > length_parameters_type;
+    length_type length;
+    length_parameters_type length_parameters;
+}; // struct EventDetection_Events_Pack
 
 //
 // This struct represents the expected signal measured
@@ -471,6 +483,14 @@ public:
             return rn_d.count(_rn) > 0;
         }
     }
+    bool have_eventdetection_events_unpack(std::string const & ed_gr, std::string const & rn) const
+    {
+        return Base::dataset_exists(eventdetection_events_path(ed_gr, rn));
+    }
+    bool have_eventdetection_events_pack(std::string const & ed_gr, std::string const & rn) const
+    {
+        return Base::group_exists(eventdetection_events_pack_path(ed_gr, rn));
+    }
     /**
      * Get EventDetection params for given EventDetection group (default: first EventDetection group).
      */
@@ -567,6 +587,36 @@ public:
         }
         return res;
     } // get_eventdetection_events()
+    void add_eventdetection_events(
+        std::string const & gr, std::string const & rn,
+        std::vector< EventDetection_Event_Entry > const & ed) const
+    {
+        hdf5_tools::Compound_Map m;
+        m.add_member("mean", &EventDetection_Event_Entry::mean);
+        m.add_member("start", &EventDetection_Event_Entry::start);
+        m.add_member("length", &EventDetection_Event_Entry::length);
+        m.add_member("stdv", &EventDetection_Event_Entry::stdv);
+        Base::write_dataset(eventdetection_events_path(gr, rn), ed, m);
+    }
+    EventDetection_Events_Pack get_eventdetection_events_pack(
+        std::string const & gr, std::string const & rn) const
+    {
+        EventDetection_Events_Pack edp;
+        Base::read(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip);
+        edp.skip_parameters = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip");
+        Base::read(eventdetection_events_pack_path(gr, rn) + "/Length", edp.length);
+        edp.length_parameters = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Length");
+        return edp;
+    }
+    void add_eventdetection_events_pack(
+        std::string const & gr, std::string const & rn,
+        EventDetection_Events_Pack const & edp) const
+    {
+        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip);
+        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip_parameters);
+        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Length", edp.length);
+        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Length", edp.length_parameters);
+    }
 
     /**
      * Get list of all Basecall groups.
@@ -927,13 +977,29 @@ public:
         std::tie(rsp.signal, rsp.signal_parameters) = rw_coder().encode(rsi);
         return rsp;
     }
-
     /**
      * Unpack raw samples
      */
     static std::vector< Raw_Samples_Int_Entry > unpack_rw(Raw_Samples_Pack const & rsp)
     {
         return rw_coder().decode< Raw_Samples_Int_Entry >(rsp.signal, rsp.signal_parameters);
+    }
+    /**
+     * Pack eventdetection events
+     */
+    static EventDetection_Events_Pack pack_ed(std::vector< EventDetection_Event_Entry > const & ed)
+    {
+        EventDetection_Events_Pack edp;
+        abort(); //TODO
+        return edp;
+    }
+    /**
+     * Unpack eventdetection events
+     */
+    static std::vector< EventDetection_Event_Entry > unpack_rw(EventDetection_Events_Pack const & edp)
+    {
+        abort(); //TODO
+        return std::vector< EventDetection_Event_Entry >();
     }
 
 private:
@@ -1183,7 +1249,38 @@ private:
             initialized = true;
         }
         return _rw_coder;
-    }
+    } // rw_coder()
+    
+    static fast5_pack::Huffman_Diff_Coder & ed_skip_coder()
+    {
+        static fast5_pack::Huffman_Diff_Coder _ed_skip_coder;
+        static bool initialized = false;
+        if (not initialized)
+        {
+            std::vector< std::string > tmp =
+#include "fast5_cwmap_ed_skip_1.inl"
+                ;
+            _ed_skip_coder.load_codeword_map(tmp, "fast5_cwmap_ed_skip_1.inl");
+            initialized = true;
+        }
+        return _ed_skip_coder;
+    } // ed_skip_coder()
+
+    static fast5_pack::Huffman_Diff_Coder & ed_len_coder()
+    {
+        static fast5_pack::Huffman_Diff_Coder _ed_len_coder;
+        static bool initialized = false;
+        if (not initialized)
+        {
+            std::vector< std::string > tmp =
+#include "fast5_cwmap_ed_len_1.inl"
+                ;
+            _ed_len_coder.load_codeword_map(tmp, "fast5_cwmap_ed_len_1.inl");
+            initialized = true;
+        }
+        return _ed_len_coder;
+    } // ed_len_coder()
+
 }; // class File
 
 } // namespace fast5

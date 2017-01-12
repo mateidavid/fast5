@@ -974,8 +974,8 @@ private:
         auto rn_list = Base::list_group(p);
         for (const auto& rn : rn_list)
         {
-            if (Base::dataset_exists(eventdetection_events_path(rn))
-                or Base::group_exists(eventdetection_events_pack_path(rn)))
+            if (Base::dataset_exists(eventdetection_events_path(ed_gr, rn))
+                or Base::group_exists(eventdetection_events_pack_path(ed_gr, rn)))
             {
                 res.push_back(rn);
             }

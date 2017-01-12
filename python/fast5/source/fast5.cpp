@@ -12,11 +12,13 @@ BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(have_raw_samples_overloads, have_raw_samp
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_raw_samples_params_overloads, get_raw_samples_params, 0, 1)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_raw_samples_int_overloads, get_raw_samples_int, 0, 1)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_raw_samples_overloads, get_raw_samples, 0, 1)
+//
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_eventdetection_read_name_list_overloads, get_eventdetection_read_name_list, 0, 1)
-BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(have_eventdetection_events_overloads, have_eventdetection_events, 0, 1)
+BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(have_eventdetection_events_overloads, have_eventdetection_events, 0, 2)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_eventdetection_params_overloads, get_eventdetection_params, 0, 1)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_eventdetection_event_params_overloads, get_eventdetection_event_params, 0, 2)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_eventdetection_events_overloads, get_eventdetection_events, 0, 2)
+//
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(have_basecall_fastq_overlords, have_basecall_fastq, 1, 2)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(get_basecall_fastq_overlords, get_basecall_fastq, 1, 2)
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(have_basecall_seq_overlords, have_basecall_seq, 1, 2)

@@ -10,8 +10,8 @@
 #include <stdexcept>
 #include <cassert>
 
-#include <bitset>
-#include "logger.hpp"
+//#include <bitset>
+//#include "logger.hpp"
 
 namespace fast5_pack
 {
@@ -75,11 +75,11 @@ namespace fast5_pack
                 {
                     if (i == v.size()) break;
                     assert(buff_len == 0);
-                    LOG(debug) << "absolute value val=" << v[i] << std::endl;
+                    //LOG(debug) << "absolute value val=" << v[i] << std::endl;
                     for (unsigned j = 0; j < sizeof(Int_Type); ++j)
                     {
                         std::uint8_t y = (v[i] >> (8 * j)) & 0xFF;
-                        LOG(debug) << "byte " << j << ": " << std::bitset<8>(y) << std::endl;
+                        //LOG(debug) << "byte " << j << ": " << std::bitset<8>(y) << std::endl;
                         res.push_back(y);
                     }
                     reset = false;
@@ -93,12 +93,12 @@ namespace fast5_pack
                         val = v[i];
                         x = val - last;
                         reset = _cw_m.count(x) == 0;
-                        LOG(debug) << "relative value: val=" << v[i] << " last=" << last << " x=" << x << " reset=" << reset << std::endl;
+                        //LOG(debug) << "relative value: val=" << v[i] << " last=" << last << " x=" << x << " reset=" << reset << std::endl;
                     }
                     else
                     {
                         reset = true;
-                        LOG(debug) << "end: reset=1" << std::endl;
+                        //LOG(debug) << "end: reset=1" << std::endl;
                     }
                     auto p = (not reset? _cw_m[x] : _cw_m[break_cw()]);
                     buff |= (p.first << buff_len);
@@ -122,7 +122,7 @@ namespace fast5_pack
         std::vector< Int_Type > decode(std::vector< uint8_t > const & v,
                                        std::map< std::string, std::string > const & v_id)
         {
-            assert(v_id == id());
+            if (v_id != id()) throw std::invalid_argument("decode id mismatch");
             std::vector< Int_Type > res;
             std::uint64_t buff = 0;
             std::uint8_t buff_len = 0;
@@ -145,24 +145,24 @@ namespace fast5_pack
                 {
                     assert((buff_len % 8) == 0);
                     assert(buff_len / 8 >= sizeof(Int_Type));
-                    LOG(debug) << "absolute value" << std::endl;
+                    //LOG(debug) << "absolute value" << std::endl;
                     Int_Type x = 0;
                     for (unsigned j = 0; j < sizeof(Int_Type); ++j)
                     {
                         std::uint64_t y = (buff & 0xFF);
-                        LOG(debug) << "byte " << j << ": " << std::bitset<8>(y) << std::endl;
+                        //LOG(debug) << "byte " << j << ": " << std::bitset<8>(y) << std::endl;
                         x |= (y << (8 * j));
                         buff >>= 8;
                         buff_len -= 8;
                     }
-                    LOG(debug) << "got: val=" << x << std::endl;
+                    //LOG(debug) << "got: val=" << x << std::endl;
                     res.push_back(x);
                     last = x;
                     reset = false;
                 }
                 else // not reset
                 {
-                    LOG(debug) << "reading relative value" << std::endl;
+                    //LOG(debug) << "reading relative value" << std::endl;
                     // TODO: faster decoding
                     // currently, try all codewords one by one
                     auto it = _cw_m.begin();
@@ -182,14 +182,14 @@ namespace fast5_pack
                     buff_len -= p.second;
                     if (x != break_cw())
                     {
-                        LOG(debug) << "got: x=" << x << " last=" << last << " val=" << x + last << " cw_len=" << (int)p.second << std::endl;
+                        //LOG(debug) << "got: x=" << x << " last=" << last << " val=" << x + last << " cw_len=" << (int)p.second << std::endl;
                         x += last;
                         res.push_back(x);
                         last = x;
                     }
                     else
                     {
-                        LOG(debug) << "got: break cw_len=" << (int)p.second << std::endl;
+                        //LOG(debug) << "got: break cw_len=" << (int)p.second << std::endl;
                         reset = true;
                         if ((buff_len % 8) > 0)
                         {

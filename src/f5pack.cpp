@@ -46,6 +46,7 @@ namespace opts
     SwitchArg rw_unpack("", "rw-unpack", "Unpack raw samples data.", cmd_parser);
     SwitchArg rw_pack("", "rw-pack", "Pack raw samples data.", cmd_parser);
     //
+    SwitchArg check("c", "check", "Check packing.", cmd_parser);
     SwitchArg unpack("u", "unpack", "Unpack fast5 file.", cmd_parser);
     SwitchArg pack("p", "pack", "Pack fast5 file (default, if no other pack/unpack/copy options).", cmd_parser);
     SwitchArg force("f", "force", "Overwrite output file if it exists.", cmd_parser);
@@ -75,8 +76,17 @@ void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
     for (auto const & rn : rn_l)
     {
         auto rsi = src_f.get_raw_samples_int(rn);
-        auto p = src_f.pack_rw(rsi);
-        dst_f.add_raw_samples_pack(rn, p);
+        auto rs_pack = src_f.pack_rw(rsi);
+        if (opts::check)
+        {
+            auto rs_unpack = src_f.unpack_rw(rs_pack);
+            assert(rs_unpack.size() == rsi.size());
+            for (unsigned i = 0; i < rs_unpack.size(); ++i)
+            {
+                assert(rs_unpack[i] == rsi[i]);
+            }
+        }
+        dst_f.add_raw_samples_pack(rn, rs_pack);
     }
 }
 void do_unpack_rw(fast5::File const & src_f, fast5::File const & dst_f)
@@ -115,8 +125,33 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
         for (auto const & rn : rn_l)
         {
             auto ed = src_f.get_eventdetection_events(gr, rn);
-            auto p = src_f.pack_ed(ed);
-            dst_f.add_eventdetection_events_pack(gr, rn, p);
+            auto ed_param = src_f.get_eventdetection_event_params(gr, rn);
+            auto ed_pack = src_f.pack_ed(ed, ed_param);
+            if (opts::check)
+            {
+                auto rs = src_f.get_raw_samples(rn);
+                auto rs_param = src_f.get_raw_samples_params(rn);
+                auto ed_unpack = src_f.unpack_ed(ed_pack, ed_param, rs, rs_param);
+                assert(ed_unpack.size() == ed.size());
+                for (unsigned i = 0; i < ed_unpack.size(); ++i)
+                {
+                    LOG(debug) << "i=" << i
+                               << " unpack=(" << ed_unpack[i].start
+                               << "," << ed_unpack[i].length
+                               << "," << ed_unpack[i].mean
+                               << "," << ed_unpack[i].stdv
+                               << ") orig=(" << ed[i].start
+                               << "," << ed[i].length
+                               << "," << ed[i].mean
+                               << "," << ed[i].stdv
+                               << ")" << endl;
+                    assert(ed_unpack[i].start == ed[i].start);
+                    assert(ed_unpack[i].length == ed[i].length);
+                    //assert(abs(ed_unpack[i].mean - ed[i].mean) < 1e-2);
+                    //assert(abs(ed_unpack[i].mean - ed[i].mean) < 1e-2);
+                }
+            }
+            dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
         }
     }
 }
@@ -148,8 +183,8 @@ void do_copy_ed(fast5::File const & src_f, fast5::File const & dst_f)
             }
             else if (src_f.have_eventdetection_events_pack(gr, rn))
             {
-                auto p = src_f.get_eventdetection_events_pack(gr, rn);
-                dst_f.add_eventdetection_events_pack(gr, rn, p);
+                auto ed_pack = src_f.get_eventdetection_events_pack(gr, rn);
+                dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
             }
         }
     }
@@ -266,5 +301,6 @@ int main(int argc, char * argv[])
     LOG(info) << "rw: " << (opts::rw_pack? "pack" : opts::rw_unpack? "unpack" : opts::rw_copy? "copy" : "drop") << endl;
     LOG(info) << "ed: " << (opts::ed_pack? "pack" : opts::ed_unpack? "unpack" : opts::ed_copy? "copy" : "drop") << endl;
     LOG(info) << "ev: " << (opts::ev_pack? "pack" : opts::ev_unpack? "unpack" : opts::ev_copy? "copy" : "drop") << endl;
+    LOG(info) << "check: " << opts::check.get() << endl;
     real_main();
 }

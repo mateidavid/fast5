@@ -57,9 +57,9 @@ struct Raw_Samples_Parameters
 struct Raw_Samples_Pack
 {
     typedef std::vector< std::uint8_t > signal_type;
-    typedef std::map< std::string, std::string > signal_parameters_type;
+    typedef std::map< std::string, std::string > signal_param_type;
     signal_type signal;
-    signal_parameters_type signal_parameters;
+    signal_param_type signal_param;
 }; // struct Raw_Samples_Pack
 
 struct EventDetection_Event_Entry
@@ -92,13 +92,13 @@ struct EventDetection_Event_Parameters
 struct EventDetection_Events_Pack
 {
     typedef std::vector< std::uint8_t > skip_type;
-    typedef std::map< std::string, std::string > skip_parameters_type;
+    typedef std::map< std::string, std::string > skip_param_type;
     skip_type skip;
-    skip_parameters_type skip_parameters;
-    typedef std::vector< std::uint8_t > length_type;
-    typedef std::map< std::string, std::string > length_parameters_type;
-    length_type length;
-    length_parameters_type length_parameters;
+    skip_param_type skip_param;
+    typedef std::vector< std::uint8_t > len_type;
+    typedef std::map< std::string, std::string > len_param_type;
+    len_type len;
+    len_param_type len_param;
 }; // struct EventDetection_Events_Pack
 
 //
@@ -411,7 +411,7 @@ public:
     {
         Raw_Samples_Pack rsp;
         Base::read(raw_samples_pack_path(rn) + "/Signal", rsp.signal);
-        rsp.signal_parameters = get_attr_map(raw_samples_pack_path(rn) + "/Signal");
+        rsp.signal_param = get_attr_map(raw_samples_pack_path(rn) + "/Signal");
         return rsp;
     }
     /**
@@ -427,7 +427,7 @@ public:
     void add_raw_samples_pack(std::string const & rn, Raw_Samples_Pack const & rsp) const
     {
         Base::write_dataset(raw_samples_pack_path(rn) + "/Signal", rsp.signal);
-        add_attr_map(raw_samples_pack_path(rn) + "/Signal", rsp.signal_parameters);
+        add_attr_map(raw_samples_pack_path(rn) + "/Signal", rsp.signal_param);
     }
 
     /**
@@ -549,41 +549,52 @@ public:
         std::vector< EventDetection_Event_Entry > res;
         const std::string& ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
         const std::string rn = not _rn.empty()? _rn : get_eventdetection_read_name_list(ed_gr).front();
-        auto p = eventdetection_events_path(ed_gr, rn);
-        auto struct_member_names = Base::get_struct_members(p);
-        assert(struct_member_names.size() >= 4);
-        bool have_stdv = false;
-        bool have_variance = false;
-        for (const auto& s : struct_member_names)
+        if (have_eventdetection_events_unpack(ed_gr, rn))
         {
-            if (s == "stdv") have_stdv = true;
-            else if (s == "variance") have_variance = true;
-        }
-        hdf5_tools::Compound_Map m;
-        m.add_member("mean", &EventDetection_Event_Entry::mean);
-        m.add_member("start", &EventDetection_Event_Entry::start);
-        m.add_member("length", &EventDetection_Event_Entry::length);
-        if (have_stdv)
-        {
-            m.add_member("stdv", &EventDetection_Event_Entry::stdv);
-        }
-        else if (have_variance)
-        {
-            m.add_member("variance", &EventDetection_Event_Entry::stdv);
-        }
-        else
-        {
-            // must have stdv or variance
-            abort();
-        }
-        Base::read(p, res, m);
-        if (not have_stdv)
-        {
-            // have read variances
-            for (auto& e : res)
+            auto p = eventdetection_events_path(ed_gr, rn);
+            auto struct_member_names = Base::get_struct_members(p);
+            assert(struct_member_names.size() >= 4);
+            bool have_stdv = false;
+            bool have_variance = false;
+            for (const auto& s : struct_member_names)
             {
-                e.stdv = std::sqrt(e.stdv);
+                if (s == "stdv") have_stdv = true;
+                else if (s == "variance") have_variance = true;
             }
+            hdf5_tools::Compound_Map m;
+            m.add_member("mean", &EventDetection_Event_Entry::mean);
+            m.add_member("start", &EventDetection_Event_Entry::start);
+            m.add_member("length", &EventDetection_Event_Entry::length);
+            if (have_stdv)
+            {
+                m.add_member("stdv", &EventDetection_Event_Entry::stdv);
+            }
+            else if (have_variance)
+            {
+                m.add_member("variance", &EventDetection_Event_Entry::stdv);
+            }
+            else
+            {
+                // must have stdv or variance
+                abort();
+            }
+            Base::read(p, res, m);
+            if (not have_stdv)
+            {
+                // have read variances
+                for (auto& e : res)
+                {
+                    e.stdv = std::sqrt(e.stdv);
+                }
+            }
+        } // have ed unpack
+        else // have pack
+        {
+            auto ed_pack = get_eventdetection_events_pack(ed_gr, rn);
+            auto ed_param = get_eventdetection_event_params(ed_gr, rn);
+            auto rs = get_raw_samples(rn);
+            auto rs_param = get_raw_samples_params(rn);
+            res = unpack_ed(ed_pack, ed_param, rs, rs_param);
         }
         return res;
     } // get_eventdetection_events()
@@ -603,9 +614,9 @@ public:
     {
         EventDetection_Events_Pack edp;
         Base::read(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip);
-        edp.skip_parameters = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip");
-        Base::read(eventdetection_events_pack_path(gr, rn) + "/Length", edp.length);
-        edp.length_parameters = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Length");
+        edp.skip_param = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip");
+        Base::read(eventdetection_events_pack_path(gr, rn) + "/Len", edp.len);
+        edp.len_param = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len");
         return edp;
     }
     void add_eventdetection_events_pack(
@@ -613,9 +624,9 @@ public:
         EventDetection_Events_Pack const & edp) const
     {
         Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip);
-        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip_parameters);
-        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Length", edp.length);
-        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Length", edp.length_parameters);
+        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip_param);
+        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Len", edp.len);
+        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len", edp.len_param);
     }
 
     /**
@@ -974,7 +985,7 @@ public:
     static Raw_Samples_Pack pack_rw(std::vector< Raw_Samples_Int_Entry > const & rsi)
     {
         Raw_Samples_Pack rsp;
-        std::tie(rsp.signal, rsp.signal_parameters) = rw_coder().encode(rsi);
+        std::tie(rsp.signal, rsp.signal_param) = rw_coder().encode(rsi);
         return rsp;
     }
     /**
@@ -982,24 +993,71 @@ public:
      */
     static std::vector< Raw_Samples_Int_Entry > unpack_rw(Raw_Samples_Pack const & rsp)
     {
-        return rw_coder().decode< Raw_Samples_Int_Entry >(rsp.signal, rsp.signal_parameters);
+        return rw_coder().decode< Raw_Samples_Int_Entry >(rsp.signal, rsp.signal_param);
     }
     /**
      * Pack eventdetection events
      */
-    static EventDetection_Events_Pack pack_ed(std::vector< EventDetection_Event_Entry > const & ed)
+    static EventDetection_Events_Pack pack_ed(
+        std::vector< EventDetection_Event_Entry > const & ed,
+        EventDetection_Event_Parameters const & ed_param)
     {
-        EventDetection_Events_Pack edp;
-        abort(); //TODO
-        return edp;
+        EventDetection_Events_Pack ed_pack;
+        std::vector< long long > skip;
+        std::vector< long long > len;
+        long long last_end = ed_param.start_time;
+        for (unsigned i = 0; i < ed.size(); ++i)
+        {
+            skip.push_back(ed[i].start - last_end);
+            len.push_back(ed[i].length);
+            last_end = ed[i].start + ed[i].length;
+        }
+        std::tie(ed_pack.skip, ed_pack.skip_param) = ed_skip_coder().encode(skip);
+        std::tie(ed_pack.len, ed_pack.len_param) = ed_len_coder().encode(len);
+        return ed_pack;
     }
     /**
      * Unpack eventdetection events
      */
-    static std::vector< EventDetection_Event_Entry > unpack_rw(EventDetection_Events_Pack const & edp)
+    static std::vector< EventDetection_Event_Entry > unpack_ed(
+        EventDetection_Events_Pack const & ed_pack,
+        EventDetection_Event_Parameters const & ed_par,
+        std::vector< Raw_Samples_Entry > const & rs,
+        Raw_Samples_Parameters const & rs_par)
     {
-        abort(); //TODO
-        return std::vector< EventDetection_Event_Entry >();
+        auto skip = ed_skip_coder().decode< long long >(ed_pack.skip, ed_pack.skip_param);
+        auto len = ed_len_coder().decode< long long >(ed_pack.len, ed_pack.len_param);
+        if (skip.size() != len.size())
+        {
+            throw std::invalid_argument("unpack_ed failure: skip and length of different size");
+        }
+        std::vector< EventDetection_Event_Entry > ed(skip.size());
+        long long last_end = ed_par.start_time;
+        for (unsigned i = 0; i < skip.size(); ++i)
+        {
+            ed[i].start = last_end + skip[i];
+            ed[i].length = len[i];
+            last_end = ed[i].start + ed[i].length;
+            // use rs to reconstruct mean and stdv
+            long long rs_start_idx = ed[i].start - rs_par.start_time;
+            if (rs_start_idx < 0 or rs_start_idx + ed[i].length > (long long)rs.size())
+            {
+                throw std::invalid_argument("unpack_ed failure: bad rs_start_idx");
+            }
+            double s = 0.0;
+            double s2 = 0.0;
+            unsigned n = ed[i].length;
+            for (unsigned j = 0; j < n; ++j)
+            {
+                s += rs[i];
+                s2 += rs[i] * rs[i];
+            }
+            ed[i].mean = s / n;
+            ed[i].stdv = n > 1
+                ? std::sqrt(s2/(n - 1) - s*s/(n * (n - 1)))
+                : 0;
+        }
+        return ed;
     }
 
 private:

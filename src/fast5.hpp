@@ -13,6 +13,7 @@
 #include <array>
 #include <set>
 #include <map>
+#include <queue>
 
 #include "hdf5_tools.hpp"
 #define MAX_K_LEN 8
@@ -830,6 +831,15 @@ public:
         }
         return std::string();
     }
+    /**
+     * Basecall Confguration group.
+     */
+    std::map< std::string, std::string > get_basecall_config(std::string const & gr) const
+    {
+        return Base::group_exists(basecall_config_path(gr))
+            ? get_attr_map(basecall_config_path(gr), true)
+            : std::map< std::string, std::string >();
+    }
 
     static std::string fq2seq(const std::string& fq)
     {
@@ -923,15 +933,31 @@ private:
         }
     }
 
-    std::map< std::string, std::string > get_attr_map(const std::string& path) const
+    std::map< std::string, std::string > get_attr_map(const std::string& path, bool recurse = false) const
     {
         std::map< std::string, std::string > res;
-        auto a_list = Base::get_attr_list(path);
-        for (const auto& a : a_list)
+        std::queue< std::string > q;
+        q.push("");
+        while (not q.empty())
         {
-            std::string tmp;
-            Base::read(path + "/" + a, tmp);
-            res[a] = tmp;
+            auto pt = q.front();
+            q.pop();
+            auto full_path = pt.empty()? path : path + "/" + pt;
+            auto a_list = Base::get_attr_list(full_path);
+            for (auto const & a : a_list)
+            {
+                std::string tmp;
+                Base::read(full_path + "/" + a, tmp);
+                res[pt.empty()? a : pt + "/" + a] = tmp;
+            }
+            if (recurse and group_exists(full_path))
+            {
+                auto sg_l = Base::list_group(full_path);
+                for (auto const & sg : sg_l)
+                {
+                    q.push(pt.empty()? sg : pt + "/" + sg);
+                }
+            }
         }
         return res;
     }
@@ -1047,6 +1073,10 @@ private:
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(2) + "/Alignment";
+    }
+    static std::string basecall_config_path(std::string const & gr)
+    {
+        return basecall_root_path() + "/" + basecall_group_prefix() + gr + "/Configuration";
     }
 }; // class File
 

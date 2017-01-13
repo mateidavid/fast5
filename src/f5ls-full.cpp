@@ -192,6 +192,10 @@ int main(int argc, char* argv[])
                     print_map(cout, bc_params, tmp.str());
                     // check if basecall log exists
                     cout << "basecall/" << bc_gr << "/have_log=" << f.have_basecall_log(bc_gr) << endl;
+                    // dump basecall config
+                    auto bc_config = f.get_basecall_config(bc_gr);
+                    tmp << "Configuration/";
+                    print_map(cout, bc_config, tmp.str());
                 }
                 for (unsigned st = 0; st < 3; ++st)
                 {

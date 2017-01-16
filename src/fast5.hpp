@@ -1033,28 +1033,31 @@ public:
         }
         std::vector< EventDetection_Event_Entry > ed(skip.size());
         long long last_end = ed_par.start_time;
+        long long off_by_one = ed_par.start_time == rs_par.start_time; // hack
         for (unsigned i = 0; i < skip.size(); ++i)
         {
             ed[i].start = last_end + skip[i];
             ed[i].length = len[i];
             last_end = ed[i].start + ed[i].length;
             // use rs to reconstruct mean and stdv
-            long long rs_start_idx = ed[i].start - rs_par.start_time;
-            if (rs_start_idx < 0 or rs_start_idx + ed[i].length > (long long)rs.size())
+            long long rs_start_idx = ed[i].start - rs_par.start_time + off_by_one;
+            if (rs_start_idx < 0 or rs_start_idx + ed[i].length > (long long)rs.size() + off_by_one)
             {
                 throw std::invalid_argument("unpack_ed failure: bad rs_start_idx");
             }
             double s = 0.0;
             double s2 = 0.0;
             unsigned n = ed[i].length;
+            if (off_by_one and rs_start_idx + n == (long long)rs.size()) --n;
             for (unsigned j = 0; j < n; ++j)
             {
-                s += rs[i];
-                s2 += rs[i] * rs[i];
+                auto x = rs[rs_start_idx + j];
+                s += x;
+                s2 += x * x;
             }
             ed[i].mean = s / n;
             ed[i].stdv = n > 1
-                ? std::sqrt(s2/(n - 1) - s*s/(n * (n - 1)))
+                ? std::sqrt((s2 - s*s/n)/(n))
                 : 0;
         }
         return ed;

@@ -145,6 +145,7 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                                << "," << ed[i].mean
                                << "," << ed[i].stdv
                                << ")" << endl;
+                    LOG(debug1) << "gr=" << gr << " i=" << i << " mean_diff=" << ed_unpack[i].mean - ed[i].mean << " stdv_diff=" << ed_unpack[i].stdv - ed[i].stdv << endl;
                     assert(ed_unpack[i].start == ed[i].start);
                     assert(ed_unpack[i].length == ed[i].length);
                     //assert(abs(ed_unpack[i].mean - ed[i].mean) < 1e-2);

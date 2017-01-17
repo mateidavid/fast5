@@ -184,6 +184,12 @@ struct Event_Entry
     }
 }; // struct Event_Entry
 
+struct Basecall_Event_Parameters
+{
+    double start_time;
+    double duration;
+};
+
 //
 // This struct represents a template-to-complement
 // match that is emitted by ONT's 2D basecaller
@@ -869,6 +875,24 @@ public:
         cm.add_member("move", &T::move);
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         Base::write(basecall_events_path(bc_gr_1d, st), true, ev, cm);
+    }
+    Basecall_Event_Parameters get_basecall_event_params(unsigned st, const std::string& _bc_gr = std::string()) const
+    {
+        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        auto p = basecall_events_path(bc_gr_1d, st);
+        Basecall_Event_Parameters res;
+        Base::read(p + "/start_time", res.start_time);
+        Base::read(p + "/duration", res.duration);
+        return res;
+    }
+    void add_basecall_event_params(unsigned st, std::string const & bc_gr,
+                                   Basecall_Event_Parameters const & bce_param) const
+    {
+        auto bc_gr_1d = get_basecall_group_1d(bc_gr);
+        auto p = basecall_events_path(bc_gr_1d, st);
+        Base::write_attribute(p + "/start_time", bce_param.start_time);
+        Base::write_attribute(p + "/duration", bce_param.duration);
     }
     /**
      * Check if Basecall event alignment exist for given Basecall group.

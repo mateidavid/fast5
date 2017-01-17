@@ -199,8 +199,22 @@ void real_main()
         //
         if (opts::ev and f.have_basecall_events(opts::st, opts::gr))
         {
+            auto bce_params = f.get_basecall_event_params(opts::st, opts::gr);
+            if (not opts::time_int)
+            {
+                cout
+                    << "#start_time=" << bce_params.start_time << endl
+                    << "#duration=" << bce_params.duration << endl;
+            }
+            else
+            {
+                cout
+                    << "#start_time=" << time_int(bce_params.start_time, channel_id_params) << endl
+                    << "#duration=" << time_int(bce_params.duration, channel_id_params) << endl;
+            }
             auto bce = f.get_basecall_events(opts::st, opts::gr);
             cout
+                << "start\tlength\tmean\tstdv\tstate\tmove" << endl
                 << alg::os_join(bce, "\n", [&channel_id_params] (fast5::Event_Entry const & e) {
                         ostringstream oss;
                         oss.precision(opts::float_prec);

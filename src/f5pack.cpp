@@ -133,9 +133,9 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                 auto rs_param = src_f.get_raw_samples_params(rn);
                 auto ed_unpack = src_f.unpack_ed(ed_pack, ed_param, rs, rs_param);
                 assert(ed_unpack.size() == ed.size());
-                for (unsigned i = 0; i < ed_unpack.size(); ++i)
+                for (unsigned i = 0; i + 1 < ed_unpack.size(); ++i)
                 {
-                    LOG(debug) << "i=" << i
+                    LOG(debug1) << "i=" << i
                                << " unpack=(" << ed_unpack[i].start
                                << "," << ed_unpack[i].length
                                << "," << ed_unpack[i].mean
@@ -145,9 +145,25 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                                << "," << ed[i].mean
                                << "," << ed[i].stdv
                                << ")" << endl;
-                    LOG(debug1) << "gr=" << gr << " i=" << i << " mean_diff=" << ed_unpack[i].mean - ed[i].mean << " stdv_diff=" << ed_unpack[i].stdv - ed[i].stdv << endl;
+                    LOG(debug2) << "gr=" << gr << " i=" << i << " mean_diff=" << ed_unpack[i].mean - ed[i].mean << " stdv_diff=" << ed_unpack[i].stdv - ed[i].stdv << endl;
                     assert(ed_unpack[i].start == ed[i].start);
                     assert(ed_unpack[i].length == ed[i].length);
+                    if (abs(ed_unpack[i].mean - ed[i].mean) > .1)
+                    {
+                        LOG(error)
+                            << "gr=" << gr
+                            << " i=" << i
+                            << " mean_diff=" << ed_unpack[i].mean - ed[i].mean << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    if (abs(ed_unpack[i].stdv - ed[i].stdv) > .1)
+                    {
+                        LOG(error)
+                            << "gr=" << gr
+                            << " i=" << i
+                            << " mean_stdv=" << ed_unpack[i].stdv - ed[i].stdv << endl;
+                        exit(EXIT_FAILURE);
+                    }
                     //assert(abs(ed_unpack[i].mean - ed[i].mean) < 1e-2);
                     //assert(abs(ed_unpack[i].mean - ed[i].mean) < 1e-2);
                 }

@@ -1009,7 +1009,7 @@ public:
     static Raw_Samples_Pack pack_rw(std::vector< Raw_Samples_Int_Entry > const & rsi)
     {
         Raw_Samples_Pack rsp;
-        std::tie(rsp.signal, rsp.signal_param) = rw_coder().encode(rsi);
+        std::tie(rsp.signal, rsp.signal_param) = rw_coder().encode(rsi, true);
         return rsp;
     }
     /**
@@ -1036,8 +1036,8 @@ public:
             len.push_back(ed[i].length);
             last_end = ed[i].start + ed[i].length;
         }
-        std::tie(ed_pack.skip, ed_pack.skip_param) = ed_skip_coder().encode(skip);
-        std::tie(ed_pack.len, ed_pack.len_param) = ed_len_coder().encode(len);
+        std::tie(ed_pack.skip, ed_pack.skip_param) = ed_skip_coder().encode(skip, false);
+        std::tie(ed_pack.len, ed_pack.len_param) = ed_len_coder().encode(len, false);
         return ed_pack;
     }
     /**
@@ -1321,9 +1321,9 @@ private:
         }
     } // rec_copy_attributes()
 
-    static fast5_pack::Huffman_Diff_Coder & rw_coder()
+    static fast5_pack::Huffman_Coder & rw_coder()
     {
-        static fast5_pack::Huffman_Diff_Coder _rw_coder;
+        static fast5_pack::Huffman_Coder _rw_coder;
         static bool initialized = false;
         if (not initialized)
         {
@@ -1336,9 +1336,9 @@ private:
         return _rw_coder;
     } // rw_coder()
     
-    static fast5_pack::Huffman_Diff_Coder & ed_skip_coder()
+    static fast5_pack::Huffman_Coder & ed_skip_coder()
     {
-        static fast5_pack::Huffman_Diff_Coder _ed_skip_coder;
+        static fast5_pack::Huffman_Coder _ed_skip_coder;
         static bool initialized = false;
         if (not initialized)
         {
@@ -1351,9 +1351,9 @@ private:
         return _ed_skip_coder;
     } // ed_skip_coder()
 
-    static fast5_pack::Huffman_Diff_Coder & ed_len_coder()
+    static fast5_pack::Huffman_Coder & ed_len_coder()
     {
-        static fast5_pack::Huffman_Diff_Coder _ed_len_coder;
+        static fast5_pack::Huffman_Coder _ed_len_coder;
         static bool initialized = false;
         if (not initialized)
         {

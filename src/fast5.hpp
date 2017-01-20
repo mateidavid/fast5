@@ -523,6 +523,10 @@ public:
         const std::string& ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
         return get_attr_map(eventdetection_params_path(ed_gr));
     }
+    void add_eventdetection_params(std::string const & ed_gr, Attr_Map const & am) const
+    {
+        add_attr_map(eventdetection_params_path(ed_gr), am);
+    }
     /**
      * Get EventDetection event params for given EventDetection group, and given read name
      * (default: first EventDetection group, and first read name in it).
@@ -560,9 +564,22 @@ public:
         }
         else
         {
-            res.abasic_found = 0;
+            res.abasic_found = 2;
         }
         return res;
+    }
+    void add_eventdetection_event_params(std::string const & gr, std::string const & rn,
+                                         EventDetection_Event_Parameters const & ede_params) const
+    {
+        auto p = eventdetection_event_params_path(gr, rn);
+        if (not ede_params.read_id.empty()) Base::write_attribute(p + "/read_id", ede_params.read_id);
+        Base::write_attribute(p + "/read_number", ede_params.read_number);
+        Base::write_attribute(p + "/scaling_used", ede_params.scaling_used);
+        Base::write_attribute(p + "/start_mux", ede_params.start_mux);
+        Base::write_attribute(p + "/start_time", ede_params.start_time);
+        Base::write_attribute(p + "/duration", ede_params.duration);
+        if (ede_params.median_before > 0.0) Base::write_attribute(p + "/median_before", ede_params.median_before);
+        if (ede_params.abasic_found < 2) Base::write_attribute(p + "/abasic_found", ede_params.abasic_found);
     }
     /**
      * Get EventDetection events for given EventDetection group, and given read name.
@@ -684,9 +701,13 @@ public:
     /**
      * Get Basecall group params for given Basecall group.
      */
-    Attr_Map get_basecall_params(const std::string& bc_gr) const
+    Attr_Map get_basecall_params(std::string const & gr) const
     {
-        return get_attr_map(basecall_root_path() + "/" + basecall_group_prefix() + bc_gr);
+        return get_attr_map(basecall_root_path() + "/" + basecall_group_prefix() + gr);
+    }
+    void add_basecall_params(std::string const & gr, Attr_Map const & am) const
+    {
+        add_attr_map(basecall_root_path() + "/" + basecall_group_prefix() + gr, am);
     }
     /**
      * Check if Basecall log exists for given Basecall group.
@@ -1107,12 +1128,12 @@ public:
     /**
      * Copy all attributes from one file to another.
      */
-    static void copy_attributes(File const & src_f, File const & dst_f)
+    static void copy_attributes(File const & src_f, File const & dst_f, std::string const & p = std::string())
     {
         assert(src_f.is_open());
         assert(dst_f.is_open());
         assert(dst_f.is_rw());
-        rec_copy_attributes(src_f, dst_f, "");
+        rec_copy_attributes(src_f, dst_f, p);
     }
 
     /**

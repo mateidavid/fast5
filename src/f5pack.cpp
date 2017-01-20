@@ -75,6 +75,7 @@ void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
     for (auto const & rn : rn_l)
     {
         auto rsi = src_f.get_raw_samples_int(rn);
+        auto rs_params = src_f.get_raw_samples_params(rn);
         auto rs_pack = src_f.pack_rw(rsi);
         if (opts::check)
         {
@@ -98,6 +99,7 @@ void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
                 }
             }
         }
+        dst_f.add_raw_samples_params(rn, rs_params);
         dst_f.add_raw_samples_pack(rn, rs_pack);
     }
 }
@@ -106,7 +108,9 @@ void do_unpack_rw(fast5::File const & src_f, fast5::File const & dst_f)
     auto rn_l = src_f.get_raw_samples_read_name_list();
     for (auto const & rn : rn_l)
     {
+        auto rs_params = src_f.get_raw_samples_params(rn);
         auto rsi = src_f.get_raw_samples_int(rn);
+        dst_f.add_raw_samples_params(rn, rs_params);
         dst_f.add_raw_samples_int(rn, rsi);
     }
 }
@@ -115,6 +119,8 @@ void do_copy_rw(fast5::File const & src_f, fast5::File const & dst_f)
     auto rn_l = src_f.get_raw_samples_read_name_list();
     for (auto const & rn : rn_l)
     {
+        auto rs_params = src_f.get_raw_samples_params(rn);
+        dst_f.add_raw_samples_params(rn, rs_params);
         if (src_f.have_raw_samples_unpack(rn))
         {
             auto rsi = src_f.get_raw_samples_int(rn);
@@ -136,43 +142,36 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
         auto rn_l = src_f.get_eventdetection_read_name_list(gr);
         for (auto const & rn : rn_l)
         {
-            auto ed = src_f.get_eventdetection_events(gr, rn);
-            auto ed_param = src_f.get_eventdetection_event_params(gr, rn);
-            auto ed_pack = src_f.pack_ed(ed, ed_param);
-            if (opts::check)
+            auto ed_params = src_f.get_eventdetection_params(gr);
+            auto ede_params = src_f.get_eventdetection_event_params(gr, rn);
+            dst_f.add_eventdetection_params(gr, ed_params);
+            dst_f.add_eventdetection_event_params(gr, rn, ede_params);
+            if (src_f.have_eventdetection_events_pack(gr, rn))
             {
-                auto rs = src_f.get_raw_samples(rn);
-                auto rs_param = src_f.get_raw_samples_params(rn);
-                auto ed_unpack = src_f.unpack_ed(ed_pack, ed_param, rs, rs_param);
-                if (ed_unpack.size() != ed.size())
+                auto ed_pack = src_f.get_eventdetection_events_pack(gr, rn);
+                dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
+            }
+            else if (src_f.have_eventdetection_events(gr, rn))
+            {
+                auto ed = src_f.get_eventdetection_events(gr, rn);
+                auto ed_pack = src_f.pack_ed(ed, ede_params);
+                if (opts::check)
                 {
-                    LOG(error)
-                        << "check_failed gr=" << gr
-                        << " ed_unpack.size=" << ed_unpack.size()
-                        << " ed_orig.size=" << ed.size() << endl;
-                    exit(EXIT_FAILURE);
-                }
-                for (unsigned i = 0; i + 1 < ed_unpack.size(); ++i) // skip last event
-                {
-                    LOG(debug1)
-                        << "gr=" << gr
-                        << " i=" << i
-                        << " ed_unpack=(" << ed_unpack[i].start
-                        << "," << ed_unpack[i].length
-                        << "," << ed_unpack[i].mean
-                        << "," << ed_unpack[i].stdv
-                        << ") ed_orig=(" << ed[i].start
-                        << "," << ed[i].length
-                        << "," << ed[i].mean
-                        << "," << ed[i].stdv
-                        << ")" << endl;
-                    if (ed_unpack[i].start != ed[i].start
-                        or ed_unpack[i].length != ed[i].length
-                        or abs(ed_unpack[i].mean - ed[i].mean) > .1
-                        or abs(ed_unpack[i].stdv - ed[i].stdv) > .1)
+                    auto rs = src_f.get_raw_samples(rn);
+                    auto rs_param = src_f.get_raw_samples_params(rn);
+                    auto ed_unpack = src_f.unpack_ed(ed_pack, ede_params, rs, rs_param);
+                    if (ed_unpack.size() != ed.size())
                     {
                         LOG(error)
                             << "check_failed gr=" << gr
+                            << " ed_unpack.size=" << ed_unpack.size()
+                            << " ed_orig.size=" << ed.size() << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    for (unsigned i = 0; i + 1 < ed_unpack.size(); ++i) // skip last event
+                    {
+                        LOG(debug1)
+                            << "gr=" << gr
                             << " i=" << i
                             << " ed_unpack=(" << ed_unpack[i].start
                             << "," << ed_unpack[i].length
@@ -183,11 +182,29 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                             << "," << ed[i].mean
                             << "," << ed[i].stdv
                             << ")" << endl;
-                        exit(EXIT_FAILURE);
+                        if (ed_unpack[i].start != ed[i].start
+                            or ed_unpack[i].length != ed[i].length
+                            or abs(ed_unpack[i].mean - ed[i].mean) > .1
+                            or abs(ed_unpack[i].stdv - ed[i].stdv) > .1)
+                        {
+                            LOG(error)
+                                << "check_failed gr=" << gr
+                                << " i=" << i
+                                << " ed_unpack=(" << ed_unpack[i].start
+                                << "," << ed_unpack[i].length
+                                << "," << ed_unpack[i].mean
+                                << "," << ed_unpack[i].stdv
+                                << ") ed_orig=(" << ed[i].start
+                                << "," << ed[i].length
+                                << "," << ed[i].mean
+                                << "," << ed[i].stdv
+                                << ")" << endl;
+                            exit(EXIT_FAILURE);
+                        }
                     }
-                }
-            } // if check
-            dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
+                } // if check
+                dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
+            }
         } // for rn
     } // for gr
 } // do_pack_ed()
@@ -199,7 +216,11 @@ void do_unpack_ed(fast5::File const & src_f, fast5::File const & dst_f)
         auto rn_l = src_f.get_eventdetection_read_name_list(gr);
         for (auto const & rn : rn_l)
         {
+            auto ed_params = src_f.get_eventdetection_params(gr);
+            auto ede_params = src_f.get_eventdetection_event_params(gr, rn);
             auto ed = src_f.get_eventdetection_events(gr, rn);
+            dst_f.add_eventdetection_params(gr, ed_params);
+            dst_f.add_eventdetection_event_params(gr, rn, ede_params);
             dst_f.add_eventdetection_events(gr, rn, ed);
         }
     }
@@ -212,6 +233,10 @@ void do_copy_ed(fast5::File const & src_f, fast5::File const & dst_f)
         auto rn_l = src_f.get_eventdetection_read_name_list(gr);
         for (auto const & rn : rn_l)
         {
+            auto ed_params = src_f.get_eventdetection_params(gr);
+            auto ede_params = src_f.get_eventdetection_event_params(gr, rn);
+            dst_f.add_eventdetection_params(gr, ed_params);
+            dst_f.add_eventdetection_event_params(gr, rn, ede_params);
             if (src_f.have_eventdetection_events_unpack(gr, rn))
             {
                 auto ed = src_f.get_eventdetection_events(gr, rn);
@@ -232,6 +257,11 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f)
         auto gr_l = src_f.get_basecall_strand_group_list(st);
         for (auto const & gr : gr_l)
         {
+            if (st == 0)
+            {
+                auto bc_params = src_f.get_basecall_params(gr);
+                dst_f.add_basecall_params(gr, bc_params);
+            }
             if (src_f.have_basecall_events_pack(st, gr))
             {
                 auto ev_pack = src_f.get_basecall_events_pack(st, gr);
@@ -307,6 +337,11 @@ void do_unpack_ev(fast5::File const & src_f, fast5::File const & dst_f)
         auto gr_l = src_f.get_basecall_strand_group_list(st);
         for (auto const & gr : gr_l)
         {
+            if (st == 0)
+            {
+                auto bc_params = src_f.get_basecall_params(gr);
+                dst_f.add_basecall_params(gr, bc_params);
+            }
             if (not src_f.have_basecall_events(st, gr)) continue;
             auto ev = src_f.get_basecall_events(st, gr);
             auto ev_param = src_f.get_basecall_event_params(st, gr);
@@ -322,6 +357,11 @@ void do_copy_ev(fast5::File const & src_f, fast5::File const & dst_f)
         auto gr_l = src_f.get_basecall_strand_group_list(st);
         for (auto const & gr : gr_l)
         {
+            if (st == 0)
+            {
+                auto bc_params = src_f.get_basecall_params(gr);
+                dst_f.add_basecall_params(gr, bc_params);
+            }
             if (src_f.have_basecall_events_unpack(st, gr))
             {
                 auto ev = src_f.get_basecall_events(st, gr);
@@ -351,7 +391,7 @@ void real_main()
         assert(dst_f.is_open());
         assert(dst_f.is_rw());
         // copy all attributes
-        fast5::File::copy_attributes(src_f, dst_f);
+        fast5::File::copy_attributes(src_f, dst_f, "/UniqueGlobalKey");
         // process raw samples
         if (opts::rw_pack)
         {

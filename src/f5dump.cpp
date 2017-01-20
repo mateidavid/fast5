@@ -44,11 +44,6 @@ void print_map(ostream& os, const map< U, V >& m, const string& prefix)
     }
 }
 
-unsigned time_int(double f, fast5::Channel_Id_Parameters const & channel_id_params)
-{
-    return f * channel_id_params.sampling_rate;
-}
-
 void real_main()
 {
     fast5::File f;
@@ -209,13 +204,13 @@ void real_main()
             else
             {
                 cout
-                    << "#start_time=" << time_int(bce_params.start_time, channel_id_params) << endl
-                    << "#duration=" << time_int(bce_params.duration, channel_id_params) << endl;
+                    << "#start_time=" << f.time_to_int(bce_params.start_time, channel_id_params.sampling_rate) << endl
+                    << "#duration=" << f.time_to_int(bce_params.duration, channel_id_params.sampling_rate) << endl;
             }
             auto bce = f.get_basecall_events(opts::st, opts::gr);
             cout
                 << "start\tlength\tmean\tstdv\tstate\tmove" << endl
-                << alg::os_join(bce, "\n", [&channel_id_params] (fast5::Event_Entry const & e) {
+                << alg::os_join(bce, "\n", [&] (fast5::Event_Entry const & e) {
                         ostringstream oss;
                         oss.precision(opts::float_prec);
                         if (not opts::time_int)
@@ -225,8 +220,8 @@ void real_main()
                         else
                         {
                             oss
-                                << time_int(e.start, channel_id_params) << "\t"
-                                << time_int(e.length, channel_id_params) << "\t";
+                                << f.time_to_int(e.start, channel_id_params.sampling_rate) << "\t"
+                                << f.time_to_int(e.length, channel_id_params.sampling_rate) << "\t";
                         }
                         oss
                             << e.mean << "\t"

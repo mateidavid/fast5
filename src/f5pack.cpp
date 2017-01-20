@@ -255,7 +255,45 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f)
                 auto ev_pack = src_f.pack_ev(ev, ev_param, ed, ed_gr, channel_id_params.sampling_rate);
                 if (opts::check)
                 {
-                    //TODO
+                    auto ev_unpack = src_f.unpack_ev(ev_pack, ed, channel_id_params.sampling_rate);
+                    if (ev_unpack.size() != ev.size())
+                    {
+                        LOG(error)
+                            << "check_failed st=" << st
+                            << " gr=" << gr
+                            << " ev_unpack.size=" << ev_unpack.size()
+                            << " ev_orig.size=" << ev.size() << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    for (unsigned i = 0; i < ev_unpack.size(); ++i)
+                    {
+                        if (abs(ev_unpack[i].start - ev[i].start) > 1e-3
+                            or abs(ev_unpack[i].length - ev[i].length) > 1e-3
+                            or abs(ev_unpack[i].mean - ev[i].mean) > 1e-1
+                            or abs(ev_unpack[i].stdv - ev[i].stdv) > 1e-1
+                            or ev_unpack[i].move != ev[i].move
+                            or ev_unpack[i].model_state != ev[i].model_state)
+                        {
+                            LOG(error)
+                                << "check_failed st=" << st
+                                << " gr=" << gr
+                                << " i=" << i
+                                << " ev_unpack=(" << ev_unpack[i].start
+                                << "," << ev_unpack[i].length
+                                << "," << ev_unpack[i].mean
+                                << "," << ev_unpack[i].stdv
+                                << "," << ev_unpack[i].move
+                                << "," << ev_unpack[i].get_model_state()
+                                << ") ev_orig=(" << ev[i].start
+                                << "," << ev[i].length
+                                << "," << ev[i].mean
+                                << "," << ev[i].stdv
+                                << "," << ev[i].move
+                                << "," << ev[i].get_model_state()
+                                << ")" << endl;
+                            exit(EXIT_FAILURE);
+                        }
+                    }
                 }
                 dst_f.add_basecall_events_pack(st, gr, ev_pack);
             }

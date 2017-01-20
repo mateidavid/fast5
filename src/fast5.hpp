@@ -204,6 +204,7 @@ struct Basecall_Events_Pack
     std::string ed_gr;
     long long start_time;
     long long duration;
+    unsigned state_size;
 }; // struct Basecall_Events_Pack
 
 //
@@ -921,11 +922,14 @@ public:
         Basecall_Events_Pack ev_pack;
         Base::read(p + "/Skip", ev_pack.skip);
         ev_pack.skip_param = get_attr_map(p + "/Skip");
+        Base::read(p + "/Move", ev_pack.move);
+        ev_pack.move_param = get_attr_map(p + "/Move");
         Base::read(p + "/Bases", ev_pack.bases);
         ev_pack.bases_param = get_attr_map(p + "/Bases");
         Base::read(p + "/ed_gr", ev_pack.ed_gr);
         Base::read(p + "/start_time", ev_pack.start_time);
         Base::read(p + "/duration", ev_pack.duration);
+        Base::read(p + "/state_size", ev_pack.state_size);
         return ev_pack;
     }
     void add_basecall_events_pack(unsigned st, std::string const & bc_gr, Basecall_Events_Pack const & ev_pack) const
@@ -933,11 +937,14 @@ public:
         auto p = basecall_events_pack_path(bc_gr, st);
         Base::write_dataset(p + "/Skip", ev_pack.skip);
         add_attr_map(p + "/Skip", ev_pack.skip_param);
+        Base::write_dataset(p + "/Move", ev_pack.move);
+        add_attr_map(p + "/Move", ev_pack.move_param);
         Base::write_dataset(p + "/Bases", ev_pack.bases);
         add_attr_map(p + "/Bases", ev_pack.bases_param);
         Base::write_attribute(p + "/ed_gr", ev_pack.ed_gr);
         Base::write_attribute(p + "/start_time", ev_pack.start_time);
         Base::write_attribute(p + "/duration", ev_pack.duration);
+        Base::write_attribute(p + "/state_size", ev_pack.state_size);
     }
     Basecall_Event_Parameters get_basecall_event_params(unsigned st, const std::string& _bc_gr = std::string()) const
     {
@@ -1206,6 +1213,7 @@ public:
         ev_pack.ed_gr = ed_gr;
         ev_pack.start_time = time_to_int(ev_param.start_time, sampling_rate);
         ev_pack.duration = time_to_int(ev_param.duration, sampling_rate);
+        ev_pack.state_size = ev[0].get_model_state().size();
 
         std::vector< long long > skip;
         std::vector< std::uint8_t > mv;
@@ -1214,14 +1222,14 @@ public:
         for (unsigned i = 0; i < ev.size(); ++i)
         {
             // skip
-            auto ti = time_to_int(ed[i].start, sampling_rate);
+            auto ti = time_to_int(ev[i].start, sampling_rate);
             auto last_j = j;
             while (j < (long long)ed.size() and ed[j].start < ti) ++j;
             if (j == (long long)ed.size())
             {
                 throw std::invalid_argument("pack_ev failed: no matching ed event");
             }
-            skip.push_back(j - last_j);
+            skip.push_back(j - last_j - 1);
             // move
             if (ev[i].move < 0 or ev[i].move > std::numeric_limits< uint8_t >::max())
             {
@@ -1230,10 +1238,14 @@ public:
             mv.push_back(ev[i].move);
             // state
             auto s = ev[i].get_model_state();
-            int bases_to_skip = 0;
-            if (i > 0 and ev[i].move < (long long)s.size())
+            if (s.size() != ev_pack.state_size)
             {
-                bases_to_skip = (long long)s.size() - ev[i].move;
+                throw std::invalid_argument("pack_ev failed: different state sizes");
+            }
+            int bases_to_skip = 0;
+            if (i > 0 and ev[i].move < (int)ev_pack.state_size)
+            {
+                bases_to_skip = (int)ev_pack.state_size - ev[i].move;
             }
             for (auto c : s.substr(bases_to_skip))
             {
@@ -1253,11 +1265,41 @@ public:
               double sampling_rate)
     {
         std::vector< Event_Entry > res;
-        (void)ev_pack;
-        (void)ed;
-        (void)sampling_rate;
-        //TODO
+        auto skip = ev_skip_coder().decode< long long >(ev_pack.skip, ev_pack.skip_param);
+        auto mv = ev_move_coder().decode< std::uint8_t >(ev_pack.move, ev_pack.move_param);
+        auto bases = ev_bases_coder().decode< std::int8_t >(ev_pack.bases, ev_pack.bases_param);
+        if (skip.size() != mv.size())
+        {
+            throw std::invalid_argument("unpack_ev failed: skip and move have different sizes");
+        }
+        res.resize(skip.size());
+        long long j = 0;
+        std::string s;
+        unsigned bases_pos = 0;
+        for (unsigned i = 0; i < res.size(); ++i)
+        {
+            j += skip[i] + 1;
+            res[i].start = time_to_float(ed[j].start, sampling_rate);
+            res[i].length = time_to_float(ed[j].length, sampling_rate);
+            res[i].mean = ed[j].mean;
+            res[i].stdv = ed[j].stdv;
+            res[i].move = mv[i];
+            if (i > 0) s = s.substr(mv[i]); // apply move
+            while (s.size() < ev_pack.state_size) s += bases[bases_pos++];
+            std::copy(s.begin(), s.end(), res[i].model_state.begin());
+            if (ev_pack.state_size < MAX_K_LEN) res[i].model_state[ev_pack.state_size] = 0;
+        }
         return res;
+    }
+
+    static long long time_to_int(double tf, double sampling_rate)
+    {
+        return tf * sampling_rate + .5;
+    }
+
+    static double time_to_float(long long ti, double sampling_rate)
+    {
+        return (long double)ti / sampling_rate;
     }
 
 private:
@@ -1380,16 +1422,6 @@ private:
         assert(have_channel_id_params());
         return ((float)si + _channel_id_params.offset)
             * _channel_id_params.range / _channel_id_params.digitisation;
-    }
-
-    static long long time_to_int(double tf, double sampling_rate)
-    {
-        return tf * sampling_rate;
-    }
-
-    static double time_to_float(long long ti, double sampling_rate)
-    {
-        return (long double)ti / sampling_rate;
     }
 
     // static paths

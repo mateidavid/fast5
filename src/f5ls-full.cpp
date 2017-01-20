@@ -192,9 +192,13 @@ int main(int argc, char* argv[])
                     print_map(cout, bc_params, tmp.str());
                     // check if basecall log exists
                     cout << "basecall/" << bc_gr << "/have_log=" << f.have_basecall_log(bc_gr) << endl;
+                    // check if eventdetection link exists
+                    auto bc_ed_gr = f.get_basecall_eventdetection_group(bc_gr);
+                    cout << "basecall/" << bc_gr << "/eventdetection_group=" << bc_ed_gr << endl;
                 }
                 for (unsigned st = 0; st < 3; ++st)
                 {
+                    auto gr_l = f.get_basecall_strand_group_list(st);
                     bool have_seq = f.have_basecall_seq(st);
                     cout << "basecall(" << st << ")/have_seq=" << have_seq << endl;
                     if (have_seq)

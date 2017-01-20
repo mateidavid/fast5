@@ -69,7 +69,6 @@ unsigned time_int(double f, fast5::Channel_Id_Parameters const & channel_id_para
     return f * channel_id_params.sampling_rate;
 }
 
-
 void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
 {
     auto rn_l = src_f.get_raw_samples_read_name_list();
@@ -80,10 +79,23 @@ void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
         if (opts::check)
         {
             auto rs_unpack = src_f.unpack_rw(rs_pack);
-            assert(rs_unpack.size() == rsi.size());
+            if (rs_unpack.size() != rsi.size())
+            {
+                LOG(error)
+                    << "check_failed rs_unpack.size=" << rs_unpack.size()
+                    << " rs_orig.size=" << rsi.size() << endl;
+                exit(EXIT_FAILURE);
+            }
             for (unsigned i = 0; i < rs_unpack.size(); ++i)
             {
-                assert(rs_unpack[i] == rsi[i]);
+                if (rs_unpack[i] != rsi[i])
+                {
+                    LOG(error)
+                        << "check_failed i=" << i
+                        << " rs_unpack=" << rs_unpack[i]
+                        << " rs_orig=" << rsi[i] << endl;
+                    exit(EXIT_FAILURE);
+                }
             }
         }
         dst_f.add_raw_samples_pack(rn, rs_pack);
@@ -132,46 +144,53 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                 auto rs = src_f.get_raw_samples(rn);
                 auto rs_param = src_f.get_raw_samples_params(rn);
                 auto ed_unpack = src_f.unpack_ed(ed_pack, ed_param, rs, rs_param);
-                assert(ed_unpack.size() == ed.size());
-                for (unsigned i = 0; i + 1 < ed_unpack.size(); ++i)
+                if (ed_unpack.size() != ed.size())
                 {
-                    LOG(debug1) << "i=" << i
-                               << " unpack=(" << ed_unpack[i].start
-                               << "," << ed_unpack[i].length
-                               << "," << ed_unpack[i].mean
-                               << "," << ed_unpack[i].stdv
-                               << ") orig=(" << ed[i].start
-                               << "," << ed[i].length
-                               << "," << ed[i].mean
-                               << "," << ed[i].stdv
-                               << ")" << endl;
-                    LOG(debug2) << "gr=" << gr << " i=" << i << " mean_diff=" << ed_unpack[i].mean - ed[i].mean << " stdv_diff=" << ed_unpack[i].stdv - ed[i].stdv << endl;
-                    assert(ed_unpack[i].start == ed[i].start);
-                    assert(ed_unpack[i].length == ed[i].length);
-                    if (abs(ed_unpack[i].mean - ed[i].mean) > .1)
-                    {
-                        LOG(error)
-                            << "gr=" << gr
-                            << " i=" << i
-                            << " mean_diff=" << ed_unpack[i].mean - ed[i].mean << endl;
-                        exit(EXIT_FAILURE);
-                    }
-                    if (abs(ed_unpack[i].stdv - ed[i].stdv) > .1)
-                    {
-                        LOG(error)
-                            << "gr=" << gr
-                            << " i=" << i
-                            << " mean_stdv=" << ed_unpack[i].stdv - ed[i].stdv << endl;
-                        exit(EXIT_FAILURE);
-                    }
-                    //assert(abs(ed_unpack[i].mean - ed[i].mean) < 1e-2);
-                    //assert(abs(ed_unpack[i].mean - ed[i].mean) < 1e-2);
+                    LOG(error)
+                        << "check_failed gr=" << gr
+                        << " ed_unpack.size=" << ed_unpack.size()
+                        << " ed_orig.size=" << ed.size() << endl;
+                    exit(EXIT_FAILURE);
                 }
-            }
+                for (unsigned i = 0; i + 1 < ed_unpack.size(); ++i) // skip last event
+                {
+                    LOG(debug1)
+                        << "gr=" << gr
+                        << " i=" << i
+                        << " ed_unpack=(" << ed_unpack[i].start
+                        << "," << ed_unpack[i].length
+                        << "," << ed_unpack[i].mean
+                        << "," << ed_unpack[i].stdv
+                        << ") ed_orig=(" << ed[i].start
+                        << "," << ed[i].length
+                        << "," << ed[i].mean
+                        << "," << ed[i].stdv
+                        << ")" << endl;
+                    if (ed_unpack[i].start != ed[i].start
+                        or ed_unpack[i].length != ed[i].length
+                        or abs(ed_unpack[i].mean - ed[i].mean) > .1
+                        or abs(ed_unpack[i].stdv - ed[i].stdv) > .1)
+                    {
+                        LOG(error)
+                            << "check_failed gr=" << gr
+                            << " i=" << i
+                            << " ed_unpack=(" << ed_unpack[i].start
+                            << "," << ed_unpack[i].length
+                            << "," << ed_unpack[i].mean
+                            << "," << ed_unpack[i].stdv
+                            << ") ed_orig=(" << ed[i].start
+                            << "," << ed[i].length
+                            << "," << ed[i].mean
+                            << "," << ed[i].stdv
+                            << ")" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                }
+            } // if check
             dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
-        }
-    }
-}
+        } // for rn
+    } // for gr
+} // do_pack_ed()
 void do_unpack_ed(fast5::File const & src_f, fast5::File const & dst_f)
 {
     auto gr_l = src_f.get_eventdetection_group_list();
@@ -206,6 +225,80 @@ void do_copy_ed(fast5::File const & src_f, fast5::File const & dst_f)
         }
     }
 }
+void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f)
+{
+    for (unsigned st = 0; st < 2; ++st)
+    {
+        auto gr_l = src_f.get_basecall_strand_group_list(st);
+        for (auto const & gr : gr_l)
+        {
+            if (src_f.have_basecall_events_pack(st, gr))
+            {
+                auto ev_pack = src_f.get_basecall_events_pack(st, gr);
+                dst_f.add_basecall_events_pack(st, gr, ev_pack);
+            }
+            else if (src_f.have_basecall_events_unpack(st, gr))
+            {
+                auto ev = src_f.get_basecall_events(st, gr);
+                auto ev_param = src_f.get_basecall_event_params(st, gr);
+                // sampling rate
+                auto channel_id_params = src_f.get_channel_id_params();
+                // ed group
+                auto ed_gr = src_f.get_basecall_eventdetection_group(gr);
+                if (ed_gr.empty())
+                {
+                    LOG(error)
+                        << "missing eventdetection events for basecall events: st=" << st << " gr=" << gr << endl;
+                    exit(EXIT_FAILURE);
+                }
+                auto ed = src_f.get_eventdetection_events(ed_gr);
+                auto ev_pack = src_f.pack_ev(ev, ev_param, ed, ed_gr, channel_id_params.sampling_rate);
+                if (opts::check)
+                {
+                    //TODO
+                }
+                dst_f.add_basecall_events_pack(st, gr, ev_pack);
+            }
+        }
+    }
+} // do_pack_ev
+void do_unpack_ev(fast5::File const & src_f, fast5::File const & dst_f)
+{
+    for (unsigned st = 0; st < 2; ++st)
+    {
+        auto gr_l = src_f.get_basecall_strand_group_list(st);
+        for (auto const & gr : gr_l)
+        {
+            if (not src_f.have_basecall_events(st, gr)) continue;
+            auto ev = src_f.get_basecall_events(st, gr);
+            auto ev_param = src_f.get_basecall_event_params(st, gr);
+            dst_f.add_basecall_events(st, gr, ev);
+            dst_f.add_basecall_event_params(st, gr, ev_param);
+        }
+    }
+} // do_unpack_ev
+void do_copy_ev(fast5::File const & src_f, fast5::File const & dst_f)
+{
+    for (unsigned st = 0; st < 2; ++st)
+    {
+        auto gr_l = src_f.get_basecall_strand_group_list(st);
+        for (auto const & gr : gr_l)
+        {
+            if (src_f.have_basecall_events_unpack(st, gr))
+            {
+                auto ev = src_f.get_basecall_events(st, gr);
+                auto ev_param = src_f.get_basecall_event_params(st, gr);
+                dst_f.add_basecall_events(st, gr, ev);
+                dst_f.add_basecall_event_params(st, gr, ev_param);
+            }
+            else if (src_f.have_basecall_events_pack(st, gr))
+            {
+                auto ev_pack = src_f.get_basecall_events_pack(st, gr);
+                dst_f.add_basecall_events_pack(st, gr, ev_pack);
+            }
+        }
+    }
+} // do_copy_ev
 
 void real_main()
 {
@@ -246,6 +339,19 @@ void real_main()
         else if (opts::ed_copy)
         {
             do_copy_ed(src_f, dst_f);
+        }
+        // process basecall events
+        if (opts::ev_pack)
+        {
+            do_pack_ev(src_f, dst_f);
+        }
+        else if (opts::ev_unpack)
+        {
+            do_unpack_ev(src_f, dst_f);
+        }
+        else if (opts::ev_copy)
+        {
+            do_copy_ev(src_f, dst_f);
         }
         // close files
         src_f.close();
@@ -318,6 +424,6 @@ int main(int argc, char * argv[])
     LOG(info) << "rw: " << (opts::rw_pack? "pack" : opts::rw_unpack? "unpack" : opts::rw_copy? "copy" : "drop") << endl;
     LOG(info) << "ed: " << (opts::ed_pack? "pack" : opts::ed_unpack? "unpack" : opts::ed_copy? "copy" : "drop") << endl;
     LOG(info) << "ev: " << (opts::ev_pack? "pack" : opts::ev_unpack? "unpack" : opts::ev_copy? "copy" : "drop") << endl;
-    LOG(info) << "check: " << opts::check.get() << endl;
+    LOG(info) << "check: " << (opts::check? "yes" : "no") << endl;
     real_main();
 }

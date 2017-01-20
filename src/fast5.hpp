@@ -29,6 +29,8 @@ namespace
 namespace fast5
 {
 
+typedef std::map< std::string, std::string > Attr_Map;
+
 struct Channel_Id_Parameters
 {
     std::string channel_number;
@@ -36,11 +38,17 @@ struct Channel_Id_Parameters
     double offset;
     double range;
     double sampling_rate;
+    Channel_Id_Parameters()
+        : channel_number(""),
+          digitisation(0.0),
+          offset(0.0),
+          range(0.0),
+          sampling_rate(0.0) {}
 }; // struct Channel_Id_Parameters
 
-typedef std::map< std::string, std::string > Tracking_Id_Parameters;
+typedef Attr_Map Tracking_Id_Parameters;
 
-typedef std::map< std::string, std::string > Sequences_Parameters;
+typedef Attr_Map Sequences_Parameters;
 
 typedef float Raw_Samples_Entry;
 typedef int16_t Raw_Samples_Int_Entry;
@@ -56,10 +64,8 @@ struct Raw_Samples_Parameters
 
 struct Raw_Samples_Pack
 {
-    typedef std::vector< std::uint8_t > signal_type;
-    typedef std::map< std::string, std::string > signal_param_type;
-    signal_type signal;
-    signal_param_type signal_param;
+    fast5_pack::Huffman_Coder::Code_Type signal;
+    Attr_Map signal_param;
 }; // struct Raw_Samples_Pack
 
 struct EventDetection_Event_Entry
@@ -91,14 +97,10 @@ struct EventDetection_Event_Parameters
 
 struct EventDetection_Events_Pack
 {
-    typedef std::vector< std::uint8_t > skip_type;
-    typedef std::map< std::string, std::string > skip_param_type;
-    skip_type skip;
-    skip_param_type skip_param;
-    typedef std::vector< std::uint8_t > len_type;
-    typedef std::map< std::string, std::string > len_param_type;
-    len_type len;
-    len_param_type len_param;
+    fast5_pack::Huffman_Coder::Code_Type skip;
+    Attr_Map skip_param;
+    fast5_pack::Huffman_Coder::Code_Type len;
+    Attr_Map len_param;
 }; // struct EventDetection_Events_Pack
 
 //
@@ -190,6 +192,20 @@ struct Basecall_Event_Parameters
     double duration;
 };
 
+struct Basecall_Events_Pack
+{
+    fast5_pack::Huffman_Coder::Code_Type skip;
+    Attr_Map skip_param;
+    fast5_pack::Huffman_Coder::Code_Type move;
+    Attr_Map move_param;
+    fast5_pack::Huffman_Coder::Code_Type bases;
+    Attr_Map bases_param;
+    //
+    std::string ed_gr;
+    long long start_time;
+    long long duration;
+}; // struct Basecall_Events_Pack
+
 //
 // This struct represents a template-to-complement
 // match that is emitted by ONT's 2D basecaller
@@ -238,6 +254,8 @@ public:
         Base::open(file_name, rw);
         if (is_open())
         {
+            // get channel_id_params
+            load_channel_id_params();
             // detect raw samples read name
             detect_raw_samples_read_name_list();
             // detect eventdetection groups
@@ -263,20 +281,14 @@ public:
      */
     bool have_channel_id_params() const
     {
-        return Base::group_exists(channel_id_path());
+        return _channel_id_params.sampling_rate > 0.0;
     }
     /**
      * Extract "/UniqueGlobalKey/channel_id" attributes.
      */
     Channel_Id_Parameters get_channel_id_params() const
     {
-        Channel_Id_Parameters res;
-        Base::read(channel_id_path() + "/channel_number", res.channel_number);
-        Base::read(channel_id_path() + "/digitisation", res.digitisation);
-        Base::read(channel_id_path() + "/offset", res.offset);
-        Base::read(channel_id_path() + "/range", res.range);
-        Base::read(channel_id_path() + "/sampling_rate", res.sampling_rate);
-        return res;
+        return _channel_id_params;
     }
     /**
      * Check if sampling rate exists.
@@ -290,8 +302,7 @@ public:
      */
     double get_sampling_rate() const
     {
-        auto channel_id_params = get_channel_id_params();
-        return channel_id_params.sampling_rate;
+        return _channel_id_params.sampling_rate;
     }
 
     /**
@@ -375,6 +386,15 @@ public:
         Base::read(p + "/duration", res.duration);
         return res;
     }
+    void add_raw_samples_params(std::string const & rn, Raw_Samples_Parameters const & params) const
+    {
+        std::string p = raw_samples_params_path(rn);
+        Base::write_attribute(p + "/read_id", params.read_id);
+        Base::write_attribute(p + "/read_number", params.read_number);
+        Base::write_attribute(p + "/start_mux", params.start_mux);
+        Base::write_attribute(p + "/start_time", params.start_time);
+        Base::write_attribute(p + "/duration", params.duration);
+    }
     /**
      * Get raw samples for given read name as ints (default: first read name).
      */
@@ -401,15 +421,12 @@ public:
     {
         // get raw samples
         auto raw_samples_int = get_raw_samples_int(_rn);
-        // get scaling parameters
-        auto channel_id_params = get_channel_id_params();
         // decode levels
         std::vector< Raw_Samples_Entry > res;
         res.reserve(raw_samples_int.size());
         for (auto int_level : raw_samples_int)
         {
-            res.push_back((static_cast< float >(int_level) + channel_id_params.offset)
-                          * channel_id_params.range / channel_id_params.digitisation);
+            res.push_back(raw_sample_to_float(int_level));
         }
         return res;
     }
@@ -500,7 +517,7 @@ public:
     /**
      * Get EventDetection params for given EventDetection group (default: first EventDetection group).
      */
-    std::map< std::string, std::string > get_eventdetection_params(const std::string& _ed_gr = std::string()) const
+    Attr_Map get_eventdetection_params(const std::string& _ed_gr = std::string()) const
     {
         const std::string& ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
         return get_attr_map(eventdetection_params_path(ed_gr));
@@ -666,7 +683,7 @@ public:
     /**
      * Get Basecall group params for given Basecall group.
      */
-    std::map< std::string, std::string > get_basecall_params(const std::string& bc_gr) const
+    Attr_Map get_basecall_params(const std::string& bc_gr) const
     {
         return get_attr_map(basecall_root_path() + "/" + basecall_group_prefix() + bc_gr);
     }
@@ -838,7 +855,16 @@ public:
         if (_bc_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
         const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
-        return Base::dataset_exists(basecall_events_path(bc_gr_1d, st));
+        return (Base::dataset_exists(basecall_events_path(bc_gr_1d, st))
+                or Base::group_exists(basecall_events_pack_path(bc_gr_1d, st)));
+    }
+    bool have_basecall_events_unpack(unsigned st, std::string const & gr) const
+    {
+        return Base::dataset_exists(basecall_events_path(get_basecall_group_1d(gr), st));
+    }
+    bool have_basecall_events_pack(unsigned st, std::string const & gr) const
+    {
+        return Base::group_exists(basecall_events_pack_path(get_basecall_group_1d(gr), st));
     }
     /**
      * Get Basecall events for given Basecall group and given strand.
@@ -847,16 +873,29 @@ public:
     {
         std::vector< Event_Entry > res;
         const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
-        hdf5_tools::Compound_Map m;
-        m.add_member("mean", &Event_Entry::mean);
-        m.add_member("start", &Event_Entry::start);
-        m.add_member("stdv", &Event_Entry::stdv);
-        m.add_member("length", &Event_Entry::length);
-        m.add_member("p_model_state", &Event_Entry::p_model_state);
-        m.add_member("model_state", &Event_Entry::model_state);
-        m.add_member("move", &Event_Entry::move);
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
-        Base::read(basecall_events_path(bc_gr_1d, st), res, m);
+        if (have_basecall_events_unpack(st, bc_gr))
+        {
+            hdf5_tools::Compound_Map m;
+            m.add_member("mean", &Event_Entry::mean);
+            m.add_member("start", &Event_Entry::start);
+            m.add_member("stdv", &Event_Entry::stdv);
+            m.add_member("length", &Event_Entry::length);
+            m.add_member("p_model_state", &Event_Entry::p_model_state);
+            m.add_member("model_state", &Event_Entry::model_state);
+            m.add_member("move", &Event_Entry::move);
+            Base::read(basecall_events_path(bc_gr_1d, st), res, m);
+        }
+        else // have pack
+        {
+            auto ev_pack = get_basecall_events_pack(st, bc_gr);
+            if (not have_eventdetection_events(ev_pack.ed_gr))
+            {
+                throw std::invalid_argument("missing evendetection events for basecall events unpacking");
+            }
+            auto ed = get_eventdetection_events(ev_pack.ed_gr);
+            res = unpack_ev(ev_pack, ed, _channel_id_params.sampling_rate);
+        }
         return res;
     }
     /**
@@ -876,14 +915,53 @@ public:
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         Base::write(basecall_events_path(bc_gr_1d, st), true, ev, cm);
     }
+    Basecall_Events_Pack get_basecall_events_pack(unsigned st, std::string const & bc_gr) const
+    {
+        auto p = basecall_events_pack_path(bc_gr, st);
+        Basecall_Events_Pack ev_pack;
+        Base::read(p + "/Skip", ev_pack.skip);
+        ev_pack.skip_param = get_attr_map(p + "/Skip");
+        Base::read(p + "/Bases", ev_pack.bases);
+        ev_pack.bases_param = get_attr_map(p + "/Bases");
+        Base::read(p + "/ed_gr", ev_pack.ed_gr);
+        Base::read(p + "/start_time", ev_pack.start_time);
+        Base::read(p + "/duration", ev_pack.duration);
+        return ev_pack;
+    }
+    void add_basecall_events_pack(unsigned st, std::string const & bc_gr, Basecall_Events_Pack const & ev_pack) const
+    {
+        auto p = basecall_events_pack_path(bc_gr, st);
+        Base::write_dataset(p + "/Skip", ev_pack.skip);
+        add_attr_map(p + "/Skip", ev_pack.skip_param);
+        Base::write_dataset(p + "/Bases", ev_pack.bases);
+        add_attr_map(p + "/Bases", ev_pack.bases_param);
+        Base::write_attribute(p + "/ed_gr", ev_pack.ed_gr);
+        Base::write_attribute(p + "/start_time", ev_pack.start_time);
+        Base::write_attribute(p + "/duration", ev_pack.duration);
+    }
     Basecall_Event_Parameters get_basecall_event_params(unsigned st, const std::string& _bc_gr = std::string()) const
     {
+        Basecall_Event_Parameters res;
         const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
-        auto p = basecall_events_path(bc_gr_1d, st);
-        Basecall_Event_Parameters res;
-        Base::read(p + "/start_time", res.start_time);
-        Base::read(p + "/duration", res.duration);
+        if (have_basecall_events_unpack(st, bc_gr_1d))
+        {
+            auto p = basecall_events_path(bc_gr_1d, st);
+            auto params = get_attr_map(p);
+            if (params.count("start_time")) std::istringstream(params["start_time"]) >> res.start_time;
+            else res.start_time = 0.0;
+            if (params.count("duration")) std::istringstream(params["duration"]) >> res.duration;
+            else res.duration = 0.0;
+        }
+        else if (have_basecall_events_pack(st, bc_gr_1d))
+        {
+            auto p = basecall_events_pack_path(bc_gr_1d, st);
+            Basecall_Events_Pack ev_pack;
+            Base::read(p + "/start_time", ev_pack.start_time);
+            Base::read(p + "/duration", ev_pack.duration);
+            res.start_time = time_to_float(ev_pack.start_time, _channel_id_params.sampling_rate);
+            res.duration = time_to_float(ev_pack.duration, _channel_id_params.sampling_rate);
+        }
         return res;
     }
     void add_basecall_event_params(unsigned st, std::string const & bc_gr,
@@ -891,6 +969,10 @@ public:
     {
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         auto p = basecall_events_path(bc_gr_1d, st);
+        if (not Base::dataset_exists(p))
+        {
+            throw std::invalid_argument("basecall events must be added before their params");
+        }
         Base::write_attribute(p + "/start_time", bce_param.start_time);
         Base::write_attribute(p + "/duration", bce_param.duration);
     }
@@ -941,13 +1023,13 @@ public:
     /**
      * Get EventDetection group for given Basecall group, if available.
      */
-    std::string get_basecall_eventdetection_group(const std::string& bc_gr) const
+    std::string get_basecall_eventdetection_group(std::string const & bc_gr) const
     {
-        std::string path = basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/event_detection";
-        if (Base::attribute_exists(path))
+        if (not have_eventdetection_events()) return "";
+        auto bc_param = get_basecall_params(bc_gr);
+        if (bc_param.count("event_detection"))
         {
-            std::string tmp;
-            Base::read(path, tmp);
+            std::string tmp = bc_param["event_detection"];
             auto pos = tmp.find(eventdetection_group_prefix());
             if (pos != std::string::npos)
             {
@@ -957,10 +1039,33 @@ public:
                 {
                     end_pos = tmp.size();
                 }
-                return tmp.substr(pos, end_pos - pos);
+                auto ed_gr = tmp.substr(pos, end_pos - pos);
+                return (have_eventdetection_events(ed_gr)? ed_gr : "");
             }
         }
-        return std::string();
+        // the hard way
+        if (not have_basecall_events(0, bc_gr)) return "";
+        auto ev = get_basecall_events(0, bc_gr);
+        EventDetection_Event_Entry ede;
+        ede.mean = 0.0;
+        ede.stdv = 1.0;
+        ede.start = time_to_int(ev[0].start, get_sampling_rate());
+        ede.length = time_to_int(ev[0].length, get_sampling_rate());
+        auto ed_gr_l = get_eventdetection_group_list();
+        for (auto & ed_gr : ed_gr_l)
+        {
+            auto ed = get_eventdetection_events(ed_gr);
+            auto p = std::equal_range(
+                ed.begin(), ed.end(), ede,
+                [] (EventDetection_Event_Entry const & lhs, EventDetection_Event_Entry const & rhs) {
+                    return lhs.start < rhs.start;
+                });
+            if (p.first != p.second and p.first->length == ede.length)
+            {
+                return ed_gr;
+            }
+        }
+        return "";
     }
 
     static std::string fq2seq(const std::string& fq)
@@ -1045,9 +1150,9 @@ public:
      */
     static std::vector< EventDetection_Event_Entry > unpack_ed(
         EventDetection_Events_Pack const & ed_pack,
-        EventDetection_Event_Parameters const & ed_par,
+        EventDetection_Event_Parameters const & ed_param,
         std::vector< Raw_Samples_Entry > const & rs,
-        Raw_Samples_Parameters const & rs_par)
+        Raw_Samples_Parameters const & rs_param)
     {
         auto skip = ed_skip_coder().decode< long long >(ed_pack.skip, ed_pack.skip_param);
         auto len = ed_len_coder().decode< long long >(ed_pack.len, ed_pack.len_param);
@@ -1056,15 +1161,15 @@ public:
             throw std::invalid_argument("unpack_ed failure: skip and length of different size");
         }
         std::vector< EventDetection_Event_Entry > ed(skip.size());
-        long long last_end = ed_par.start_time;
-        long long off_by_one = ed_par.start_time == rs_par.start_time; // hack
+        long long last_end = ed_param.start_time;
+        long long off_by_one = ed_param.start_time == rs_param.start_time; // hack
         for (unsigned i = 0; i < skip.size(); ++i)
         {
             ed[i].start = last_end + skip[i];
             ed[i].length = len[i];
             last_end = ed[i].start + ed[i].length;
             // use rs to reconstruct mean and stdv
-            long long rs_start_idx = ed[i].start - rs_par.start_time + off_by_one;
+            long long rs_start_idx = ed[i].start - rs_param.start_time + off_by_one;
             if (rs_start_idx < 0 or rs_start_idx + ed[i].length > (long long)rs.size() + off_by_one)
             {
                 throw std::invalid_argument("unpack_ed failure: bad rs_start_idx");
@@ -1087,7 +1192,100 @@ public:
         return ed;
     }
 
+    /**
+     * Pack basecall events
+     */
+    static Basecall_Events_Pack pack_ev(
+        std::vector< Event_Entry > const & ev,
+        Basecall_Event_Parameters const & ev_param,
+        std::vector< EventDetection_Event_Entry > const & ed,
+        std::string const & ed_gr,
+        double sampling_rate)
+    {
+        Basecall_Events_Pack ev_pack;
+        ev_pack.ed_gr = ed_gr;
+        ev_pack.start_time = time_to_int(ev_param.start_time, sampling_rate);
+        ev_pack.duration = time_to_int(ev_param.duration, sampling_rate);
+
+        std::vector< long long > skip;
+        std::vector< std::uint8_t > mv;
+        std::vector< std::int8_t > bases;
+        long long j = 0;
+        for (unsigned i = 0; i < ev.size(); ++i)
+        {
+            // skip
+            auto ti = time_to_int(ed[i].start, sampling_rate);
+            auto last_j = j;
+            while (j < (long long)ed.size() and ed[j].start < ti) ++j;
+            if (j == (long long)ed.size())
+            {
+                throw std::invalid_argument("pack_ev failed: no matching ed event");
+            }
+            skip.push_back(j - last_j);
+            // move
+            if (ev[i].move < 0 or ev[i].move > std::numeric_limits< uint8_t >::max())
+            {
+                throw std::invalid_argument("pack_ev failed: invalid move");
+            }
+            mv.push_back(ev[i].move);
+            // state
+            auto s = ev[i].get_model_state();
+            int bases_to_skip = 0;
+            if (i > 0 and ev[i].move < (long long)s.size())
+            {
+                bases_to_skip = (long long)s.size() - ev[i].move;
+            }
+            for (auto c : s.substr(bases_to_skip))
+            {
+                bases.push_back(c);
+            }
+        }
+
+        std::tie(ev_pack.skip, ev_pack.skip_param) = ev_skip_coder().encode(skip, false);
+        std::tie(ev_pack.move, ev_pack.move_param) = ev_move_coder().encode(mv, false);
+        std::tie(ev_pack.bases, ev_pack.bases_param) = ev_bases_coder().encode(bases, false);
+        return ev_pack;
+    }
+
+    static std::vector< Event_Entry >
+    unpack_ev(Basecall_Events_Pack const & ev_pack,
+              std::vector< EventDetection_Event_Entry > const & ed,
+              double sampling_rate)
+    {
+        std::vector< Event_Entry > res;
+        (void)ev_pack;
+        (void)ed;
+        (void)sampling_rate;
+        //TODO
+        return res;
+    }
+
 private:
+    // channel id params, including sampling rate
+    Channel_Id_Parameters _channel_id_params;
+
+    // list of read names for which we have raw samples
+    std::vector< std::string > _raw_samples_read_name_list;
+
+    // list of EventDetection groups
+    std::vector< std::string > _eventdetection_group_list;
+
+    // list of Basecall groups
+    std::vector< std::string > _basecall_group_list;
+
+    // list of per-strand Basecall groups; 0/1/2 = template/complement/2d
+    std::array< std::vector< std::string >, 3 > _basecall_strand_group_list;
+
+    void load_channel_id_params()
+    {
+        if (not Base::group_exists(channel_id_path())) return;
+        Base::read(channel_id_path() + "/channel_number", _channel_id_params.channel_number);
+        Base::read(channel_id_path() + "/digitisation", _channel_id_params.digitisation);
+        Base::read(channel_id_path() + "/offset", _channel_id_params.offset);
+        Base::read(channel_id_path() + "/range", _channel_id_params.range);
+        Base::read(channel_id_path() + "/sampling_rate", _channel_id_params.sampling_rate);
+    }
+
     void detect_raw_samples_read_name_list()
     {
         if (not Base::group_exists(raw_samples_root_path())) return;
@@ -1156,9 +1354,9 @@ private:
         }
     }
 
-    std::map< std::string, std::string > get_attr_map(const std::string& path) const
+    Attr_Map get_attr_map(const std::string& path) const
     {
-        std::map< std::string, std::string > res;
+        Attr_Map res;
         auto a_list = Base::get_attr_list(path);
         for (const auto& a : a_list)
         {
@@ -1169,7 +1367,7 @@ private:
         return res;
     }
 
-    void add_attr_map(std::string const & path, std::map< std::string, std::string > const & attr_m) const
+    void add_attr_map(std::string const & path, Attr_Map const & attr_m) const
     {
         for (auto const & p : attr_m)
         {
@@ -1177,17 +1375,22 @@ private:
         }
     }
 
-    // list of read names for which we have raw samples
-    std::vector< std::string > _raw_samples_read_name_list;
+    float raw_sample_to_float(int si) const
+    {
+        assert(have_channel_id_params());
+        return ((float)si + _channel_id_params.offset)
+            * _channel_id_params.range / _channel_id_params.digitisation;
+    }
 
-    // list of EventDetection groups
-    std::vector< std::string > _eventdetection_group_list;
+    static long long time_to_int(double tf, double sampling_rate)
+    {
+        return tf * sampling_rate;
+    }
 
-    // list of Basecall groups
-    std::vector< std::string > _basecall_group_list;
-
-    // list of per-strand Basecall groups; 0/1/2 = template/complement/2d
-    std::array< std::vector< std::string >, 3 > _basecall_strand_group_list;
+    static double time_to_float(long long ti, double sampling_rate)
+    {
+        return (long double)ti / sampling_rate;
+    }
 
     // static paths
     static const std::string& file_version_path()
@@ -1292,6 +1495,11 @@ private:
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(st) + "/Events";
     }
+    static std::string basecall_events_pack_path(const std::string& bc_gr, unsigned st)
+    {
+        return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
+            + basecall_strand_subgroup(st) + "/Events_Pack";
+    }
     static std::string basecall_event_alignment_path(const std::string& bc_gr)
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
@@ -1314,10 +1522,12 @@ private:
             {
                 rec_copy_attributes(src_f, dst_f, path + "/" + sg);
             }
+            /*
             else
             {
                 std::clog << "skipping dataset: " << path + "/" + sg << std::endl;
             }
+            */
         }
     } // rec_copy_attributes()
 
@@ -1365,6 +1575,51 @@ private:
         }
         return _ed_len_coder;
     } // ed_len_coder()
+
+    static fast5_pack::Huffman_Coder & ev_skip_coder()
+    {
+        static fast5_pack::Huffman_Coder _ev_skip_coder;
+        static bool initialized = false;
+        if (not initialized)
+        {
+            std::vector< std::string > tmp =
+#include "fast5_cwmap_ev_skip_1.inl"
+                ;
+            _ev_skip_coder.load_codeword_map(tmp, "fast5_cwmap_ev_skip_1.inl");
+            initialized = true;
+        }
+        return _ev_skip_coder;
+    } // ev_skip_coder()
+
+    static fast5_pack::Huffman_Coder & ev_move_coder()
+    {
+        static fast5_pack::Huffman_Coder _ev_move_coder;
+        static bool initialized = false;
+        if (not initialized)
+        {
+            std::vector< std::string > tmp =
+#include "fast5_cwmap_ev_move_1.inl"
+                ;
+            _ev_move_coder.load_codeword_map(tmp, "fast5_cwmap_ev_move_1.inl");
+            initialized = true;
+        }
+        return _ev_move_coder;
+    } // ev_move_coder()
+
+    static fast5_pack::Huffman_Coder & ev_bases_coder()
+    {
+        static fast5_pack::Huffman_Coder _ev_bases_coder;
+        static bool initialized = false;
+        if (not initialized)
+        {
+            std::vector< std::string > tmp =
+#include "fast5_cwmap_ev_bases_1.inl"
+                ;
+            _ev_bases_coder.load_codeword_map(tmp, "fast5_cwmap_ev_bases_1.inl");
+            initialized = true;
+        }
+        return _ev_bases_coder;
+    } // ev_move_coder()
 
 }; // class File
 

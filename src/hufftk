@@ -64,6 +64,28 @@ def load_ed_len(args):
     logger.debug("mean val: " + str(float(val_sum)/val_cnt))
     return val_d
 
+def load_fq_qv(args):
+    val_d = {val: [1, None] for val in range(args.fq_qv_range[0] - 1, args.fq_qv_range[1] + 1)}
+    val_sum = 0
+    val_cnt = 0
+    for fn in args.input:
+        f = fast5.File(fn)
+        if not f.have_basecall_fastq(0, args.gr):
+            continue
+        fq = f.get_basecall_fastq(0, args.gr)
+        qv = fq.split()[3]
+        for c in qv:
+            val = ord(c) - 33
+            val_sum += val
+            val_cnt += 1
+            if args.fq_qv_range[0] <= val and val <= args.fq_qv_range[1]:
+                val_idx = val
+            else:
+                val_idx = args.fq_qv_range[0] - 1
+            val_d[val_idx][0] += 1
+    logger.debug("mean val: " + str(float(val_sum)/val_cnt))
+    return val_d
+
 def run_build_tree(val_d, rg):
     # dump histogram
     #for val in range(-args.range_width, args.range_width + 1):
@@ -111,7 +133,9 @@ if __name__ == "__main__":
                         help="Encoding range for ed skip values.")
     parser.add_argument("--ed-len-range", default=[1,100],
                         help="Encoding range for ed length values.")
-    parser.add_argument("command", choices=["rw", "ed-skip", "ed-len"])
+    parser.add_argument("--fq-qv-range", default=[0,31],
+                        help="Encoding range for fq qv values.")
+    parser.add_argument("command", choices=["rw", "ed-skip", "ed-len", "fq-qv"])
     parser.add_argument("input", nargs="*",
                         help="Fast5 file")
     args = parser.parse_args()
@@ -142,3 +166,6 @@ if __name__ == "__main__":
     elif args.command == "ed-len":
         d = load_ed_len(args)
         run_build_tree(d, args.ed_len_range)
+    elif args.command == "fq-qv":
+        d = load_fq_qv(args)
+        run_build_tree(d, args.fq_qv_range)

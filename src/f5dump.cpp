@@ -238,7 +238,8 @@ void real_main()
         if (opts::fq and f.have_basecall_fastq(opts::st, opts::gr))
         {
             auto fq = f.get_basecall_fastq(opts::st, opts::gr);
-            cout << fq << endl;
+            cout << fq;
+            if (fq.size() > 0 and fq[fq.size() - 1] != '\n') cout << endl;
         } // if opts::fq
     }
     catch (hdf5_tools::Exception& e)

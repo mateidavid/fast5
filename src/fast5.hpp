@@ -20,7 +20,7 @@
 
 namespace
 {
-    inline static std::string array_to_string(const std::array< char, MAX_K_LEN >& a)
+    inline static std::string array_to_string(std::array< char, MAX_K_LEN > const & a)
     {
         return std::string(a.begin(), std::find(a.begin(), a.end(), '\0'));
     }
@@ -74,7 +74,7 @@ struct EventDetection_Event_Entry
     double stdv;
     long long start;
     long long length;
-    friend bool operator == (const EventDetection_Event_Entry& lhs, const EventDetection_Event_Entry& rhs)
+    friend bool operator == (EventDetection_Event_Entry const & lhs, EventDetection_Event_Entry const & rhs)
     {
         return lhs.mean == rhs.mean
             and lhs.stdv == rhs.stdv
@@ -120,7 +120,7 @@ struct Model_Entry
     double weight;
     std::array< char, MAX_K_LEN > kmer;
     std::string get_kmer() const { return array_to_string(kmer); }
-    friend bool operator == (const Model_Entry& lhs, const Model_Entry& rhs)
+    friend bool operator == (Model_Entry const & lhs, Model_Entry const & rhs)
     {
         return lhs.variant == rhs.variant
             and lhs.level_mean == rhs.level_mean
@@ -146,6 +146,17 @@ struct Model_Parameters
     double var_sd;
 }; // struct Model_Parameters
 
+
+struct Basecall_Fastq_Pack
+{
+    fast5_pack::Huffman_Coder::Code_Type bp;
+    Attr_Map bp_param;
+    fast5_pack::Huffman_Coder::Code_Type qv;
+    Attr_Map qv_param;
+    std::string read_name;
+    std::uint8_t qv_bits;
+}; // struct Basecall_Fastq_Pack
+
 //
 // This struct represents an observed event.
 // The members of the struct are the same as
@@ -168,7 +179,7 @@ struct Event_Entry
     std::array< char, MAX_K_LEN > mp_state;
     std::string get_model_state() const { return array_to_string(model_state); }
     std::string get_mp_state() const { return array_to_string(mp_state); }
-    friend bool operator == (const Event_Entry& lhs, const Event_Entry& rhs)
+    friend bool operator == (Event_Entry const & lhs, Event_Entry const & rhs)
     {
         return lhs.mean == rhs.mean
             and lhs.stdv == rhs.stdv
@@ -217,7 +228,7 @@ struct Event_Alignment_Entry
     long long complement_index;
     std::array< char, MAX_K_LEN > kmer;
     std::string get_kmer() const { return array_to_string(kmer); }
-    friend bool operator == (const Event_Alignment_Entry& lhs, const Event_Alignment_Entry& rhs)
+    friend bool operator == (Event_Alignment_Entry const & lhs, Event_Alignment_Entry const & rhs)
     {
         return lhs.template_index == rhs.template_index
             and lhs.complement_index == rhs.complement_index
@@ -242,15 +253,15 @@ public:
     //using Base::write;
 
     File() = default;
-    File(const std::string& file_name, bool rw = false) { open(file_name, rw); }
+    File(std::string const & file_name, bool rw = false) { open(file_name, rw); }
 
     bool is_open() const { return static_cast< const Base* >(this)->is_open(); }
     bool is_rw() const { return static_cast< const Base* >(this)->is_rw(); }
-    const std::string& file_name() const { return static_cast< const Base* >(this)->file_name(); }
-    void create(const std::string& file_name, bool truncate = false) { static_cast< Base* >(this)->create(file_name, truncate); }
+    std::string const & file_name() const { return static_cast< const Base* >(this)->file_name(); }
+    void create(std::string const & file_name, bool truncate = false) { static_cast< Base* >(this)->create(file_name, truncate); }
     void close() { static_cast< Base* >(this)->close(); }
 
-    void open(const std::string& file_name, bool rw = false)
+    void open(std::string const & file_name, bool rw = false)
     {
         Base::open(file_name, rw);
         if (is_open())
@@ -339,7 +350,7 @@ public:
     /**
      * Get list of raw samples read names.
      */
-    const std::vector< std::string >& get_raw_samples_read_name_list() const
+    std::vector< std::string > const & get_raw_samples_read_name_list() const
     {
         return _raw_samples_read_name_list;
     }
@@ -347,7 +358,7 @@ public:
      * Check if raw samples exist.
      * If _rn non-empty, check if raw samples exist for given read.
      */
-    bool have_raw_samples(const std::string& _rn = std::string()) const
+    bool have_raw_samples(std::string const & _rn = std::string()) const
     {
         if (not have_channel_id_params())
         {
@@ -375,10 +386,10 @@ public:
     /**
      * Get raw samples attributes for given read name (default: first read name).
      */
-    Raw_Samples_Parameters get_raw_samples_params(const std::string& _rn = std::string()) const
+    Raw_Samples_Parameters get_raw_samples_params(std::string const & _rn = std::string()) const
     {
         Raw_Samples_Parameters res;
-        const std::string& rn = not _rn.empty()? _rn : get_raw_samples_read_name_list().front();
+        std::string const rn = not _rn.empty()? _rn : get_raw_samples_read_name_list().front();
         std::string p = raw_samples_params_path(rn);
         Base::read(p + "/read_id", res.read_id);
         Base::read(p + "/read_number", res.read_number);
@@ -399,11 +410,11 @@ public:
     /**
      * Get raw samples for given read name as ints (default: first read name).
      */
-    std::vector< Raw_Samples_Int_Entry > get_raw_samples_int(const std::string& _rn = std::string()) const
+    std::vector< Raw_Samples_Int_Entry > get_raw_samples_int(std::string const & _rn = std::string()) const
     {
         // get raw samples
         std::vector< Raw_Samples_Int_Entry > res;
-        const std::string& rn = not _rn.empty()? _rn : get_raw_samples_read_name_list().front();
+        std::string const rn = not _rn.empty()? _rn : get_raw_samples_read_name_list().front();
         if (Base::dataset_exists(raw_samples_path(rn)))
         {
             Base::read(raw_samples_path(rn), res);
@@ -418,7 +429,7 @@ public:
     /**
      * Get raw samples for given read name (default: first read name).
      */
-    std::vector< Raw_Samples_Entry > get_raw_samples(const std::string& _rn = std::string()) const
+    std::vector< Raw_Samples_Entry > get_raw_samples(std::string const & _rn = std::string()) const
     {
         // get raw samples
         auto raw_samples_int = get_raw_samples_int(_rn);
@@ -457,7 +468,7 @@ public:
     /**
      * Get list of EventDetection groups.
      */
-    const std::vector< std::string >& get_eventdetection_group_list() const
+    std::vector< std::string > const & get_eventdetection_group_list() const
     {
         return _eventdetection_group_list;
     }
@@ -471,9 +482,9 @@ public:
     /**
      * Get list of reads for given EventDetection group (default: first EventDetection group).
      */
-    std::vector< std::string > get_eventdetection_read_name_list(const std::string& _ed_gr = std::string()) const
+    std::vector< std::string > get_eventdetection_read_name_list(std::string const & _ed_gr = std::string()) const
     {
-        const std::string& ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
+        std::string const & ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
         return detect_eventdetection_read_name_list(ed_gr);
     }
     /**
@@ -482,8 +493,8 @@ public:
      * If _rn given: check if events exist for given group and read name.
      */
     bool have_eventdetection_events(
-        const std::string& _ed_gr = std::string(),
-        const std::string& _rn = std::string()) const
+        std::string const & _ed_gr = std::string(),
+        std::string const & _rn = std::string()) const
     {
         std::string ed_gr;
         if (_ed_gr.empty())
@@ -518,9 +529,9 @@ public:
     /**
      * Get EventDetection params for given EventDetection group (default: first EventDetection group).
      */
-    Attr_Map get_eventdetection_params(const std::string& _ed_gr = std::string()) const
+    Attr_Map get_eventdetection_params(std::string const & _ed_gr = std::string()) const
     {
-        const std::string& ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
+        std::string const & ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
         return get_attr_map(eventdetection_params_path(ed_gr));
     }
     void add_eventdetection_params(std::string const & ed_gr, Attr_Map const & am) const
@@ -532,11 +543,11 @@ public:
      * (default: first EventDetection group, and first read name in it).
      */
     EventDetection_Event_Parameters get_eventdetection_event_params(
-        const std::string& _ed_gr = std::string(), const std::string& _rn = std::string()) const
+        std::string const & _ed_gr = std::string(), std::string const & _rn = std::string()) const
     {
         EventDetection_Event_Parameters res;
-        const std::string& ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
-        const std::string rn = not _rn.empty()? _rn : get_eventdetection_read_name_list(ed_gr).front();
+        std::string const & ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
+        std::string const rn = not _rn.empty()? _rn : get_eventdetection_read_name_list(ed_gr).front();
         auto p = eventdetection_event_params_path(ed_gr, rn);
         auto a_v = Base::get_attr_list(p);
         std::set< std::string > a_s(a_v.begin(), a_v.end());
@@ -585,11 +596,11 @@ public:
      * Get EventDetection events for given EventDetection group, and given read name.
      */
     std::vector< EventDetection_Event_Entry > get_eventdetection_events(
-        const std::string& _ed_gr = std::string(), const std::string& _rn = std::string()) const
+        std::string const & _ed_gr = std::string(), std::string const & _rn = std::string()) const
     {
         std::vector< EventDetection_Event_Entry > res;
-        const std::string& ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
-        const std::string rn = not _rn.empty()? _rn : get_eventdetection_read_name_list(ed_gr).front();
+        std::string const & ed_gr = not _ed_gr.empty()? _ed_gr : get_eventdetection_group_list().front();
+        std::string const rn = not _rn.empty()? _rn : get_eventdetection_read_name_list(ed_gr).front();
         if (have_eventdetection_events_unpack(ed_gr, rn))
         {
             auto p = eventdetection_events_path(ed_gr, rn);
@@ -597,7 +608,7 @@ public:
             assert(struct_member_names.size() >= 4);
             bool have_stdv = false;
             bool have_variance = false;
-            for (const auto& s : struct_member_names)
+            for (auto const & s : struct_member_names)
             {
                 if (s == "stdv") have_stdv = true;
                 else if (s == "variance") have_variance = true;
@@ -673,7 +684,7 @@ public:
     /**
      * Get list of all Basecall groups.
      */
-    const std::vector< std::string >& get_basecall_group_list() const
+    std::vector< std::string > const & get_basecall_group_list() const
     {
         return _basecall_group_list;
     }
@@ -687,7 +698,7 @@ public:
     /**
      * Get list of Basecall groups for given strand.
      */
-    const std::vector< std::string >& get_basecall_strand_group_list(unsigned st) const
+    std::vector< std::string > const & get_basecall_strand_group_list(unsigned st) const
     {
         return _basecall_strand_group_list[st];
     }
@@ -712,7 +723,7 @@ public:
     /**
      * Check if Basecall log exists for given Basecall group.
      */
-    bool have_basecall_log(const std::string& bc_gr) const
+    bool have_basecall_log(std::string const & bc_gr) const
     {
         std::string path = basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/Log";
         return Base::exists(path);
@@ -720,7 +731,7 @@ public:
     /**
      * Get Basecall log for given Basecall group.
      */
-    std::string get_basecall_log(const std::string& bc_gr) const
+    std::string get_basecall_log(std::string const & bc_gr) const
     {
         std::string res;
         std::string path = basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/Log";
@@ -730,48 +741,86 @@ public:
     /**
      * Check if Basecall fastq exists for given Basecall group and given strand.
      */
-    bool have_basecall_fastq(unsigned st, const std::string& _bc_gr = std::string()) const
+    bool have_basecall_fastq(unsigned st, std::string const & _gr = std::string()) const
     {
-        if (_bc_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
-        return Base::dataset_exists(basecall_fastq_path(bc_gr, st));
+        if (_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
+        std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
+        return have_basecall_fastq_unpack(st, gr) or have_basecall_fastq_pack(st, gr);
+    }
+    bool have_basecall_fastq_unpack(unsigned st, std::string const & gr) const
+    {
+        return Base::dataset_exists(basecall_fastq_path(gr, st));
+    }
+    bool have_basecall_fastq_pack(unsigned st, std::string const & gr) const
+    {
+        return Base::group_exists(basecall_fastq_pack_path(gr, st));
     }
     /**
      * Get Basecall fastq for given Basecall group and given strand.
      */
-    std::string get_basecall_fastq(unsigned st, const std::string& _bc_gr = std::string()) const
+    std::string get_basecall_fastq(unsigned st, std::string const & _gr = std::string()) const
     {
         std::string res;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
-        Base::read(basecall_fastq_path(bc_gr, st), res);
+        std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
+        if (have_basecall_fastq_unpack(st, gr))
+        {
+            Base::read(basecall_fastq_path(gr, st), res);
+        }
+        else
+        {
+            auto fq_pack = get_basecall_fastq_pack(st, gr);
+            res = unpack_fq(fq_pack);
+        }
         return res;
     }
     /**
      * Add Basecall fastq
      */
-    void add_basecall_fastq(unsigned st, const std::string& bc_gr, const std::string& fq) const
+    void add_basecall_fastq(unsigned st, std::string const & gr, std::string const & fq) const
     {
-        Base::write(basecall_fastq_path(bc_gr, st), true, fq);
+        Base::write(basecall_fastq_path(gr, st), true, fq);
+    }
+    Basecall_Fastq_Pack get_basecall_fastq_pack(unsigned st, std::string const & gr) const
+    {
+        Basecall_Fastq_Pack fq_pack;
+        auto p = basecall_fastq_pack_path(gr, st);
+        Base::read(p + "/BP", fq_pack.bp);
+        fq_pack.bp_param = get_attr_map(p + "/BP");
+        Base::read(p + "/QV", fq_pack.qv);
+        fq_pack.qv_param = get_attr_map(p + "/QV");
+        Base::read(p + "/read_name", fq_pack.read_name);
+        Base::read(p + "/qv_bits", fq_pack.qv_bits);
+        return fq_pack;        
+    }
+    void add_basecall_fastq_pack(unsigned st, std::string const & gr, Basecall_Fastq_Pack const & fq_pack) const
+    {
+        auto p = basecall_fastq_pack_path(gr, st);
+        Base::write_dataset(p + "/BP", fq_pack.bp);
+        add_attr_map(p + "/BP", fq_pack.bp_param);
+        Base::write_dataset(p + "/QV", fq_pack.qv);
+        add_attr_map(p + "/QV", fq_pack.qv_param);
+        Base::write_attribute(p + "/read_name", fq_pack.read_name);
+        Base::write_attribute(p + "/qv_bits", fq_pack.qv_bits);
     }
     /**
      * Check if Basecall seq exists for given Basecall group and given strand.
      */
-    bool have_basecall_seq(unsigned st, const std::string& _bc_gr = std::string()) const
+    bool have_basecall_seq(unsigned st, std::string const & _bc_gr = std::string()) const
     {
         return have_basecall_fastq(st, _bc_gr);
     }
     /**
      * Get Basecall sequence for given Basecall group and given strand.
      */
-    std::string get_basecall_seq(unsigned st, const std::string& _bc_gr = std::string()) const
+    std::string get_basecall_seq(unsigned st, std::string const & _bc_gr = std::string()) const
     {
         return fq2seq(get_basecall_fastq(st, _bc_gr));
     }
     /**
      * Add Basecall seq
      */
-    void add_basecall_seq(unsigned st, const std::string& bc_gr,
-                          const std::string& name, const std::string& seq, int default_qual = 33) const
+    void add_basecall_seq(unsigned st, std::string const & bc_gr,
+                          std::string const & name, std::string const & seq, int default_qual = 33) const
     {
         std::ostringstream oss;
         oss << '@' << name << std::endl
@@ -783,26 +832,26 @@ public:
     /**
      * Check if Basecall model exist for given Basecall group and given strand.
      */
-    bool have_basecall_model(unsigned st, const std::string& _bc_gr = std::string()) const
+    bool have_basecall_model(unsigned st, std::string const & _bc_gr = std::string()) const
     {
         if (_bc_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
+        std::string const & bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         return Base::dataset_exists(basecall_model_path(bc_gr_1d, st));
     }
     /**
      * Get Basecall model file name for given Basecall group and given strand.
      */
-    std::string get_basecall_model_file(unsigned st, const std::string& _bc_gr = std::string()) const
+    std::string get_basecall_model_file(unsigned st, std::string const & _bc_gr = std::string()) const
     {
         std::string res;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
+        std::string const & bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         assert(Base::exists(basecall_model_file_path(bc_gr_1d, st)));
         Base::read(basecall_model_file_path(bc_gr_1d, st), res);
         return res;
     }
-    void add_basecall_model_file(unsigned st, const std::string& bc_gr, const std::string& file_name) const
+    void add_basecall_model_file(unsigned st, std::string const & bc_gr, std::string const & file_name) const
     {
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         std::string path = basecall_model_file_path(bc_gr_1d, st);
@@ -811,10 +860,10 @@ public:
     /**
      * Get Basecall model parameters for given Basecall group and given strand.
      */
-    Model_Parameters get_basecall_model_params(unsigned st, const std::string& _bc_gr = std::string()) const
+    Model_Parameters get_basecall_model_params(unsigned st, std::string const & _bc_gr = std::string()) const
     {
         Model_Parameters res;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
+        std::string const & bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         std::string path = basecall_model_path(bc_gr_1d, st);
         Base::read(path + "/scale", res.scale);
@@ -826,7 +875,7 @@ public:
         return res;
     }
     template < typename T >
-    void add_basecall_model_params(unsigned st, const std::string& bc_gr, const T& params) const
+    void add_basecall_model_params(unsigned st, std::string const & bc_gr, T const & params) const
     {
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         std::string path = basecall_model_path(bc_gr_1d, st);
@@ -840,10 +889,10 @@ public:
     /**
      * Get Basecall model for given Basecall group and given strand.
      */
-    std::vector< Model_Entry > get_basecall_model(unsigned st, const std::string& _bc_gr = std::string()) const
+    std::vector< Model_Entry > get_basecall_model(unsigned st, std::string const & _bc_gr = std::string()) const
     {
         std::vector< Model_Entry > res;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
+        std::string const & bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
         hdf5_tools::Compound_Map m;
         m.add_member("kmer", &Model_Entry::kmer);
         m.add_member("level_mean", &Model_Entry::level_mean);
@@ -858,7 +907,7 @@ public:
      * Add Basecall model
      */
     template < typename T >
-    void add_basecall_model(unsigned st, const std::string& bc_gr, const std::vector< T >& m) const
+    void add_basecall_model(unsigned st, std::string const & bc_gr, std::vector< T > const & m) const
     {
         hdf5_tools::Compound_Map cm;
         cm.add_member("kmer", &T::kmer);
@@ -872,10 +921,10 @@ public:
     /**
      * Check if Basecall events exist for given Basecall group and given strand.
      */
-    bool have_basecall_events(unsigned st, const std::string& _bc_gr = std::string()) const
+    bool have_basecall_events(unsigned st, std::string const & _bc_gr = std::string()) const
     {
         if (_bc_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
+        std::string const & bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         return (Base::dataset_exists(basecall_events_path(bc_gr_1d, st))
                 or Base::group_exists(basecall_events_pack_path(bc_gr_1d, st)));
@@ -891,10 +940,10 @@ public:
     /**
      * Get Basecall events for given Basecall group and given strand.
      */
-    std::vector< Event_Entry > get_basecall_events(unsigned st, const std::string& _bc_gr = std::string()) const
+    std::vector< Event_Entry > get_basecall_events(unsigned st, std::string const & _bc_gr = std::string()) const
     {
         std::vector< Event_Entry > res;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
+        std::string const & bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         if (have_basecall_events_unpack(st, bc_gr))
         {
@@ -911,12 +960,17 @@ public:
         else // have pack
         {
             auto ev_pack = get_basecall_events_pack(st, bc_gr);
+            if (not have_basecall_fastq(st, bc_gr))
+            {
+                throw std::invalid_argument("missing fastq for basecall events unpacking");
+            }
+            auto fq = get_basecall_fastq(st, bc_gr);
             if (not have_eventdetection_events(ev_pack.ed_gr))
             {
                 throw std::invalid_argument("missing evendetection events for basecall events unpacking");
             }
             auto ed = get_eventdetection_events(ev_pack.ed_gr);
-            res = unpack_ev(ev_pack, ed, _channel_id_params.sampling_rate);
+            res = unpack_ev(ev_pack, fq, ed, _channel_id_params.sampling_rate);
         }
         return res;
     }
@@ -924,7 +978,7 @@ public:
      * Add Basecall events
      */
     template < typename T >
-    void add_basecall_events(unsigned st, const std::string& bc_gr, const std::vector< T >& ev) const
+    void add_basecall_events(unsigned st, std::string const & bc_gr, std::vector< T > const & ev) const
     {
         hdf5_tools::Compound_Map cm;
         cm.add_member("mean", &T::mean);
@@ -945,8 +999,8 @@ public:
         ev_pack.skip_param = get_attr_map(p + "/Skip");
         Base::read(p + "/Move", ev_pack.move);
         ev_pack.move_param = get_attr_map(p + "/Move");
-        Base::read(p + "/Bases", ev_pack.bases);
-        ev_pack.bases_param = get_attr_map(p + "/Bases");
+        //Base::read(p + "/Bases", ev_pack.bases);
+        //ev_pack.bases_param = get_attr_map(p + "/Bases");
         Base::read(p + "/ed_gr", ev_pack.ed_gr);
         Base::read(p + "/start_time", ev_pack.start_time);
         Base::read(p + "/duration", ev_pack.duration);
@@ -960,17 +1014,17 @@ public:
         add_attr_map(p + "/Skip", ev_pack.skip_param);
         Base::write_dataset(p + "/Move", ev_pack.move);
         add_attr_map(p + "/Move", ev_pack.move_param);
-        Base::write_dataset(p + "/Bases", ev_pack.bases);
-        add_attr_map(p + "/Bases", ev_pack.bases_param);
+        //Base::write_dataset(p + "/Bases", ev_pack.bases);
+        //add_attr_map(p + "/Bases", ev_pack.bases_param);
         Base::write_attribute(p + "/ed_gr", ev_pack.ed_gr);
         Base::write_attribute(p + "/start_time", ev_pack.start_time);
         Base::write_attribute(p + "/duration", ev_pack.duration);
         Base::write_attribute(p + "/state_size", ev_pack.state_size);
     }
-    Basecall_Event_Parameters get_basecall_event_params(unsigned st, const std::string& _bc_gr = std::string()) const
+    Basecall_Event_Parameters get_basecall_event_params(unsigned st, std::string const & _bc_gr = std::string()) const
     {
         Basecall_Event_Parameters res;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
+        std::string const & bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(st).front();
         auto bc_gr_1d = get_basecall_group_1d(bc_gr);
         if (have_basecall_events_unpack(st, bc_gr_1d))
         {
@@ -1007,19 +1061,19 @@ public:
     /**
      * Check if Basecall event alignment exist for given Basecall group.
      */
-    bool have_basecall_event_alignment(const std::string& _bc_gr = std::string()) const
+    bool have_basecall_event_alignment(std::string const & _bc_gr = std::string()) const
     {
         if (_bc_gr.empty() and get_basecall_strand_group_list(2).empty()) return false;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(2).front();
+        std::string const & bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(2).front();
         return Base::dataset_exists(basecall_event_alignment_path(bc_gr));
     }
     /**
      * Get Basecall events for given Basecall group.
      */
-    std::vector< Event_Alignment_Entry > get_basecall_event_alignment(const std::string& _bc_gr = std::string()) const
+    std::vector< Event_Alignment_Entry > get_basecall_event_alignment(std::string const & _bc_gr = std::string()) const
     {
         std::vector< Event_Alignment_Entry > res;
-        const std::string& bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(2).front();
+        std::string const & bc_gr = not _bc_gr.empty()? _bc_gr : get_basecall_strand_group_list(2).front();
         hdf5_tools::Compound_Map m;
         m.add_member("template", &Event_Alignment_Entry::template_index);
         m.add_member("complement", &Event_Alignment_Entry::complement_index);
@@ -1031,7 +1085,7 @@ public:
     /**
      * Get basecall group holding 1d calls.
      */
-    std::string get_basecall_group_1d(const std::string& bc_gr) const
+    std::string get_basecall_group_1d(std::string const & bc_gr) const
     {
         std::string path = basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/basecall_1d";
         if (Base::attribute_exists(path))
@@ -1096,11 +1150,11 @@ public:
         return "";
     }
 
-    static std::string fq2seq(const std::string& fq)
+    static std::string fq2seq(std::string const & fq)
     {
         return split_fq(fq)[1];
     }
-    static std::array< std::string, 4 > split_fq(const std::string& fq)
+    static std::array< std::string, 4 > split_fq(std::string const & fq)
     {
         std::array< std::string, 4 > res = {{"", "", "", ""}};
         size_t i = 0;
@@ -1221,10 +1275,52 @@ public:
     }
 
     /**
+     * Pack basecall fastq
+     */
+    static Basecall_Fastq_Pack pack_fq(std::string const & fq, unsigned qv_bits = 5)
+    {
+        static unsigned const max_qv_bits = 5;
+        static std::uint8_t const max_qv = ((std::uint8_t)1 << max_qv_bits) - 1;
+        Basecall_Fastq_Pack fq_pack;
+        auto fqa = split_fq(fq);
+        fq_pack.read_name = fqa[0];
+        std::vector< std::int8_t > bp(fqa[1].begin(), fqa[1].end());
+        qv_bits = std::min(qv_bits, max_qv_bits);
+        auto qv_mask = max_qv & ((std::uint8_t)1 << (max_qv_bits - qv_bits));
+        fq_pack.qv_bits = qv_bits;
+        std::vector< std::uint8_t > qv;
+        for (auto c : fqa[3])
+        {
+            std::uint8_t val = (std::uint8_t)(c - 33);
+            val = std::min(val, max_qv);
+            val &= qv_mask;
+            qv.push_back(val);
+        }
+        std::tie(fq_pack.bp, fq_pack.bp_param) = fq_bp_coder().encode(bp, false);
+        std::tie(fq_pack.qv, fq_pack.qv_param) = fq_qv_coder().encode(qv, false);
+        return fq_pack;
+    }
+    static std::string unpack_fq(Basecall_Fastq_Pack const & fq_pack)
+    {
+        std::string res;
+        res += "@";
+        res += fq_pack.read_name;
+        res += "\n";
+        auto bp = fq_bp_coder().decode< std::int8_t >(fq_pack.bp, fq_pack.bp_param);
+        for (auto c : bp) res += c;
+        res += "\n+\n";
+        auto qv = fq_qv_coder().decode< std::uint8_t >(fq_pack.qv, fq_pack.qv_param);
+        for (auto c : qv) res += (char)33 + c;
+        res += "\n";
+        return res;
+    }
+
+    /**
      * Pack basecall events
      */
     static Basecall_Events_Pack pack_ev(
         std::vector< Event_Entry > const & ev,
+        std::string const & fq,
         Basecall_Event_Parameters const & ev_param,
         std::vector< EventDetection_Event_Entry > const & ed,
         std::string const & ed_gr,
@@ -1236,9 +1332,10 @@ public:
         ev_pack.duration = time_to_int(ev_param.duration, sampling_rate);
         ev_pack.state_size = ev[0].get_model_state().size();
 
+        auto fqa = split_fq(fq);
         std::vector< long long > skip;
         std::vector< std::uint8_t > mv;
-        std::vector< std::int8_t > bases;
+        std::string bases;
         long long j = 0;
         for (unsigned i = 0; i < ev.size(); ++i)
         {
@@ -1273,22 +1370,28 @@ public:
                 bases.push_back(c);
             }
         }
+        if (bases != fqa[1])
+        {
+            throw std::invalid_argument("pack_ev failed: sequence of states does not match fastq seq");
+        }
 
         std::tie(ev_pack.skip, ev_pack.skip_param) = ev_skip_coder().encode(skip, false);
         std::tie(ev_pack.move, ev_pack.move_param) = ev_move_coder().encode(mv, false);
-        std::tie(ev_pack.bases, ev_pack.bases_param) = ev_bases_coder().encode(bases, false);
         return ev_pack;
     }
 
     static std::vector< Event_Entry >
     unpack_ev(Basecall_Events_Pack const & ev_pack,
+              std::string const & fq,
               std::vector< EventDetection_Event_Entry > const & ed,
               double sampling_rate)
     {
         std::vector< Event_Entry > res;
         auto skip = ev_skip_coder().decode< long long >(ev_pack.skip, ev_pack.skip_param);
         auto mv = ev_move_coder().decode< std::uint8_t >(ev_pack.move, ev_pack.move_param);
-        auto bases = ev_bases_coder().decode< std::int8_t >(ev_pack.bases, ev_pack.bases_param);
+        //auto bases = ev_bases_coder().decode< std::int8_t >(ev_pack.bases, ev_pack.bases_param);
+        auto fqa = split_fq(fq);
+        auto const & bases = fqa[1];
         if (skip.size() != mv.size())
         {
             throw std::invalid_argument("unpack_ev failed: skip and move have different sizes");
@@ -1367,7 +1470,7 @@ private:
     {
         if (not Base::group_exists(eventdetection_root_path())) return;
         auto g_list = Base::list_group(eventdetection_root_path());
-        for (const auto& g : g_list)
+        for (auto const & g : g_list)
         {
             if (g.size() <= eventdetection_group_prefix().size()) continue;
             auto p = std::mismatch(eventdetection_group_prefix().begin(),
@@ -1378,13 +1481,13 @@ private:
         }
     }
 
-    std::vector< std::string > detect_eventdetection_read_name_list(const std::string& ed_gr) const
+    std::vector< std::string > detect_eventdetection_read_name_list(std::string const & ed_gr) const
     {
         std::vector< std::string > res;
         std::string p = eventdetection_root_path() + "/" + eventdetection_group_prefix() + ed_gr + "/Reads";
         if (not Base::group_exists(p)) return res;
         auto rn_list = Base::list_group(p);
-        for (const auto& rn : rn_list)
+        for (auto const & rn : rn_list)
         {
             if (Base::dataset_exists(eventdetection_events_path(ed_gr, rn))
                 or Base::group_exists(eventdetection_events_pack_path(ed_gr, rn)))
@@ -1399,7 +1502,7 @@ private:
     {
         if (not Base::group_exists(basecall_root_path())) return;
         auto g_list = Base::list_group(basecall_root_path());
-        for (const auto& g : g_list)
+        for (auto const & g : g_list)
         {
             if (g.size() <= basecall_group_prefix().size()) continue;
             auto p = std::mismatch(basecall_group_prefix().begin(),
@@ -1417,11 +1520,11 @@ private:
         }
     }
 
-    Attr_Map get_attr_map(const std::string& path) const
+    Attr_Map get_attr_map(std::string const & path) const
     {
         Attr_Map res;
         auto a_list = Base::get_attr_list(path);
-        for (const auto& a : a_list)
+        for (auto const & a : a_list)
         {
             std::string tmp;
             Base::read(path + "/" + a, tmp);
@@ -1446,114 +1549,119 @@ private:
     }
 
     // static paths
-    static const std::string& file_version_path()
+    static std::string const & file_version_path()
     {
         static const std::string _file_version_path = "/file_version";
         return _file_version_path;
     }
 
-    static const std::string& channel_id_path()
+    static std::string const & channel_id_path()
     {
         static const std::string _channel_id_path = "/UniqueGlobalKey/channel_id";
         return _channel_id_path;
     }
-    static const std::string& tracking_id_path()
+    static std::string const & tracking_id_path()
     {
         static const std::string _tracking_id_path = "/UniqueGlobalKey/tracking_id";
         return _tracking_id_path;
     }
-    static const std::string& raw_samples_root_path()
+    static std::string const & raw_samples_root_path()
     {
         static const std::string _raw_samples_root_path = "/Raw/Reads";
         return _raw_samples_root_path;
     }
-    static std::string raw_samples_params_path(const std::string& rn)
+    static std::string raw_samples_params_path(std::string const & rn)
     {
         return raw_samples_root_path() + "/" + rn;
     }
-    static std::string raw_samples_path(const std::string& rn)
+    static std::string raw_samples_path(std::string const & rn)
     {
         return raw_samples_root_path() + "/" + rn + "/Signal";
     }
-    static std::string raw_samples_pack_path(const std::string& rn)
+    static std::string raw_samples_pack_path(std::string const & rn)
     {
         return raw_samples_root_path() + "/" + rn + "/Signal_Pack";
     }
-    static const std::string& sequences_path()
+    static std::string const & sequences_path()
     {
         static const std::string _sequences_path = "/Sequences/Meta";
         return _sequences_path;
     }
-    static const std::string& eventdetection_root_path()
+    static std::string const & eventdetection_root_path()
     {
         static const std::string _eventdetection_root_path = "/Analyses";
         return _eventdetection_root_path;
     }
-    static const std::string& eventdetection_group_prefix()
+    static std::string const & eventdetection_group_prefix()
     {
         static const std::string _eventdetection_group_prefix = "EventDetection_";
         return _eventdetection_group_prefix;
     }
-    static std::string eventdetection_params_path(const std::string& ed_gr)
+    static std::string eventdetection_params_path(std::string const & ed_gr)
     {
         return eventdetection_root_path() + "/" + eventdetection_group_prefix() + ed_gr;
     }
-    static std::string eventdetection_event_params_path(const std::string& ed_gr, const std::string& rn)
+    static std::string eventdetection_event_params_path(std::string const & ed_gr, std::string const & rn)
     {
         return eventdetection_root_path() + "/" + eventdetection_group_prefix() + ed_gr + "/Reads/" + rn;
     }
-    static std::string eventdetection_events_path(const std::string& ed_gr, const std::string& rn)
+    static std::string eventdetection_events_path(std::string const & ed_gr, std::string const & rn)
     {
         return eventdetection_root_path() + "/" + eventdetection_group_prefix() + ed_gr + "/Reads/" + rn + "/Events";
     }
-    static std::string eventdetection_events_pack_path(const std::string& ed_gr, const std::string& rn)
+    static std::string eventdetection_events_pack_path(std::string const & ed_gr, std::string const & rn)
     {
         return eventdetection_root_path() + "/" + eventdetection_group_prefix() + ed_gr + "/Reads/" + rn + "/Events_Pack";
     }
 
-    static const std::string& basecall_root_path()
+    static std::string const & basecall_root_path()
     {
         static const std::string _basecall_root_path = "/Analyses";
         return _basecall_root_path;
     }
-    static const std::string& basecall_group_prefix()
+    static std::string const & basecall_group_prefix()
     {
         static const std::string _basecall_group_prefix = "Basecall_";
         return _basecall_group_prefix;
     }
-    static const std::string& basecall_strand_subgroup(unsigned st)
+    static std::string const & basecall_strand_subgroup(unsigned st)
     {
         static const std::array< std::string, 3 > _basecall_strand_subgroup =
             {{ "BaseCalled_template", "BaseCalled_complement", "BaseCalled_2D" }};
         return _basecall_strand_subgroup[st];
     }
-    static std::string basecall_fastq_path(const std::string& bc_gr, unsigned st)
+    static std::string basecall_fastq_path(std::string const & bc_gr, unsigned st)
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(st) + "/Fastq";
     }
-    static std::string basecall_model_path(const std::string& bc_gr, unsigned st)
+    static std::string basecall_fastq_pack_path(std::string const & bc_gr, unsigned st)
+    {
+        return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
+            + basecall_strand_subgroup(st) + "/Fastq_Pack";
+    }
+    static std::string basecall_model_path(std::string const & bc_gr, unsigned st)
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(st) + "/Model";
     }
-    static std::string basecall_model_file_path(const std::string& bc_gr, unsigned st)
+    static std::string basecall_model_file_path(std::string const & bc_gr, unsigned st)
     {
         assert(st < 2);
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr
             + "/Summary/basecall_1d_" + (st == 0? "template" : "complement") + "/model_file";
     }
-    static std::string basecall_events_path(const std::string& bc_gr, unsigned st)
+    static std::string basecall_events_path(std::string const & bc_gr, unsigned st)
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(st) + "/Events";
     }
-    static std::string basecall_events_pack_path(const std::string& bc_gr, unsigned st)
+    static std::string basecall_events_pack_path(std::string const & bc_gr, unsigned st)
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(st) + "/Events_Pack";
     }
-    static std::string basecall_event_alignment_path(const std::string& bc_gr)
+    static std::string basecall_event_alignment_path(std::string const & bc_gr)
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + bc_gr + "/"
             + basecall_strand_subgroup(2) + "/Alignment";
@@ -1659,20 +1767,35 @@ private:
         return _ev_move_coder;
     } // ev_move_coder()
 
-    static fast5_pack::Huffman_Coder & ev_bases_coder()
+    static fast5_pack::Huffman_Coder & fq_bp_coder()
     {
-        static fast5_pack::Huffman_Coder _ev_bases_coder;
+        static fast5_pack::Huffman_Coder _fq_bp_coder;
         static bool initialized = false;
         if (not initialized)
         {
             std::vector< std::string > tmp =
-#include "fast5_cwmap_ev_bases_1.inl"
+#include "fast5_cwmap_fq_bp_1.inl"
                 ;
-            _ev_bases_coder.load_codeword_map(tmp, "fast5_cwmap_ev_bases_1.inl");
+            _fq_bp_coder.load_codeword_map(tmp, "fast5_cwmap_fq_bp_1.inl");
             initialized = true;
         }
-        return _ev_bases_coder;
-    } // ev_move_coder()
+        return _fq_bp_coder;
+    } // fq_bp_coder()
+
+    static fast5_pack::Huffman_Coder & fq_qv_coder()
+    {
+        static fast5_pack::Huffman_Coder _fq_qv_coder;
+        static bool initialized = false;
+        if (not initialized)
+        {
+            std::vector< std::string > tmp =
+#include "fast5_cwmap_fq_qv_1.inl"
+                ;
+            _fq_qv_coder.load_codeword_map(tmp, "fast5_cwmap_fq_qv_1.inl");
+            initialized = true;
+        }
+        return _fq_qv_coder;
+    } // fq_qv_coder()
 
 }; // class File
 

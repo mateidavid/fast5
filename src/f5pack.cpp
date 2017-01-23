@@ -34,15 +34,16 @@ namespace opts
     static unsigned const max_qv_bits = 5;
     static std::uint8_t max_qv = ((std::uint8_t)1 << max_qv_bits) - 1;
     ValueArg< unsigned > qv_bits("", "qv-bits", "QV bits to keep.", false, max_qv_bits, "int", cmd_parser);
-    SwitchArg fq_drop("", "fq-drop", "Drop basecall fastq data.", cmd_parser);
-    SwitchArg fq_copy("", "fq-copy", "Copy basecall fastq data.", cmd_parser);
-    SwitchArg fq_unpack("", "fq-unpack", "Unpack basecall fatsq data.", cmd_parser);
-    SwitchArg fq_pack("", "fq-pack", "Pack basecall fastq data.", cmd_parser);
     //
     SwitchArg ev_drop("", "ev-drop", "Drop basecall event data.", cmd_parser);
     SwitchArg ev_copy("", "ev-copy", "Copy basecall event data.", cmd_parser);
     SwitchArg ev_unpack("", "ev-unpack", "Unpack basecall event data.", cmd_parser);
     SwitchArg ev_pack("", "ev-pack", "Pack basecall event data.", cmd_parser);
+    //
+    SwitchArg fq_drop("", "fq-drop", "Drop basecall fastq data.", cmd_parser);
+    SwitchArg fq_copy("", "fq-copy", "Copy basecall fastq data.", cmd_parser);
+    SwitchArg fq_unpack("", "fq-unpack", "Unpack basecall fatsq data.", cmd_parser);
+    SwitchArg fq_pack("", "fq-pack", "Pack basecall fastq data.", cmd_parser);
     //
     SwitchArg ed_drop("", "ed-drop", "Drop event detection data.", cmd_parser);
     SwitchArg ed_copy("", "ed-copy", "Copy event detection data.", cmd_parser);
@@ -62,20 +63,6 @@ namespace opts
     UnlabeledValueArg< string > input_fn("input", "Input fast5 file.", true, "", "file", cmd_parser);
     UnlabeledValueArg< string > output_fn("output", "Output fast5 file.", true, "", "file", cmd_parser);
 } // opts
-
-template < typename U, typename V >
-void print_map(ostream& os, const map< U, V >& m, const string& prefix)
-{
-    for (const auto& p : m)
-    {
-        os << prefix << p.first << "=" << p.second << endl;
-    }
-}
-
-unsigned time_int(double f, fast5::Channel_Id_Parameters const & channel_id_params)
-{
-    return f * channel_id_params.sampling_rate;
-}
 
 void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
 {

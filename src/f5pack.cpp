@@ -310,7 +310,7 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f)
                             << " fq_orig_qv_size=" << fqa[3].size() << endl;
                         exit(EXIT_FAILURE);
                     }
-                    auto qv_mask = opts::max_qv & ((std::uint8_t)1 << (5 - opts::qv_bits));
+                    auto qv_mask = opts::max_qv & (opts::max_qv << (opts::max_qv_bits - opts::qv_bits));
                     for (unsigned i = 0; i < fqa_unpack[3].size(); ++i)
                     {
                         if ((std::min((std::uint8_t)(fqa_unpack[3][i] - 33), opts::max_qv) & qv_mask) !=

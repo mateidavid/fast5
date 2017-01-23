@@ -1286,7 +1286,7 @@ public:
         fq_pack.read_name = fqa[0];
         std::vector< std::int8_t > bp(fqa[1].begin(), fqa[1].end());
         qv_bits = std::min(qv_bits, max_qv_bits);
-        auto qv_mask = max_qv & ((std::uint8_t)1 << (max_qv_bits - qv_bits));
+        auto qv_mask = max_qv & (max_qv << (max_qv_bits - qv_bits));
         fq_pack.qv_bits = qv_bits;
         std::vector< std::uint8_t > qv;
         for (auto c : fqa[3])

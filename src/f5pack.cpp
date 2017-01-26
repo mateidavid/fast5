@@ -30,7 +30,8 @@ namespace opts
     //ValueArg< unsigned > st("", "st", "Strand.", false, 0, "0|1|2", cmd_parser);
     //ValueArg< string > gr("", "gr", "Group name suffix.", false, "", "000|RNN_001|...", cmd_parser);
     //
-    //SwitchArg fq("", "fq", "Dump basecall fastq data.", cmd_parser);
+    ValueArg< unsigned > p_model_state_bits("", "p-model-state-bits", "P_Model_State bits to keep.", false, 2, "int", cmd_parser);
+    //
     static unsigned const max_qv_bits = 5;
     static std::uint8_t max_qv = ((std::uint8_t)1 << max_qv_bits) - 1;
     ValueArg< unsigned > qv_bits("", "qv-bits", "QV bits to keep.", false, max_qv_bits, "int", cmd_parser);
@@ -396,7 +397,8 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f)
                     exit(EXIT_FAILURE);
                 }
                 auto ed = src_f.get_eventdetection_events(ed_gr);
-                auto ev_pack = src_f.pack_ev(ev, fq, ev_param, ed, ed_gr, channel_id_params.sampling_rate);
+                auto ev_pack = src_f.pack_ev(ev, fq, ev_param, ed, ed_gr,
+                                             channel_id_params.sampling_rate, opts::p_model_state_bits);
                 if (opts::check)
                 {
                     auto ev_unpack = src_f.unpack_ev(ev_pack, fq, ed, channel_id_params.sampling_rate);

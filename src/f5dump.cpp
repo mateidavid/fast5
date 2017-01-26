@@ -209,7 +209,7 @@ void real_main()
             }
             auto bce = f.get_basecall_events(opts::st, opts::gr);
             cout
-                << "start\tlength\tmean\tstdv\tstate\tmove" << endl
+                << "start\tlength\tmean\tstdv\tstate\tmove\tp_model_state" << endl
                 << alg::os_join(bce, "\n", [&] (fast5::Event_Entry const & e) {
                         ostringstream oss;
                         oss.precision(opts::float_prec);
@@ -227,7 +227,8 @@ void real_main()
                             << e.mean << "\t"
                             << e.stdv << "\t"
                             << string(e.model_state.begin(), e.model_state.end()).data() << "\t"
-                            << e.move;
+                            << e.move << "\t"
+                            << e.p_model_state;
                         return oss.str();
                     })
                 << endl;

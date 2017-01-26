@@ -209,13 +209,14 @@ struct Basecall_Events_Pack
     Attr_Map skip_param;
     fast5_pack::Huffman_Coder::Code_Type move;
     Attr_Map move_param;
-    fast5_pack::Huffman_Coder::Code_Type bases;
-    Attr_Map bases_param;
+    fast5_pack::Huffman_Coder::Code_Type p_model_state;
+    Attr_Map p_model_state_param;
     //
     std::string ed_gr;
     long long start_time;
     long long duration;
     unsigned state_size;
+    unsigned p_model_state_bits;
 }; // struct Basecall_Events_Pack
 
 //
@@ -999,12 +1000,13 @@ public:
         ev_pack.skip_param = get_attr_map(p + "/Skip");
         Base::read(p + "/Move", ev_pack.move);
         ev_pack.move_param = get_attr_map(p + "/Move");
-        //Base::read(p + "/Bases", ev_pack.bases);
-        //ev_pack.bases_param = get_attr_map(p + "/Bases");
+        Base::read(p + "/P_Model_State", ev_pack.p_model_state);
+        ev_pack.p_model_state_param = get_attr_map(p + "/P_Model_State");
         Base::read(p + "/ed_gr", ev_pack.ed_gr);
         Base::read(p + "/start_time", ev_pack.start_time);
         Base::read(p + "/duration", ev_pack.duration);
         Base::read(p + "/state_size", ev_pack.state_size);
+        Base::read(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
         return ev_pack;
     }
     void add_basecall_events_pack(unsigned st, std::string const & gr, Basecall_Events_Pack const & ev_pack) const
@@ -1014,12 +1016,13 @@ public:
         add_attr_map(p + "/Skip", ev_pack.skip_param);
         Base::write_dataset(p + "/Move", ev_pack.move);
         add_attr_map(p + "/Move", ev_pack.move_param);
-        //Base::write_dataset(p + "/Bases", ev_pack.bases);
-        //add_attr_map(p + "/Bases", ev_pack.bases_param);
+        Base::write_dataset(p + "/P_Model_State", ev_pack.p_model_state);
+        add_attr_map(p + "/P_Model_State", ev_pack.p_model_state_param);
         Base::write_attribute(p + "/ed_gr", ev_pack.ed_gr);
         Base::write_attribute(p + "/start_time", ev_pack.start_time);
         Base::write_attribute(p + "/duration", ev_pack.duration);
         Base::write_attribute(p + "/state_size", ev_pack.state_size);
+        Base::write_attribute(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
     }
     Basecall_Event_Parameters get_basecall_event_params(unsigned st, std::string const & _gr = std::string()) const
     {
@@ -1324,17 +1327,20 @@ public:
         Basecall_Event_Parameters const & ev_param,
         std::vector< EventDetection_Event_Entry > const & ed,
         std::string const & ed_gr,
-        double sampling_rate)
+        double sampling_rate,
+        unsigned p_model_state_bits)
     {
         Basecall_Events_Pack ev_pack;
         ev_pack.ed_gr = ed_gr;
         ev_pack.start_time = time_to_int(ev_param.start_time, sampling_rate);
         ev_pack.duration = time_to_int(ev_param.duration, sampling_rate);
         ev_pack.state_size = ev[0].get_model_state().size();
+        ev_pack.p_model_state_bits = p_model_state_bits;
 
         auto fqa = split_fq(fq);
         std::vector< long long > skip;
         std::vector< std::uint8_t > mv;
+        std::vector< std::uint16_t > p_model_state;
         std::string bases;
         long long j = 0;
         for (unsigned i = 0; i < ev.size(); ++i)
@@ -1369,6 +1375,10 @@ public:
             {
                 bases.push_back(c);
             }
+            // p_model_state
+            std::uint16_t p_model_state_val = ev[i].p_model_state * (1u << p_model_state_bits);
+            if (p_model_state_val >= (1u << p_model_state_bits)) p_model_state_val = (1u << p_model_state_bits) - 1;
+            p_model_state.push_back(p_model_state_val);
         }
         if (bases != fqa[1])
         {
@@ -1377,6 +1387,7 @@ public:
 
         std::tie(ev_pack.skip, ev_pack.skip_param) = ev_skip_coder().encode(skip, false);
         std::tie(ev_pack.move, ev_pack.move_param) = ev_move_coder().encode(mv, false);
+        std::tie(ev_pack.p_model_state, ev_pack.p_model_state_param) = bit_packer().encode(p_model_state, p_model_state_bits);
         return ev_pack;
     }
 
@@ -1389,10 +1400,11 @@ public:
         std::vector< Event_Entry > res;
         auto skip = ev_skip_coder().decode< long long >(ev_pack.skip, ev_pack.skip_param);
         auto mv = ev_move_coder().decode< std::uint8_t >(ev_pack.move, ev_pack.move_param);
+        auto p_model_state = bit_packer().decode< std::uint16_t >(ev_pack.p_model_state, ev_pack.p_model_state_param);
         //auto bases = ev_bases_coder().decode< std::int8_t >(ev_pack.bases, ev_pack.bases_param);
         auto fqa = split_fq(fq);
         auto const & bases = fqa[1];
-        if (skip.size() != mv.size())
+        if (skip.size() != mv.size() or p_model_state.size() != mv.size())
         {
             throw std::invalid_argument("unpack_ev failed: skip and move have different sizes");
         }
@@ -1400,6 +1412,9 @@ public:
         long long j = 0;
         std::string s;
         unsigned bases_pos = 0;
+        unsigned p_model_state_bits;
+        std::istringstream(ev_pack.p_model_state_param.at("num_bits")) >> p_model_state_bits;
+        long long unsigned max_p_model_state_int = 1llu << p_model_state_bits;
         for (unsigned i = 0; i < res.size(); ++i)
         {
             j += skip[i] + 1;
@@ -1412,6 +1427,7 @@ public:
             while (s.size() < ev_pack.state_size) s += bases[bases_pos++];
             std::copy(s.begin(), s.end(), res[i].model_state.begin());
             if (ev_pack.state_size < MAX_K_LEN) res[i].model_state[ev_pack.state_size] = 0;
+            res[i].p_model_state = (double)p_model_state[i] / max_p_model_state_int;
         }
         return res;
     }
@@ -1683,12 +1699,6 @@ private:
             {
                 rec_copy_attributes(src_f, dst_f, path + "/" + sg);
             }
-            /*
-            else
-            {
-                std::clog << "skipping dataset: " << path + "/" + sg << std::endl;
-            }
-            */
         }
     } // rec_copy_attributes()
 
@@ -1737,36 +1747,6 @@ private:
         return _ed_len_coder;
     } // ed_len_coder()
 
-    static fast5_pack::Huffman_Coder & ev_skip_coder()
-    {
-        static fast5_pack::Huffman_Coder _ev_skip_coder;
-        static bool initialized = false;
-        if (not initialized)
-        {
-            std::vector< std::string > tmp =
-#include "fast5_cwmap_ev_skip_1.inl"
-                ;
-            _ev_skip_coder.load_codeword_map(tmp, "fast5_cwmap_ev_skip_1.inl");
-            initialized = true;
-        }
-        return _ev_skip_coder;
-    } // ev_skip_coder()
-
-    static fast5_pack::Huffman_Coder & ev_move_coder()
-    {
-        static fast5_pack::Huffman_Coder _ev_move_coder;
-        static bool initialized = false;
-        if (not initialized)
-        {
-            std::vector< std::string > tmp =
-#include "fast5_cwmap_ev_move_1.inl"
-                ;
-            _ev_move_coder.load_codeword_map(tmp, "fast5_cwmap_ev_move_1.inl");
-            initialized = true;
-        }
-        return _ev_move_coder;
-    } // ev_move_coder()
-
     static fast5_pack::Huffman_Coder & fq_bp_coder()
     {
         static fast5_pack::Huffman_Coder _fq_bp_coder;
@@ -1797,6 +1777,41 @@ private:
         return _fq_qv_coder;
     } // fq_qv_coder()
 
+    static fast5_pack::Huffman_Coder & ev_skip_coder()
+    {
+        static fast5_pack::Huffman_Coder _ev_skip_coder;
+        static bool initialized = false;
+        if (not initialized)
+        {
+            std::vector< std::string > tmp =
+#include "fast5_cwmap_ev_skip_1.inl"
+                ;
+            _ev_skip_coder.load_codeword_map(tmp, "fast5_cwmap_ev_skip_1.inl");
+            initialized = true;
+        }
+        return _ev_skip_coder;
+    } // ev_skip_coder()
+
+    static fast5_pack::Huffman_Coder & ev_move_coder()
+    {
+        static fast5_pack::Huffman_Coder _ev_move_coder;
+        static bool initialized = false;
+        if (not initialized)
+        {
+            std::vector< std::string > tmp =
+#include "fast5_cwmap_ev_move_1.inl"
+                ;
+            _ev_move_coder.load_codeword_map(tmp, "fast5_cwmap_ev_move_1.inl");
+            initialized = true;
+        }
+        return _ev_move_coder;
+    } // ev_move_coder()
+
+    static fast5_pack::Bit_Packer & bit_packer()
+    {
+        static fast5_pack::Bit_Packer _bit_packer;
+        return _bit_packer;
+    }
 }; // class File
 
 } // namespace fast5

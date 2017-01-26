@@ -247,12 +247,12 @@ int main(int argc, char* argv[])
                     }
                     if (st == 2)
                     {
-                        bool have_event_alignment = f.have_basecall_event_alignment();
-                        cout << "basecall(2)/have_event_alignment=" << have_event_alignment << endl;
-                        if (have_event_alignment)
+                        bool have_alignment = f.have_basecall_alignment();
+                        cout << "basecall(2)/have_alignment=" << have_alignment << endl;
+                        if (have_alignment)
                         {
-                            auto al = f.get_basecall_event_alignment();
-                            cout << "basecall(2)/event_alignment/size=" << al.size() << endl;
+                            auto al = f.get_basecall_alignment();
+                            cout << "basecall(2)/alignment/size=" << al.size() << endl;
                             for (const auto& e : al)
                             {
                                 cout << "  (template_index=" << e.template_index

@@ -243,12 +243,12 @@ void real_main()
                     })
                 << endl;
         } // if opts::ev
-        if (opts::al and f.have_basecall_event_alignment(opts::gr))
+        if (opts::al and f.have_basecall_alignment(opts::gr))
         {
-            auto aln = f.get_basecall_event_alignment(opts::gr);
+            auto aln = f.get_basecall_alignment(opts::gr);
             cout
                 << "template\tcomplement\tkmer" << endl
-                << alg::os_join(aln, "\n", [&] (fast5::Event_Alignment_Entry const & a) {
+                << alg::os_join(aln, "\n", [&] (fast5::Basecall_Alignment_Entry const & a) {
                         ostringstream oss;
                         oss << a.template_index << "\t"
                             << a.complement_index << "\t"

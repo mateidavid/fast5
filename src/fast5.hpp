@@ -208,7 +208,7 @@ struct Basecall_Events_Pack
     Attr_Map skip_param;
     fast5_pack::Huffman_Coder::Code_Type move;
     Attr_Map move_param;
-    fast5_pack::Huffman_Coder::Code_Type p_model_state;
+    fast5_pack::Bit_Packer::Code_Type p_model_state;
     Attr_Map p_model_state_param;
     //
     std::string ed_gr;
@@ -222,20 +222,32 @@ struct Basecall_Events_Pack
 // This struct represents a template-to-complement
 // match that is emitted by ONT's 2D basecaller
 //
-struct Event_Alignment_Entry
+struct Basecall_Alignment_Entry
 {
     long long template_index;
     long long complement_index;
     std::array< char, MAX_K_LEN > kmer;
     std::string get_kmer() const { return array_to_string(kmer); }
-    friend bool operator == (Event_Alignment_Entry const & lhs, Event_Alignment_Entry const & rhs)
+    friend bool operator == (Basecall_Alignment_Entry const & lhs, Basecall_Alignment_Entry const & rhs)
     {
         return lhs.template_index == rhs.template_index
             and lhs.complement_index == rhs.complement_index
             and lhs.kmer == rhs.kmer;
     }
-}; // struct Event_Alignment_Entry
+}; // struct Basecall_Alignment_Entry
 
+struct Basecall_Alignment_Pack
+{
+    fast5_pack::Bit_Packer::Code_Type template_step;
+    fast5_pack::Bit_Packer::Code_Params_Type template_step_params;
+    fast5_pack::Bit_Packer::Code_Type complement_step;
+    fast5_pack::Bit_Packer::Code_Params_Type complement_step_params;
+    fast5_pack::Huffman_Coder::Code_Type move;
+    fast5_pack::Huffman_Coder::Code_Params_Type move_params;
+    unsigned template_index_start;
+    unsigned complement_index_start;
+    unsigned kmer_size;
+};
 
 class File
     : private hdf5_tools::File
@@ -347,10 +359,15 @@ public:
         return get_attr_map(sequences_path());
     }
 
+    //
+    // Raw Samples
+    //
+
     /**
      * Get list of raw samples read names.
      */
-    std::vector< std::string > const & get_raw_samples_read_name_list() const
+    std::vector< std::string > const &
+    get_raw_samples_read_name_list() const
     {
         return _raw_samples_read_name_list;
     }
@@ -358,7 +375,8 @@ public:
      * Check if raw samples exist.
      * If _rn non-empty, check if raw samples exist for given read.
      */
-    bool have_raw_samples(std::string const & _rn = std::string()) const
+    bool
+    have_raw_samples(std::string const & _rn = std::string()) const
     {
         if (not have_channel_id_params())
         {
@@ -375,18 +393,21 @@ public:
             return rn_d.count(_rn) > 0;
         }
     }
-    bool have_raw_samples_unpack(std::string const & rn) const
+    bool
+    have_raw_samples_unpack(std::string const & rn) const
     {
         return Base::dataset_exists(raw_samples_path(rn));
     }
-    bool have_raw_samples_pack(std::string const & rn) const
+    bool
+    have_raw_samples_pack(std::string const & rn) const
     {
         return Base::group_exists(raw_samples_pack_path(rn));
     }
     /**
      * Get raw samples attributes for given read name (default: first read name).
      */
-    Raw_Samples_Parameters get_raw_samples_params(std::string const & _rn = std::string()) const
+    Raw_Samples_Parameters
+    get_raw_samples_params(std::string const & _rn = std::string()) const
     {
         Raw_Samples_Parameters res;
         std::string const rn = not _rn.empty()? _rn : get_raw_samples_read_name_list().front();
@@ -398,7 +419,8 @@ public:
         Base::read(p + "/duration", res.duration);
         return res;
     }
-    void add_raw_samples_params(std::string const & rn, Raw_Samples_Parameters const & params) const
+    void
+    add_raw_samples_params(std::string const & rn, Raw_Samples_Parameters const & params) const
     {
         std::string p = raw_samples_params_path(rn);
         Base::write_attribute(p + "/read_id", params.read_id);
@@ -410,26 +432,37 @@ public:
     /**
      * Get raw samples for given read name as ints (default: first read name).
      */
-    std::vector< Raw_Samples_Int_Entry > get_raw_samples_int(std::string const & _rn = std::string()) const
+    std::vector< Raw_Samples_Int_Entry >
+    get_raw_samples_int(std::string const & _rn = std::string()) const
     {
         // get raw samples
         std::vector< Raw_Samples_Int_Entry > res;
         std::string const rn = not _rn.empty()? _rn : get_raw_samples_read_name_list().front();
-        if (Base::dataset_exists(raw_samples_path(rn)))
+        if (have_raw_samples_unpack(rn))
         {
             Base::read(raw_samples_path(rn), res);
         }
-        else
+        else if (have_raw_samples_pack(rn))
         {
-            auto rsp = get_raw_samples_pack(rn);
-            res = unpack_rw(rsp);
+            auto rs_pack = get_raw_samples_pack(rn);
+            res = unpack_rw(rs_pack);
         }
         return res;
     }
     /**
+     * Add raw samples.
+     */
+    void
+    add_raw_samples(std::string const & rn,
+                    std::vector< Raw_Samples_Int_Entry > const & rs) const
+    {
+        Base::write_dataset(raw_samples_path(rn), rs);
+    }
+    /**
      * Get raw samples for given read name (default: first read name).
      */
-    std::vector< Raw_Samples_Entry > get_raw_samples(std::string const & _rn = std::string()) const
+    std::vector< Raw_Samples_Entry >
+    get_raw_samples(std::string const & _rn = std::string()) const
     {
         // get raw samples
         auto raw_samples_int = get_raw_samples_int(_rn);
@@ -442,107 +475,76 @@ public:
         }
         return res;
     }
-    Raw_Samples_Pack get_raw_samples_pack(std::string const & rn) const
+    Raw_Samples_Pack
+    get_raw_samples_pack(std::string const & rn) const
     {
-        Raw_Samples_Pack rsp;
-        Base::read(raw_samples_pack_path(rn) + "/Signal", rsp.signal);
-        rsp.signal_param = get_attr_map(raw_samples_pack_path(rn) + "/Signal");
-        return rsp;
+        Raw_Samples_Pack rs_pack;
+        Base::read(raw_samples_pack_path(rn) + "/Signal", rs_pack.signal);
+        rs_pack.signal_param = get_attr_map(raw_samples_pack_path(rn) + "/Signal");
+        return rs_pack;
     }
-    /**
-     * Add raw samples.
-     */
-    void add_raw_samples_int(std::string const & rn, std::vector< Raw_Samples_Int_Entry > const & rs) const
+    void
+    add_raw_samples(std::string const & rn,
+                    Raw_Samples_Pack const & rs_pack) const
     {
-        Base::write_dataset(raw_samples_path(rn), rs);
+        Base::write_dataset(raw_samples_pack_path(rn) + "/Signal", rs_pack.signal);
+        add_attr_map(raw_samples_pack_path(rn) + "/Signal", rs_pack.signal_param);
     }
-    /**
-     * Add packed raw smaples.
-     */
-    void add_raw_samples_pack(std::string const & rn, Raw_Samples_Pack const & rsp) const
-    {
-        Base::write_dataset(raw_samples_pack_path(rn) + "/Signal", rsp.signal);
-        add_attr_map(raw_samples_pack_path(rn) + "/Signal", rsp.signal_param);
-    }
+
+    //
+    // EventDetection groups
+    //
 
     /**
      * Get list of EventDetection groups.
      */
-    std::vector< std::string > const & get_eventdetection_group_list() const
+    std::vector< std::string > const &
+    get_eventdetection_group_list() const
     {
         return _eventdetection_group_list;
     }
     /**
      * Check if any EventDetection groups exist.
      */
-    bool have_eventdetection_groups() const
+    bool
+    have_eventdetection_groups() const
     {
         return not get_eventdetection_group_list().empty();
     }
     /**
+     * Get EventDetection params for given EventDetection group (default: first EventDetection group).
+     */
+    Attr_Map
+    get_eventdetection_params(std::string const & _gr = std::string()) const
+    {
+        std::string const & gr = not _gr.empty()? _gr : get_eventdetection_group_list().front();
+        return get_attr_map(eventdetection_params_path(gr));
+    }
+    void
+    add_eventdetection_params(std::string const & gr, Attr_Map const & am) const
+    {
+        add_attr_map(eventdetection_params_path(gr), am);
+    }
+
+    //
+    // EventDetection events
+    //
+
+    /**
      * Get list of reads for given EventDetection group (default: first EventDetection group).
      */
-    std::vector< std::string > get_eventdetection_read_name_list(std::string const & _gr = std::string()) const
+    std::vector< std::string >
+    get_eventdetection_read_name_list(std::string const & _gr = std::string()) const
     {
         std::string const & gr = not _gr.empty()? _gr : get_eventdetection_group_list().front();
         return detect_eventdetection_read_name_list(gr);
     }
     /**
-     * Check if EventDetection events exist.
-     * If _gr given: check if events exist for given group; else: check first EventDetection group.
-     * If _rn given: check if events exist for given group and read name.
-     */
-    bool have_eventdetection_events(
-        std::string const & _gr = std::string(),
-        std::string const & _rn = std::string()) const
-    {
-        std::string gr;
-        if (_gr.empty())
-        {
-            auto gr_l = get_eventdetection_group_list();
-            if (gr_l.empty()) return false;
-            gr = gr_l.front();
-        }
-        else
-        {
-            gr = _gr;
-        }
-        auto rn_l = get_eventdetection_read_name_list(gr);
-        if (_rn.empty())
-        {
-            return not rn_l.empty();
-        }
-        else
-        {
-            std::set< std::string > rn_d(rn_l.begin(), rn_l.end());
-            return rn_d.count(_rn) > 0;
-        }
-    }
-    bool have_eventdetection_events_unpack(std::string const & gr, std::string const & rn) const
-    {
-        return Base::dataset_exists(eventdetection_events_path(gr, rn));
-    }
-    bool have_eventdetection_events_pack(std::string const & gr, std::string const & rn) const
-    {
-        return Base::group_exists(eventdetection_events_pack_path(gr, rn));
-    }
-    /**
-     * Get EventDetection params for given EventDetection group (default: first EventDetection group).
-     */
-    Attr_Map get_eventdetection_params(std::string const & _gr = std::string()) const
-    {
-        std::string const & gr = not _gr.empty()? _gr : get_eventdetection_group_list().front();
-        return get_attr_map(eventdetection_params_path(gr));
-    }
-    void add_eventdetection_params(std::string const & gr, Attr_Map const & am) const
-    {
-        add_attr_map(eventdetection_params_path(gr), am);
-    }
-    /**
      * Get EventDetection event params for given EventDetection group, and given read name
      * (default: first EventDetection group, and first read name in it).
      */
-    EventDetection_Event_Parameters get_eventdetection_event_params(
+    EventDetection_Event_Parameters
+    get_eventdetection_event_params(
         std::string const & _gr = std::string(), std::string const & _rn = std::string()) const
     {
         EventDetection_Event_Parameters res;
@@ -579,8 +581,10 @@ public:
         }
         return res;
     }
-    void add_eventdetection_event_params(std::string const & gr, std::string const & rn,
-                                         EventDetection_Event_Parameters const & ede_params) const
+    void
+    add_eventdetection_event_params(
+        std::string const & gr, std::string const & rn,
+        EventDetection_Event_Parameters const & ede_params) const
     {
         auto p = eventdetection_event_params_path(gr, rn);
         if (not ede_params.read_id.empty()) Base::write_attribute(p + "/read_id", ede_params.read_id);
@@ -593,9 +597,51 @@ public:
         if (ede_params.abasic_found < 2) Base::write_attribute(p + "/abasic_found", ede_params.abasic_found);
     }
     /**
+     * Check if EventDetection events exist.
+     * If _gr given: check if events exist for given group; else: check first EventDetection group.
+     * If _rn given: check if events exist for given group and read name.
+     */
+    bool
+    have_eventdetection_events(
+        std::string const & _gr = std::string(), std::string const & _rn = std::string()) const
+    {
+        std::string gr;
+        if (_gr.empty())
+        {
+            auto gr_l = get_eventdetection_group_list();
+            if (gr_l.empty()) return false;
+            gr = gr_l.front();
+        }
+        else
+        {
+            gr = _gr;
+        }
+        auto rn_l = get_eventdetection_read_name_list(gr);
+        if (_rn.empty())
+        {
+            return not rn_l.empty();
+        }
+        else
+        {
+            std::set< std::string > rn_d(rn_l.begin(), rn_l.end());
+            return rn_d.count(_rn) > 0;
+        }
+    }
+    bool
+    have_eventdetection_events_unpack(std::string const & gr, std::string const & rn) const
+    {
+        return Base::dataset_exists(eventdetection_events_path(gr, rn));
+    }
+    bool
+    have_eventdetection_events_pack(std::string const & gr, std::string const & rn) const
+    {
+        return Base::group_exists(eventdetection_events_pack_path(gr, rn));
+    }
+    /**
      * Get EventDetection events for given EventDetection group, and given read name.
      */
-    std::vector< EventDetection_Event_Entry > get_eventdetection_events(
+    std::vector< EventDetection_Event_Entry >
+    get_eventdetection_events(
         std::string const & _gr = std::string(), std::string const & _rn = std::string()) const
     {
         std::vector< EventDetection_Event_Entry > res;
@@ -650,7 +696,8 @@ public:
         }
         return res;
     } // get_eventdetection_events()
-    void add_eventdetection_events(
+    void
+    add_eventdetection_events(
         std::string const & gr, std::string const & rn,
         std::vector< EventDetection_Event_Entry > const & ed) const
     {
@@ -661,69 +708,87 @@ public:
         m.add_member("stdv", &EventDetection_Event_Entry::stdv);
         Base::write_dataset(eventdetection_events_path(gr, rn), ed, m);
     }
-    EventDetection_Events_Pack get_eventdetection_events_pack(
+    EventDetection_Events_Pack
+    get_eventdetection_events_pack(
         std::string const & gr, std::string const & rn) const
     {
-        EventDetection_Events_Pack edp;
-        Base::read(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip);
-        edp.skip_param = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip");
-        Base::read(eventdetection_events_pack_path(gr, rn) + "/Len", edp.len);
-        edp.len_param = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len");
-        return edp;
+        EventDetection_Events_Pack ed_pack;
+        Base::read(eventdetection_events_pack_path(gr, rn) + "/Skip", ed_pack.skip);
+        ed_pack.skip_param = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip");
+        Base::read(eventdetection_events_pack_path(gr, rn) + "/Len", ed_pack.len);
+        ed_pack.len_param = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len");
+        return ed_pack;
     }
-    void add_eventdetection_events_pack(
+    void
+    add_eventdetection_events(
         std::string const & gr, std::string const & rn,
-        EventDetection_Events_Pack const & edp) const
+        EventDetection_Events_Pack const & ed_pack) const
     {
-        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip);
-        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip", edp.skip_param);
-        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Len", edp.len);
-        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len", edp.len_param);
+        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Skip", ed_pack.skip);
+        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip", ed_pack.skip_param);
+        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Len", ed_pack.len);
+        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len", ed_pack.len_param);
     }
+
+    //
+    // Basecall groups
+    //
 
     /**
      * Get list of all Basecall groups.
      */
-    std::vector< std::string > const & get_basecall_group_list() const
+    std::vector< std::string > const &
+    get_basecall_group_list() const
     {
         return _basecall_group_list;
     }
     /**
      * Check if any Basecall groups exist.
      */
-    bool have_basecall_groups() const
+    bool
+    have_basecall_groups() const
     {
         return not get_basecall_group_list().empty();
     }
     /**
      * Get list of Basecall groups for given strand.
      */
-    std::vector< std::string > const & get_basecall_strand_group_list(unsigned st) const
+    std::vector< std::string > const &
+    get_basecall_strand_group_list(unsigned st) const
     {
         return _basecall_strand_group_list[st];
     }
     /**
      * Check if any Basecall groups exist for given strand.
      */
-    bool have_basecall_strand_groups(unsigned st) const
+    bool
+    have_basecall_strand_groups(unsigned st) const
     {
         return not get_basecall_strand_group_list(st).empty();
     }
     /**
      * Get Basecall group params for given Basecall group.
      */
-    Attr_Map get_basecall_params(std::string const & gr) const
+    Attr_Map
+    get_basecall_params(std::string const & gr) const
     {
         return get_attr_map(basecall_root_path() + "/" + basecall_group_prefix() + gr);
     }
-    void add_basecall_params(std::string const & gr, Attr_Map const & am) const
+    void
+    add_basecall_params(std::string const & gr, Attr_Map const & am) const
     {
         add_attr_map(basecall_root_path() + "/" + basecall_group_prefix() + gr, am);
     }
+
+    //
+    // Basecall log
+    //
+
     /**
      * Check if Basecall log exists for given Basecall group.
      */
-    bool have_basecall_log(std::string const & gr) const
+    bool
+    have_basecall_log(std::string const & gr) const
     {
         std::string path = basecall_root_path() + "/" + basecall_group_prefix() + gr + "/Log";
         return Base::exists(path);
@@ -731,34 +796,44 @@ public:
     /**
      * Get Basecall log for given Basecall group.
      */
-    std::string get_basecall_log(std::string const & gr) const
+    std::string
+    get_basecall_log(std::string const & gr) const
     {
         std::string res;
         std::string path = basecall_root_path() + "/" + basecall_group_prefix() + gr + "/Log";
         Base::read(path, res);
         return res;
     }
+
+    //
+    // Basecall fastq
+    //
+
     /**
      * Check if Basecall fastq exists for given Basecall group and given strand.
      */
-    bool have_basecall_fastq(unsigned st, std::string const & _gr = std::string()) const
+    bool
+    have_basecall_fastq(unsigned st, std::string const & _gr = std::string()) const
     {
         if (_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
         return have_basecall_fastq_unpack(st, gr) or have_basecall_fastq_pack(st, gr);
     }
-    bool have_basecall_fastq_unpack(unsigned st, std::string const & gr) const
+    bool
+    have_basecall_fastq_unpack(unsigned st, std::string const & gr) const
     {
         return Base::dataset_exists(basecall_fastq_path(gr, st));
     }
-    bool have_basecall_fastq_pack(unsigned st, std::string const & gr) const
+    bool
+    have_basecall_fastq_pack(unsigned st, std::string const & gr) const
     {
         return Base::group_exists(basecall_fastq_pack_path(gr, st));
     }
     /**
      * Get Basecall fastq for given Basecall group and given strand.
      */
-    std::string get_basecall_fastq(unsigned st, std::string const & _gr = std::string()) const
+    std::string
+    get_basecall_fastq(unsigned st, std::string const & _gr = std::string()) const
     {
         std::string res;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
@@ -776,11 +851,13 @@ public:
     /**
      * Add Basecall fastq
      */
-    void add_basecall_fastq(unsigned st, std::string const & gr, std::string const & fq) const
+    void
+    add_basecall_fastq(unsigned st, std::string const & gr, std::string const & fq) const
     {
         Base::write(basecall_fastq_path(gr, st), true, fq);
     }
-    Basecall_Fastq_Pack get_basecall_fastq_pack(unsigned st, std::string const & gr) const
+    Basecall_Fastq_Pack
+    get_basecall_fastq_pack(unsigned st, std::string const & gr) const
     {
         Basecall_Fastq_Pack fq_pack;
         auto p = basecall_fastq_pack_path(gr, st);
@@ -792,7 +869,8 @@ public:
         Base::read(p + "/qv_bits", fq_pack.qv_bits);
         return fq_pack;        
     }
-    void add_basecall_fastq_pack(unsigned st, std::string const & gr, Basecall_Fastq_Pack const & fq_pack) const
+    void
+    add_basecall_fastq(unsigned st, std::string const & gr, Basecall_Fastq_Pack const & fq_pack) const
     {
         auto p = basecall_fastq_pack_path(gr, st);
         Base::write_dataset(p + "/BP", fq_pack.bp);
@@ -805,22 +883,25 @@ public:
     /**
      * Check if Basecall seq exists for given Basecall group and given strand.
      */
-    bool have_basecall_seq(unsigned st, std::string const & _gr = std::string()) const
+    bool
+    have_basecall_seq(unsigned st, std::string const & _gr = std::string()) const
     {
         return have_basecall_fastq(st, _gr);
     }
     /**
      * Get Basecall sequence for given Basecall group and given strand.
      */
-    std::string get_basecall_seq(unsigned st, std::string const & _gr = std::string()) const
+    std::string
+    get_basecall_seq(unsigned st, std::string const & _gr = std::string()) const
     {
         return fq2seq(get_basecall_fastq(st, _gr));
     }
     /**
      * Add Basecall seq
      */
-    void add_basecall_seq(unsigned st, std::string const & gr,
-                          std::string const & name, std::string const & seq, int default_qual = 33) const
+    void
+    add_basecall_seq(unsigned st, std::string const & gr,
+                     std::string const & name, std::string const & seq, int default_qual = 33) const
     {
         std::ostringstream oss;
         oss << '@' << name << std::endl
@@ -829,10 +910,16 @@ public:
             << std::string(seq.size(), static_cast< char >(default_qual));
         add_basecall_fastq(st, gr, oss.str());
     }
+
+    //
+    // Basecall model
+    //
+
     /**
      * Check if Basecall model exist for given Basecall group and given strand.
      */
-    bool have_basecall_model(unsigned st, std::string const & _gr = std::string()) const
+    bool
+    have_basecall_model(unsigned st, std::string const & _gr = std::string()) const
     {
         if (_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
@@ -842,7 +929,8 @@ public:
     /**
      * Get Basecall model file name for given Basecall group and given strand.
      */
-    std::string get_basecall_model_file(unsigned st, std::string const & _gr = std::string()) const
+    std::string
+    get_basecall_model_file(unsigned st, std::string const & _gr = std::string()) const
     {
         std::string res;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
@@ -851,7 +939,8 @@ public:
         Base::read(basecall_model_file_path(gr_1d, st), res);
         return res;
     }
-    void add_basecall_model_file(unsigned st, std::string const & gr, std::string const & file_name) const
+    void
+    add_basecall_model_file(unsigned st, std::string const & gr, std::string const & file_name) const
     {
         auto gr_1d = get_basecall_group_1d(gr);
         std::string path = basecall_model_file_path(gr_1d, st);
@@ -860,7 +949,8 @@ public:
     /**
      * Get Basecall model parameters for given Basecall group and given strand.
      */
-    Model_Parameters get_basecall_model_params(unsigned st, std::string const & _gr = std::string()) const
+    Model_Parameters
+    get_basecall_model_params(unsigned st, std::string const & _gr = std::string()) const
     {
         Model_Parameters res;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
@@ -875,7 +965,8 @@ public:
         return res;
     }
     template < typename T >
-    void add_basecall_model_params(unsigned st, std::string const & gr, T const & params) const
+    void
+    add_basecall_model_params(unsigned st, std::string const & gr, T const & params) const
     {
         auto gr_1d = get_basecall_group_1d(gr);
         std::string path = basecall_model_path(gr_1d, st);
@@ -889,7 +980,8 @@ public:
     /**
      * Get Basecall model for given Basecall group and given strand.
      */
-    std::vector< Model_Entry > get_basecall_model(unsigned st, std::string const & _gr = std::string()) const
+    std::vector< Model_Entry >
+    get_basecall_model(unsigned st, std::string const & _gr = std::string()) const
     {
         std::vector< Model_Entry > res;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
@@ -918,10 +1010,16 @@ public:
         auto gr_1d = get_basecall_group_1d(gr);
         Base::write(basecall_model_path(gr_1d, st), true, m, cm);
     }
+
+    //
+    // Basecall events
+    //
+
     /**
      * Check if Basecall events exist for given Basecall group and given strand.
      */
-    bool have_basecall_events(unsigned st, std::string const & _gr = std::string()) const
+    bool
+    have_basecall_events(unsigned st, std::string const & _gr = std::string()) const
     {
         if (_gr.empty() and get_basecall_strand_group_list(st).empty()) return false;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
@@ -929,18 +1027,61 @@ public:
         return (Base::dataset_exists(basecall_events_path(gr_1d, st))
                 or Base::group_exists(basecall_events_pack_path(gr_1d, st)));
     }
-    bool have_basecall_events_unpack(unsigned st, std::string const & gr) const
+    bool
+    have_basecall_events_unpack(unsigned st, std::string const & gr) const
     {
         return Base::dataset_exists(basecall_events_path(get_basecall_group_1d(gr), st));
     }
-    bool have_basecall_events_pack(unsigned st, std::string const & gr) const
+    bool
+    have_basecall_events_pack(unsigned st, std::string const & gr) const
     {
         return Base::group_exists(basecall_events_pack_path(get_basecall_group_1d(gr), st));
+    }
+    Basecall_Event_Parameters
+    get_basecall_event_params(unsigned st, std::string const & _gr = std::string()) const
+    {
+        Basecall_Event_Parameters res;
+        std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
+        auto gr_1d = get_basecall_group_1d(gr);
+        if (have_basecall_events_unpack(st, gr_1d))
+        {
+            auto p = basecall_events_path(gr_1d, st);
+            auto params = get_attr_map(p);
+            if (params.count("start_time")) std::istringstream(params["start_time"]) >> res.start_time;
+            else res.start_time = 0.0;
+            if (params.count("duration")) std::istringstream(params["duration"]) >> res.duration;
+            else res.duration = 0.0;
+        }
+        else if (have_basecall_events_pack(st, gr_1d))
+        {
+            auto p = basecall_events_pack_path(gr_1d, st);
+            Basecall_Events_Pack ev_pack;
+            Base::read(p + "/start_time", ev_pack.start_time);
+            Base::read(p + "/duration", ev_pack.duration);
+            res.start_time = time_to_float(ev_pack.start_time, _channel_id_params.sampling_rate);
+            res.duration = time_to_float(ev_pack.duration, _channel_id_params.sampling_rate);
+        }
+        return res;
+    }
+    void
+    add_basecall_event_params(
+        unsigned st, std::string const & gr,
+        Basecall_Event_Parameters const & bce_param) const
+    {
+        auto gr_1d = get_basecall_group_1d(gr);
+        auto p = basecall_events_path(gr_1d, st);
+        if (not Base::dataset_exists(p))
+        {
+            throw std::invalid_argument("basecall events must be added before their params");
+        }
+        Base::write_attribute(p + "/start_time", bce_param.start_time);
+        Base::write_attribute(p + "/duration", bce_param.duration);
     }
     /**
      * Get Basecall events for given Basecall group and given strand.
      */
-    std::vector< Event_Entry > get_basecall_events(unsigned st, std::string const & _gr = std::string()) const
+    std::vector< Event_Entry >
+    get_basecall_events(unsigned st, std::string const & _gr = std::string()) const
     {
         std::vector< Event_Entry > res;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
@@ -978,7 +1119,8 @@ public:
      * Add Basecall events
      */
     template < typename T >
-    void add_basecall_events(unsigned st, std::string const & gr, std::vector< T > const & ev) const
+    void
+    add_basecall_events(unsigned st, std::string const & gr, std::vector< T > const & ev) const
     {
         hdf5_tools::Compound_Map cm;
         cm.add_member("mean", &T::mean);
@@ -991,7 +1133,8 @@ public:
         auto gr_1d = get_basecall_group_1d(gr);
         Base::write(basecall_events_path(gr_1d, st), true, ev, cm);
     }
-    Basecall_Events_Pack get_basecall_events_pack(unsigned st, std::string const & gr) const
+    Basecall_Events_Pack
+    get_basecall_events_pack(unsigned st, std::string const & gr) const
     {
         auto p = basecall_events_pack_path(gr, st);
         Basecall_Events_Pack ev_pack;
@@ -1008,7 +1151,8 @@ public:
         Base::read(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
         return ev_pack;
     }
-    void add_basecall_events_pack(unsigned st, std::string const & gr, Basecall_Events_Pack const & ev_pack) const
+    void
+    add_basecall_events(unsigned st, std::string const & gr, Basecall_Events_Pack const & ev_pack) const
     {
         auto p = basecall_events_pack_path(gr, st);
         Base::write_dataset(p + "/Skip", ev_pack.skip);
@@ -1023,65 +1167,100 @@ public:
         Base::write_attribute(p + "/state_size", ev_pack.state_size);
         Base::write_attribute(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
     }
-    Basecall_Event_Parameters get_basecall_event_params(unsigned st, std::string const & _gr = std::string()) const
-    {
-        Basecall_Event_Parameters res;
-        std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(st).front();
-        auto gr_1d = get_basecall_group_1d(gr);
-        if (have_basecall_events_unpack(st, gr_1d))
-        {
-            auto p = basecall_events_path(gr_1d, st);
-            auto params = get_attr_map(p);
-            if (params.count("start_time")) std::istringstream(params["start_time"]) >> res.start_time;
-            else res.start_time = 0.0;
-            if (params.count("duration")) std::istringstream(params["duration"]) >> res.duration;
-            else res.duration = 0.0;
-        }
-        else if (have_basecall_events_pack(st, gr_1d))
-        {
-            auto p = basecall_events_pack_path(gr_1d, st);
-            Basecall_Events_Pack ev_pack;
-            Base::read(p + "/start_time", ev_pack.start_time);
-            Base::read(p + "/duration", ev_pack.duration);
-            res.start_time = time_to_float(ev_pack.start_time, _channel_id_params.sampling_rate);
-            res.duration = time_to_float(ev_pack.duration, _channel_id_params.sampling_rate);
-        }
-        return res;
-    }
-    void add_basecall_event_params(unsigned st, std::string const & gr,
-                                   Basecall_Event_Parameters const & bce_param) const
-    {
-        auto gr_1d = get_basecall_group_1d(gr);
-        auto p = basecall_events_path(gr_1d, st);
-        if (not Base::dataset_exists(p))
-        {
-            throw std::invalid_argument("basecall events must be added before their params");
-        }
-        Base::write_attribute(p + "/start_time", bce_param.start_time);
-        Base::write_attribute(p + "/duration", bce_param.duration);
-    }
+
+    //
+    // Basecall alignment
+    //
+
     /**
-     * Check if Basecall event alignment exist for given Basecall group.
+     * Check if Basecall alignment exist for given Basecall group.
      */
-    bool have_basecall_event_alignment(std::string const & _gr = std::string()) const
+    bool
+    have_basecall_alignment(std::string const & _gr = std::string()) const
     {
         if (_gr.empty() and get_basecall_strand_group_list(2).empty()) return false;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(2).front();
-        return Base::dataset_exists(basecall_event_alignment_path(gr));
+        return have_basecall_alignment_unpack(gr) or have_basecall_alignment_pack(gr);
+    }
+    bool
+    have_basecall_alignment_unpack(std::string const & gr) const
+    {
+        return Base::dataset_exists(basecall_alignment_path(gr));
+    }
+    bool
+    have_basecall_alignment_pack(std::string const & gr) const
+    {
+        return Base::group_exists(basecall_alignment_pack_path(gr));
     }
     /**
-     * Get Basecall events for given Basecall group.
+     * Get Basecall alignments for given Basecall group.
      */
-    std::vector< Event_Alignment_Entry > get_basecall_event_alignment(std::string const & _gr = std::string()) const
+    std::vector< Basecall_Alignment_Entry >
+    get_basecall_alignment(std::string const & _gr = std::string()) const
     {
-        std::vector< Event_Alignment_Entry > res;
+        std::vector< Basecall_Alignment_Entry > al;
         std::string const & gr = not _gr.empty()? _gr : get_basecall_strand_group_list(2).front();
+        if (have_basecall_alignment_unpack(gr))
+        {
+            al = get_basecall_alignment_unpack(gr);
+        }
+        else if (have_basecall_alignment_pack(gr))
+        {
+            auto al_pack = get_basecall_alignment_pack(gr);
+            auto seq = get_basecall_seq(2, gr);
+            al = unpack_al(al_pack, seq);
+        }
+        return al;
+    }
+    std::vector< Basecall_Alignment_Entry >
+    get_basecall_alignment_unpack(std::string const & gr) const
+    {
+        std::vector< Basecall_Alignment_Entry > res;
         hdf5_tools::Compound_Map m;
-        m.add_member("template", &Event_Alignment_Entry::template_index);
-        m.add_member("complement", &Event_Alignment_Entry::complement_index);
-        m.add_member("kmer", &Event_Alignment_Entry::kmer);
-        Base::read(basecall_event_alignment_path(gr), res, m);
+        m.add_member("template", &Basecall_Alignment_Entry::template_index);
+        m.add_member("complement", &Basecall_Alignment_Entry::complement_index);
+        m.add_member("kmer", &Basecall_Alignment_Entry::kmer);
+        Base::read(basecall_alignment_path(gr), res, m);
         return res;
+    }
+    void
+    add_basecall_alignment(std::string const & gr, std::vector< Basecall_Alignment_Entry > const & al) const
+    {
+        hdf5_tools::Compound_Map m;
+        m.add_member("template", &Basecall_Alignment_Entry::template_index);
+        m.add_member("complement", &Basecall_Alignment_Entry::complement_index);
+        m.add_member("kmer", &Basecall_Alignment_Entry::kmer);
+        Base::write_dataset(basecall_alignment_path(gr), al, m);
+    }
+    Basecall_Alignment_Pack
+    get_basecall_alignment_pack(std::string const & gr) const
+    {
+        Basecall_Alignment_Pack al_pack;
+        auto p = basecall_alignment_pack_path(gr);
+        Base::read(p + "/Template_Step", al_pack.template_step);
+        al_pack.template_step_params = get_attr_map(p + "/Template_Step");
+        Base::read(p + "/Complement_Step", al_pack.complement_step);
+        al_pack.complement_step_params = get_attr_map(p + "/Complement_Step");
+        Base::read(p + "/Move", al_pack.move);
+        al_pack.move_params = get_attr_map(p + "/Move");
+        Base::read(p + "/template_index_start", al_pack.template_index_start);
+        Base::read(p + "/complement_index_start", al_pack.complement_index_start);
+        Base::read(p + "/kmer_size", al_pack.kmer_size);
+        return al_pack;
+    }
+    void
+    add_basecall_alignment(std::string const & gr, Basecall_Alignment_Pack const & al_pack) const
+    {
+        auto p = basecall_alignment_pack_path(gr);
+        Base::write_dataset(p + "/Template_Step", al_pack.template_step);
+        add_attr_map(p + "/Template_Step", al_pack.template_step_params);
+        Base::write_dataset(p + "/Complement_Step", al_pack.complement_step);
+        add_attr_map(p + "/Complement_Step", al_pack.complement_step_params);
+        Base::write_dataset(p + "/Move", al_pack.move);
+        add_attr_map(p + "/Move", al_pack.move_params);
+        Base::write_attribute(p + "/template_index_start", al_pack.template_index_start);
+        Base::write_attribute(p + "/complement_index_start", al_pack.complement_index_start);
+        Base::write_attribute(p + "/kmer_size", al_pack.kmer_size);
     }
 
     /**
@@ -1388,7 +1567,7 @@ public:
         std::tie(ev_pack.move, ev_pack.move_param) = ev_move_coder().encode(mv, false);
         std::tie(ev_pack.p_model_state, ev_pack.p_model_state_param) = bit_packer().encode(p_model_state, p_model_state_bits);
         return ev_pack;
-    }
+    } // pack_ev()
 
     static std::vector< Event_Entry >
     unpack_ev(Basecall_Events_Pack const & ev_pack,
@@ -1429,7 +1608,131 @@ public:
             res[i].p_model_state = (double)p_model_state[i] / max_p_model_state_int;
         }
         return res;
-    }
+    } // unpack_ev()
+
+    static Basecall_Alignment_Pack
+    pack_al(
+        std::vector< Basecall_Alignment_Entry > const & al,
+        std::string const & seq)
+    {
+        Basecall_Alignment_Pack al_pack;
+        std::array< std::vector< uint8_t > , 2 > step_v;
+        std::vector< int8_t > mv;
+        step_v[0].reserve(al.size());
+        step_v[1].reserve(al.size());
+        mv.reserve(al.size());
+        std::array< int, 2 > start_index = {{ -1, -1 }};
+        std::array< int, 2 > next_index = {{ -1, -1 }};
+        std::array< int, 2 > delta = {{ 1, -1 }};
+        auto get_idx = [&] (unsigned i, unsigned k) {
+            return k == 0? al[i].template_index : al[i].complement_index;
+        };
+        unsigned pos = 0;
+        for (unsigned i = 0; i < al.size(); ++i)
+        {
+            for (unsigned k = 0; k < 2; ++k)
+            {
+                auto idx = get_idx(i, k);
+                if (idx >= 0)
+                {
+                    if (start_index[k] < 0)
+                    {
+                        start_index[k] = idx;
+                        next_index[k] = idx;
+                    }
+                    if (idx != next_index[k])
+                    {
+                        throw std::invalid_argument("pack_al failed: unexpected index");
+                    }
+                    step_v[k].push_back(1);
+                    next_index[k] += delta[k];
+                }
+                else // idx < 0
+                {
+                    step_v[k].push_back(0);
+                }
+            }
+            // compute move
+            auto kmer = al[i].get_kmer();
+            size_t next_pos = seq.find(kmer, pos);
+            if (next_pos == std::string::npos)
+            {
+                throw std::invalid_argument("pack_al failed: cannot find kmer in 2d seq");
+            }
+            if (next_pos - pos > std::numeric_limits< int8_t >::max())
+            {
+                throw std::invalid_argument("pack_al failed: move too large");
+            }
+            mv.push_back(next_pos - pos);
+            pos = next_pos;
+        }
+        if (start_index[0] < 0)
+        {
+            throw std::invalid_argument("pack_al failed: no template events");
+        }
+        if (start_index[1] < 0)
+        {
+            throw std::invalid_argument("pack_al failed: no complement events");
+        }
+        al_pack.template_index_start = start_index[0];
+        al_pack.complement_index_start = start_index[1];
+        al_pack.kmer_size = al[0].get_kmer().size();
+        std::tie(al_pack.template_step, al_pack.template_step_params) = bit_packer().encode(step_v[0], 1);
+        std::tie(al_pack.complement_step, al_pack.complement_step_params) = bit_packer().encode(step_v[1], 1);
+        std::tie(al_pack.move, al_pack.move_params) = ev_move_coder().encode(mv, false);
+        return al_pack;
+    } // pack_al()
+
+    static std::vector< Basecall_Alignment_Entry >
+    unpack_al(
+        Basecall_Alignment_Pack const & al_pack,
+        std::string const & seq)
+    {
+        std::vector< Basecall_Alignment_Entry > al;
+        std::array< std::vector< uint8_t >, 2 > step_v =
+            {{ bit_packer().decode< uint8_t >(al_pack.template_step, al_pack.template_step_params),
+               bit_packer().decode< uint8_t >(al_pack.complement_step, al_pack.complement_step_params) }};
+        auto mv = ev_move_coder().decode< int8_t >(al_pack.move, al_pack.move_params);
+        if (step_v[1].size() != step_v[0].size()
+            or mv.size() != step_v[0].size())
+        {
+            throw std::invalid_argument("unpack_al failed: mismatching size");
+        }
+        al.resize(step_v[0].size());
+        std::array< unsigned, 2 > crt_index = {{ al_pack.template_index_start, al_pack.complement_index_start }};
+        std::array< int, 2 > delta = {{ 1, -1 }};
+        auto pos = 0;
+        auto set_idx = [&] (unsigned i, unsigned k, int val) {
+            if (k == 0)
+            {
+                al[i].template_index = val;
+            }
+            else
+            {
+                al[i].complement_index = val;
+            }
+        };
+        for (unsigned i = 0; i < step_v[0].size(); ++i)
+        {
+            for (unsigned k = 0; k < 2; ++k)
+            {
+                if (step_v[k][i] > 0)
+                {
+                    set_idx(i, k, crt_index[k]);
+                    crt_index[k] += delta[k];
+                }
+                else
+                {
+                    set_idx(i, k, -1);
+                }
+            }
+            // set kmer
+            pos += mv[i];
+            std::copy(seq.begin() + pos, seq.begin() + pos + al_pack.kmer_size, al[i].kmer.begin());
+            if (al_pack.kmer_size < MAX_K_LEN) al[i].kmer[al_pack.kmer_size] = 0;
+        }
+        return al;
+    } // unpack_al()
 
     static long long time_to_int(double tf, double sampling_rate)
     {
@@ -1470,8 +1773,8 @@ private:
     void detect_raw_samples_read_name_list()
     {
         if (not Base::group_exists(raw_samples_root_path())) return;
-        auto rn_list = Base::list_group(raw_samples_root_path());
-        for (auto const & rn : rn_list)
+        auto rn_l = Base::list_group(raw_samples_root_path());
+        for (auto const & rn : rn_l)
         {
             if (Base::dataset_exists(raw_samples_path(rn))
                 or Base::group_exists(raw_samples_pack_path(rn)))
@@ -1484,8 +1787,8 @@ private:
     void detect_eventdetection_group_list()
     {
         if (not Base::group_exists(eventdetection_root_path())) return;
-        auto g_list = Base::list_group(eventdetection_root_path());
-        for (auto const & g : g_list)
+        auto gr_l = Base::list_group(eventdetection_root_path());
+        for (auto const & g : gr_l)
         {
             if (g.size() <= eventdetection_group_prefix().size()) continue;
             auto p = std::mismatch(eventdetection_group_prefix().begin(),
@@ -1501,8 +1804,8 @@ private:
         std::vector< std::string > res;
         std::string p = eventdetection_root_path() + "/" + eventdetection_group_prefix() + gr + "/Reads";
         if (not Base::group_exists(p)) return res;
-        auto rn_list = Base::list_group(p);
-        for (auto const & rn : rn_list)
+        auto rn_l = Base::list_group(p);
+        for (auto const & rn : rn_l)
         {
             if (Base::dataset_exists(eventdetection_events_path(gr, rn))
                 or Base::group_exists(eventdetection_events_pack_path(gr, rn)))
@@ -1516,8 +1819,8 @@ private:
     void detect_basecall_group_list()
     {
         if (not Base::group_exists(basecall_root_path())) return;
-        auto g_list = Base::list_group(basecall_root_path());
-        for (auto const & g : g_list)
+        auto gr_l = Base::list_group(basecall_root_path());
+        for (auto const & g : gr_l)
         {
             if (g.size() <= basecall_group_prefix().size()) continue;
             auto p = std::mismatch(basecall_group_prefix().begin(),
@@ -1538,8 +1841,8 @@ private:
     Attr_Map get_attr_map(std::string const & path) const
     {
         Attr_Map res;
-        auto a_list = Base::get_attr_list(path);
-        for (auto const & a : a_list)
+        auto a_l = Base::get_attr_list(path);
+        for (auto const & a : a_l)
         {
             std::string tmp;
             Base::read(path + "/" + a, tmp);
@@ -1595,7 +1898,7 @@ private:
     }
     static std::string raw_samples_pack_path(std::string const & rn)
     {
-        return raw_samples_root_path() + "/" + rn + "/Signal_Pack";
+        return raw_samples_path(rn) + "_Pack";
     }
     static std::string const & sequences_path()
     {
@@ -1626,7 +1929,7 @@ private:
     }
     static std::string eventdetection_events_pack_path(std::string const & gr, std::string const & rn)
     {
-        return eventdetection_root_path() + "/" + eventdetection_group_prefix() + gr + "/Reads/" + rn + "/Events_Pack";
+        return eventdetection_events_path(gr, rn) + "_Pack";
     }
 
     static std::string const & basecall_root_path()
@@ -1652,8 +1955,7 @@ private:
     }
     static std::string basecall_fastq_pack_path(std::string const & gr, unsigned st)
     {
-        return basecall_root_path() + "/" + basecall_group_prefix() + gr + "/"
-            + basecall_strand_subgroup(st) + "/Fastq_Pack";
+        return basecall_fastq_path(gr, st) + "_Pack";
     }
     static std::string basecall_model_path(std::string const & gr, unsigned st)
     {
@@ -1673,13 +1975,16 @@ private:
     }
     static std::string basecall_events_pack_path(std::string const & gr, unsigned st)
     {
-        return basecall_root_path() + "/" + basecall_group_prefix() + gr + "/"
-            + basecall_strand_subgroup(st) + "/Events_Pack";
+        return basecall_events_path(gr, st) + "_Pack";
     }
-    static std::string basecall_event_alignment_path(std::string const & gr)
+    static std::string basecall_alignment_path(std::string const & gr)
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + gr + "/"
             + basecall_strand_subgroup(2) + "/Alignment";
+    }
+    static std::string basecall_alignment_pack_path(std::string const & gr)
+    {
+        return basecall_alignment_path(gr) + "_Pack";
     }
 
     static void rec_copy_attributes(File const & src_f, File const & dst_f, std::string const & path)

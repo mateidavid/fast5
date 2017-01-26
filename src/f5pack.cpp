@@ -36,6 +36,11 @@ namespace opts
     static std::uint8_t max_qv = ((std::uint8_t)1 << max_qv_bits) - 1;
     ValueArg< unsigned > qv_bits("", "qv-bits", "QV bits to keep.", false, max_qv_bits, "int", cmd_parser);
     //
+    SwitchArg al_drop("", "al-drop", "Drop basecall alignment data.", cmd_parser);
+    SwitchArg al_copy("", "al-copy", "Copy basecall alignment data.", cmd_parser);
+    SwitchArg al_unpack("", "al-unpack", "Unpack basecall alignment data.", cmd_parser);
+    SwitchArg al_pack("", "al-pack", "Pack basecall alignment data.", cmd_parser);
+    //
     SwitchArg ev_drop("", "ev-drop", "Drop basecall event data.", cmd_parser);
     SwitchArg ev_copy("", "ev-copy", "Copy basecall event data.", cmd_parser);
     SwitchArg ev_unpack("", "ev-unpack", "Unpack basecall event data.", cmd_parser);
@@ -81,7 +86,7 @@ void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
                 LOG(error)
                     << "check_failed rs_unpack.size=" << rs_unpack.size()
                     << " rs_orig.size=" << rsi.size() << endl;
-                exit(EXIT_FAILURE);
+                abort();
             }
             for (unsigned i = 0; i < rs_unpack.size(); ++i)
             {
@@ -91,12 +96,12 @@ void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
                         << "check_failed i=" << i
                         << " rs_unpack=" << rs_unpack[i]
                         << " rs_orig=" << rsi[i] << endl;
-                    exit(EXIT_FAILURE);
+                    abort();
                 }
             }
         }
         dst_f.add_raw_samples_params(rn, rs_params);
-        dst_f.add_raw_samples_pack(rn, rs_pack);
+        dst_f.add_raw_samples(rn, rs_pack);
         LOG(info)
             << "rn=" << rn
             << " rs_size=" << rsi.size()
@@ -113,7 +118,7 @@ void do_unpack_rw(fast5::File const & src_f, fast5::File const & dst_f)
         auto rs_params = src_f.get_raw_samples_params(rn);
         auto rsi = src_f.get_raw_samples_int(rn);
         dst_f.add_raw_samples_params(rn, rs_params);
-        dst_f.add_raw_samples_int(rn, rsi);
+        dst_f.add_raw_samples(rn, rsi);
     }
 } // do_unpack_rw()
 void do_copy_rw(fast5::File const & src_f, fast5::File const & dst_f)
@@ -126,12 +131,12 @@ void do_copy_rw(fast5::File const & src_f, fast5::File const & dst_f)
         if (src_f.have_raw_samples_unpack(rn))
         {
             auto rsi = src_f.get_raw_samples_int(rn);
-            dst_f.add_raw_samples_int(rn, rsi);
+            dst_f.add_raw_samples(rn, rsi);
         }
         else if (src_f.have_raw_samples_pack(rn))
         {
             auto p = src_f.get_raw_samples_pack(rn);
-            dst_f.add_raw_samples_pack(rn, p);
+            dst_f.add_raw_samples(rn, p);
         }
     }
 } // do_copy_rw()
@@ -151,7 +156,7 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
             if (src_f.have_eventdetection_events_pack(gr, rn))
             {
                 auto ed_pack = src_f.get_eventdetection_events_pack(gr, rn);
-                dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
+                dst_f.add_eventdetection_events(gr, rn, ed_pack);
             }
             else if (src_f.have_eventdetection_events(gr, rn))
             {
@@ -168,7 +173,7 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                             << "check_failed gr=" << gr
                             << " ed_unpack.size=" << ed_unpack.size()
                             << " ed_orig.size=" << ed.size() << endl;
-                        exit(EXIT_FAILURE);
+                        abort();
                     }
                     for (unsigned i = 0; i + 1 < ed_unpack.size(); ++i) // skip last event
                     {
@@ -201,11 +206,11 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                                 << "," << ed[i].mean
                                 << "," << ed[i].stdv
                                 << ")" << endl;
-                            exit(EXIT_FAILURE);
+                            abort();
                         }
                     }
                 } // if check
-                dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
+                dst_f.add_eventdetection_events(gr, rn, ed_pack);
                 LOG(info)
                     << "gr=" << gr
                     << " rn=" << rn
@@ -256,7 +261,7 @@ void do_copy_ed(fast5::File const & src_f, fast5::File const & dst_f)
             else if (src_f.have_eventdetection_events_pack(gr, rn))
             {
                 auto ed_pack = src_f.get_eventdetection_events_pack(gr, rn);
-                dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
+                dst_f.add_eventdetection_events(gr, rn, ed_pack);
             }
         }
     }
@@ -273,7 +278,7 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
             {
                 bc_gr_s.insert(gr);
                 auto fq_pack = src_f.get_basecall_fastq_pack(st, gr);
-                dst_f.add_basecall_fastq_pack(st, gr, fq_pack);
+                dst_f.add_basecall_fastq(st, gr, fq_pack);
             }
             else if (src_f.have_basecall_fastq_unpack(st, gr))
             {
@@ -292,7 +297,7 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                             << " gr=" << gr
                             << " fq_unpack_name=" << fqa_unpack[0]
                             << " fq_orig_name=" << fqa[0] << endl;
-                        exit(EXIT_FAILURE);
+                        abort();
                     }
                     if (fqa_unpack[1] != fqa[1])
                     {
@@ -301,7 +306,7 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                             << " gr=" << gr
                             << " fq_unpack_bp=" << fqa_unpack[1]
                             << " fq_orig_bp=" << fqa[1] << endl;
-                        exit(EXIT_FAILURE);
+                        abort();
                     }
                     if (fqa_unpack[3].size() != fqa[3].size())
                     {
@@ -310,7 +315,7 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                             << " gr=" << gr
                             << " fq_unpack_qv_size=" << fqa_unpack[3].size()
                             << " fq_orig_qv_size=" << fqa[3].size() << endl;
-                        exit(EXIT_FAILURE);
+                        abort();
                     }
                     auto qv_mask = opts::max_qv & (opts::max_qv << (opts::max_qv_bits - opts::qv_bits));
                     for (unsigned i = 0; i < fqa_unpack[3].size(); ++i)
@@ -319,16 +324,16 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                             (std::min((std::uint8_t)(fqa[3][i] - 33), opts::max_qv) & qv_mask))
                         {
                             LOG(error)
-                            << "check_failed st=" << st
-                            << " gr=" << gr
-                            << " i=" << i
-                            << " fq_unpack_qv=" << fqa_unpack[3][i]
-                            << " fq_orig_qv=" << fqa[3][i] << endl;
-                            exit(EXIT_FAILURE);
+                                << "check_failed st=" << st
+                                << " gr=" << gr
+                                << " i=" << i
+                                << " fq_unpack_qv=" << fqa_unpack[3][i]
+                                << " fq_orig_qv=" << fqa[3][i] << endl;
+                            abort();
                         }
                     }
                 }
-                dst_f.add_basecall_fastq_pack(st, gr, fq_pack);
+                dst_f.add_basecall_fastq(st, gr, fq_pack);
                 LOG(info)
                     << "gr=" << gr
                     << " st=" << st
@@ -375,7 +380,7 @@ void do_copy_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
             {
                 bc_gr_s.insert(gr);
                 auto fq_pack = src_f.get_basecall_fastq_pack(st, gr);
-                dst_f.add_basecall_fastq_pack(st, gr, fq_pack);
+                dst_f.add_basecall_fastq(st, gr, fq_pack);
             }
         }
     }
@@ -392,7 +397,7 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
             {
                 bc_gr_s.insert(gr);
                 auto ev_pack = src_f.get_basecall_events_pack(st, gr);
-                dst_f.add_basecall_events_pack(st, gr, ev_pack);
+                dst_f.add_basecall_events(st, gr, ev_pack);
             }
             else if (src_f.have_basecall_events_unpack(st, gr))
             {
@@ -406,7 +411,7 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                 {
                     LOG(error)
                         << "missing fastq for basecall events: st=" << st << " gr=" << gr << endl;
-                    exit(EXIT_FAILURE);
+                    abort();
                 }
                 auto fq = src_f.get_basecall_fastq(st, gr);
                 // ed group
@@ -415,7 +420,7 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                 {
                     LOG(error)
                         << "missing eventdetection events for basecall events: st=" << st << " gr=" << gr << endl;
-                    exit(EXIT_FAILURE);
+                    abort();
                 }
                 auto ed = src_f.get_eventdetection_events(ed_gr);
                 auto ev_pack = src_f.pack_ev(ev, fq, ev_param, ed, ed_gr,
@@ -430,7 +435,7 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                             << " gr=" << gr
                             << " ev_unpack.size=" << ev_unpack.size()
                             << " ev_orig.size=" << ev.size() << endl;
-                        exit(EXIT_FAILURE);
+                        abort();
                     }
                     for (unsigned i = 0; i < ev_unpack.size(); ++i)
                     {
@@ -458,11 +463,11 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                                 << "," << ev[i].move
                                 << "," << ev[i].get_model_state()
                                 << ")" << endl;
-                            exit(EXIT_FAILURE);
+                            abort();
                         }
                     }
                 }
-                dst_f.add_basecall_events_pack(st, gr, ev_pack);
+                dst_f.add_basecall_events(st, gr, ev_pack);
                 LOG(info)
                     << "gr=" << gr
                     << " st=" << st
@@ -514,11 +519,112 @@ void do_copy_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
             {
                 bc_gr_s.insert(gr);
                 auto ev_pack = src_f.get_basecall_events_pack(st, gr);
-                dst_f.add_basecall_events_pack(st, gr, ev_pack);
+                dst_f.add_basecall_events(st, gr, ev_pack);
             }
         }
     }
 } // do_copy_ev
+
+void do_pack_al(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+{
+    auto gr_l = src_f.get_basecall_strand_group_list(2);
+    for (auto const & gr : gr_l)
+    {
+        if (src_f.have_basecall_alignment_pack(gr))
+        {
+            bc_gr_s.insert(gr);
+            auto al_pack = src_f.get_basecall_alignment_pack(gr);
+            dst_f.add_basecall_alignment(gr, al_pack);
+        }
+        else if (src_f.have_basecall_alignment_unpack(gr))
+        {
+            bc_gr_s.insert(gr);
+            auto al = src_f.get_basecall_alignment(gr);
+            // basecall seq
+            if (not src_f.have_basecall_seq(2, gr))
+            {
+                LOG(error)
+                    << "missing fastq for basecall alignment: gr=" << gr << endl;
+                abort();
+            }
+            auto seq = src_f.get_basecall_seq(2, gr);
+            auto al_pack = src_f.pack_al(al, seq);
+            if (opts::check)
+            {
+                auto al_unpack = src_f.unpack_al(al_pack, seq);
+                if (al_unpack.size() != al.size())
+                {
+                    LOG(error)
+                        << "check_failed gr=" << gr
+                        << " al_unpack.size=" << al_unpack.size()
+                        << " al_orig.size=" << al.size() << endl;
+                    abort();
+                }
+                for (unsigned i = 0; i < al.size(); ++i)
+                {
+                    if (al_unpack[i].template_index != al[i].template_index
+                        or al_unpack[i].complement_index != al[i].complement_index
+                        or al_unpack[i].get_kmer() != al[i].get_kmer())
+                    {
+                        LOG(error)
+                            << "check_failed gr=" << gr
+                            << " i=" << i
+                            << " al_unpack=(" << al_unpack[i].template_index
+                            << "," << al_unpack[i].complement_index
+                            << "," << al_unpack[i].get_kmer()
+                            << ") al_orig=(" << al[i].template_index
+                            << "," << al[i].complement_index
+                            << "," << al[i].get_kmer()
+                            << ")" << endl;
+                        abort();
+                    }
+                }
+            }
+            dst_f.add_basecall_alignment(gr, al_pack);
+            LOG(info)
+                << "gr=" << gr
+                << " al_size=" << al.size()
+                << " template_step_bits=" << al_pack.template_step_params.at("num_bits")
+                << " complement_step_bits=" << al_pack.complement_step_params.at("num_bits")
+                << " move_bits=" << al_pack.move_params.at("avg_bits")
+                << endl;
+        }
+    }
+} // do_pack_al()
+
+void do_unpack_al(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+{
+    auto gr_l = src_f.get_basecall_strand_group_list(2);
+    for (auto const & gr : gr_l)
+    {
+        if (src_f.have_basecall_alignment(gr))
+        {
+            bc_gr_s.insert(gr);
+            auto al = src_f.get_basecall_alignment(gr);
+            dst_f.add_basecall_alignment(gr, al);
+        }
+    }
+} // do_unpack_al
+
+void do_copy_al(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+{
+    auto gr_l = src_f.get_basecall_strand_group_list(2);
+    for (auto const & gr : gr_l)
+    {
+        if (src_f.have_basecall_alignment_unpack(gr))
+        {
+            bc_gr_s.insert(gr);
+            auto al = src_f.get_basecall_alignment(gr);
+            dst_f.add_basecall_alignment(gr, al);
+        }
+        else if (src_f.have_basecall_alignment_pack(gr))
+        {
+            bc_gr_s.insert(gr);
+            auto al_pack = src_f.get_basecall_alignment_pack(gr);
+            dst_f.add_basecall_alignment(gr, al_pack);
+        }
+    }
+} // do_copy_al
 
 void do_copy_basecall_params(fast5::File const & src_f, fast5::File const & dst_f, set< string > const & bc_gr_s)
 {
@@ -596,6 +702,19 @@ void real_main()
         {
             do_copy_ev(src_f, dst_f, bc_gr_s);
         }
+        // process basecall alignments
+        if (opts::al_pack)
+        {
+            do_pack_al(src_f, dst_f, bc_gr_s);
+        }
+        else if (opts::al_unpack)
+        {
+            do_unpack_al(src_f, dst_f, bc_gr_s);
+        }
+        else if (opts::al_copy)
+        {
+            do_copy_al(src_f, dst_f, bc_gr_s);
+        }
         // copy basecall params
         do_copy_basecall_params(src_f, dst_f, bc_gr_s);
         // close files
@@ -646,11 +765,18 @@ int main(int argc, char * argv[])
         LOG(error) << "at most one of --ev-pack/--ev-unpack/--ev-copy/--ev-drop may be given" << endl;
         exit(EXIT_FAILURE);
     }
+    if (opts::al_pack + opts::al_unpack + opts::al_copy + opts::al_drop > 1)
+    {
+        LOG(error) << "at most one of --al-pack/--al-unpack/--al-copy/--al-drop may be given" << endl;
+        exit(EXIT_FAILURE);
+    }
     if (opts::pack + opts::unpack
         + opts::rw_pack + opts::rw_unpack + opts::rw_copy + opts::rw_drop
         + opts::ed_pack + opts::ed_unpack + opts::ed_copy + opts::ed_drop
         + opts::fq_pack + opts::fq_unpack + opts::fq_copy + opts::fq_drop
-        + opts::ev_pack + opts::ev_unpack + opts::ev_copy + opts::ev_drop == 0)
+        + opts::ev_pack + opts::ev_unpack + opts::ev_copy + opts::ev_drop
+        + opts::al_pack + opts::al_unpack + opts::al_copy + opts::al_drop
+        == 0)
     {
         opts::pack.set(true);
     }
@@ -660,6 +786,7 @@ int main(int argc, char * argv[])
         opts::ed_pack.set(true);
         opts::fq_pack.set(true);
         opts::ev_pack.set(true);
+        opts::al_pack.set(true);
     }
     else if (opts::unpack)
     {
@@ -667,6 +794,7 @@ int main(int argc, char * argv[])
         opts::ed_unpack.set(true);
         opts::fq_unpack.set(true);
         opts::ev_unpack.set(true);
+        opts::al_unpack.set(true);
     }
     else
     {
@@ -674,11 +802,13 @@ int main(int argc, char * argv[])
         if (opts::ed_pack + opts::ed_unpack + opts::ed_copy + opts::ed_drop == 0) opts::ed_copy.set(true);
         if (opts::fq_pack + opts::fq_unpack + opts::fq_copy + opts::fq_drop == 0) opts::fq_copy.set(true);
         if (opts::ev_pack + opts::ev_unpack + opts::ev_copy + opts::ev_drop == 0) opts::ev_copy.set(true);
+        if (opts::al_pack + opts::al_unpack + opts::al_copy + opts::al_drop == 0) opts::al_copy.set(true);
     }
     LOG(info) << "rw: " << (opts::rw_pack? "pack" : opts::rw_unpack? "unpack" : opts::rw_copy? "copy" : "drop") << endl;
     LOG(info) << "ed: " << (opts::ed_pack? "pack" : opts::ed_unpack? "unpack" : opts::ed_copy? "copy" : "drop") << endl;
     LOG(info) << "fq: " << (opts::fq_pack? "pack" : opts::fq_unpack? "unpack" : opts::fq_copy? "copy" : "drop") << endl;
     LOG(info) << "ev: " << (opts::ev_pack? "pack" : opts::ev_unpack? "unpack" : opts::ev_copy? "copy" : "drop") << endl;
+    LOG(info) << "al: " << (opts::al_pack? "pack" : opts::al_unpack? "unpack" : opts::al_copy? "copy" : "drop") << endl;
     LOG(info) << "check: " << (opts::check? "yes" : "no") << endl;
     real_main();
 }

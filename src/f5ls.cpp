@@ -173,11 +173,11 @@ int main(int argc, char* argv[])
                          << ", p_model_state=" << e.p_model_state
                          << ", move=" << e.move << ")" << endl;
                 }
-                // basecall event alignment
-                if (st == 2 and f.have_basecall_event_alignment())
+                // basecall alignment
+                if (st == 2 and f.have_basecall_alignment())
                 {
-                    auto al = f.get_basecall_event_alignment();
-                    cout << "basecall(2)/event_alignment/size=" << al.size() << endl;
+                    auto al = f.get_basecall_alignment();
+                    cout << "basecall(2)/alignment/size=" << al.size() << endl;
                     const auto& e = al.front();
                     cout << "  (template_index=" << e.template_index
                          << ", complement_index=" << e.complement_index

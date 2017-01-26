@@ -294,6 +294,7 @@ namespace fast5_pack
             res_params["size"] = oss.str();
             long long unsigned buff = 0;
             unsigned buff_len = 0;
+            auto val_mask = (1llu << num_bits) - 1;
             for (unsigned i = 0; i < v.size(); ++i)
             {
                 // flush out buff
@@ -307,7 +308,7 @@ namespace fast5_pack
                 long long unsigned x = v[i];
                 if (buff_len + num_bits <= 64)
                 {
-                    buff |= (x & ((1llu << num_bits) - 1)) << buff_len;
+                    buff |= (x & val_mask) << buff_len;
                     buff_len += num_bits;
                 }
                 else
@@ -317,7 +318,7 @@ namespace fast5_pack
                     res.push_back(buff & 0xFF);
                     buff >>= 8;
                     x >>= 8;
-                    buff |= (x & ((1llu << (num_bits - 8)) - 1)) << buff_len;
+                    buff |= (x & (val_mask >> 8)) << buff_len;
                     buff_len += num_bits - 8;
                 }
             }
@@ -350,18 +351,19 @@ namespace fast5_pack
             long long unsigned buff = 0;
             unsigned buff_len = 0;
             unsigned j = 0;
+            auto val_mask = (1llu << num_bits) - 1;
             for (unsigned i = 0; i < sz; ++i)
             {
                 while (j < v.size() and buff_len <= 64 - 8)
                 {
-                    buff |= (v.at(j) << buff_len);
+                    buff |= ((long long unsigned)v.at(j) << buff_len);
                     ++j;
                     buff_len += 8;
                 }
                 long long unsigned x;
                 if (buff_len >= num_bits)
                 {
-                    x = buff & ((1llu << num_bits) - 1);
+                    x = buff & val_mask;
                     buff >>= num_bits;
                     buff_len -= num_bits;
                 }
@@ -374,7 +376,7 @@ namespace fast5_pack
                     buff |= (v.at(j) << buff_len);
                     ++j;
                     buff_len += 8;
-                    x |= ((buff & ((1llu << (num_bits - 8)) - 1)) << 8);
+                    x |= ((buff & (val_mask >> 8)) << 8);
                     buff >>= (num_bits - 8);
                     buff_len -= num_bits - 8;
                 }

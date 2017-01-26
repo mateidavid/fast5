@@ -26,8 +26,9 @@ namespace opts
     ValueArg< unsigned > st("", "st", "Strand.", false, 0, "0|1|2", cmd_parser);
     ValueArg< string > gr("", "gr", "Group name suffix.", false, "", "000|RNN_001|...", cmd_parser);
     //
-    SwitchArg fq("", "fq", "Dump basecall fastq data.", cmd_parser);
+    SwitchArg al("", "al", "Dump basecall 2d alignment data.", cmd_parser);
     SwitchArg ev("", "ev", "Dump basecall event data.", cmd_parser);
+    SwitchArg fq("", "fq", "Dump basecall fastq data.", cmd_parser);
     SwitchArg ed("", "ed", "Dump event detection data.", cmd_parser);
     SwitchArg rw("", "rw", "Dump raw samples data.", cmd_parser);
     SwitchArg id("", "id", "Dump channel/tracking id data.", cmd_parser);
@@ -190,6 +191,15 @@ void real_main()
                 << endl;
         } // if opts::ed
         //
+        // basecall fastq
+        //
+        if (opts::fq and f.have_basecall_fastq(opts::st, opts::gr))
+        {
+            auto fq = f.get_basecall_fastq(opts::st, opts::gr);
+            cout << fq;
+            if (fq.size() > 0 and fq[fq.size() - 1] != '\n') cout << endl;
+        } // if opts::fq
+        //
         // basecall events
         //
         if (opts::ev and f.have_basecall_events(opts::st, opts::gr))
@@ -226,22 +236,27 @@ void real_main()
                         oss
                             << e.mean << "\t"
                             << e.stdv << "\t"
-                            << string(e.model_state.begin(), e.model_state.end()).data() << "\t"
+                            << e.get_model_state() << "\t"
                             << e.move << "\t"
                             << e.p_model_state;
                         return oss.str();
                     })
                 << endl;
         } // if opts::ev
-        //
-        // basecall fastq
-        //
-        if (opts::fq and f.have_basecall_fastq(opts::st, opts::gr))
+        if (opts::al and f.have_basecall_event_alignment(opts::gr))
         {
-            auto fq = f.get_basecall_fastq(opts::st, opts::gr);
-            cout << fq;
-            if (fq.size() > 0 and fq[fq.size() - 1] != '\n') cout << endl;
-        } // if opts::fq
+            auto aln = f.get_basecall_event_alignment(opts::gr);
+            cout
+                << "template\tcomplement\tkmer" << endl
+                << alg::os_join(aln, "\n", [&] (fast5::Event_Alignment_Entry const & a) {
+                        ostringstream oss;
+                        oss << a.template_index << "\t"
+                            << a.complement_index << "\t"
+                            << a.get_kmer();
+                        return oss.str();
+                    })
+                << endl;
+        } // if opts::al
     }
     catch (hdf5_tools::Exception& e)
     {
@@ -258,13 +273,13 @@ int main(int argc, char * argv[])
     //    << "program: " << opts::cmd_parser.getProgramName() << endl
     //    << "version: " << opts::cmd_parser.getVersion() << endl
     //    << "args: " << opts::cmd_parser.getOrigArgv() << endl;
-    if (opts::ls + opts::id + opts::rw + opts::ed + opts::ev + opts::fq == 0)
+    if (opts::ls + opts::id + opts::rw + opts::ed + opts::fq + opts::ev + opts::al == 0)
     {
         opts::ls.set(true);
     }
-    else if (opts::ls + opts::id + opts::rw + opts::ed + opts::ev + opts::fq > 1)
+    else if (opts::ls + opts::id + opts::rw + opts::ed + opts::fq + opts::ev + opts::al > 1)
     {
-        cerr << "at most one of --ls/--id/--rw/--ed/--ev/--fq must be given" << endl;
+        cerr << "at most one of --ls/--id/--rw/--ed/--fq/--ev/--al must be given" << endl;
         exit(EXIT_FAILURE);
     }
     cout.precision(opts::float_prec);

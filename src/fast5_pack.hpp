@@ -59,6 +59,9 @@ namespace fast5_pack
             Code_Type res;
             Code_Params_Type res_params = id();
             res_params["code_diff"] = encode_diff? "1" : "0";
+            std::ostringstream oss;
+            oss << v.size();
+            res_params["size"] = oss.str();
             uint64_t buff = 0;
             uint8_t buff_len = 0;
             bool reset = true;
@@ -121,6 +124,9 @@ namespace fast5_pack
                         
                 }
             }
+            oss.str("");
+            oss << std::fixed << std::setprecision(2) << (double)(res.size() * 8) / v.size();
+            res_params["avg_bits"] = oss.str();
             return std::make_pair(std::move(res), std::move(res_params));
         }
 

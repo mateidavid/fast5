@@ -97,6 +97,11 @@ void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
         }
         dst_f.add_raw_samples_params(rn, rs_params);
         dst_f.add_raw_samples_pack(rn, rs_pack);
+        LOG(info)
+            << "rn=" << rn
+            << " rs_size=" << rsi.size()
+            << " signal_bits=" << rs_pack.signal_param.at("avg_bits")
+            << endl;
     }
 } // do_pack_rw()
 
@@ -201,6 +206,13 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                     }
                 } // if check
                 dst_f.add_eventdetection_events_pack(gr, rn, ed_pack);
+                LOG(info)
+                    << "gr=" << gr
+                    << " rn=" << rn
+                    << " ed_size=" << ed.size()
+                    << " skip_bits=" << ed_pack.skip_param.at("avg_bits")
+                    << " len_bits=" << ed_pack.len_param.at("avg_bits")
+                    << endl;
             }
         } // for rn
     } // for gr
@@ -267,11 +279,11 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
             {
                 bc_gr_s.insert(gr);
                 auto fq = src_f.get_basecall_fastq(st, gr);
+                auto fqa = src_f.split_fq(fq);
                 auto fq_pack = src_f.pack_fq(fq, opts::qv_bits);
                 if (opts::check)
                 {
                     auto fq_unpack = src_f.unpack_fq(fq_pack);
-                    auto fqa = src_f.split_fq(fq);
                     auto fqa_unpack = src_f.split_fq(fq_unpack);
                     if (fqa_unpack[0] != fqa[0])
                     {
@@ -317,6 +329,13 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                     }
                 }
                 dst_f.add_basecall_fastq_pack(st, gr, fq_pack);
+                LOG(info)
+                    << "gr=" << gr
+                    << " st=" << st
+                    << " bp_size=" << fqa[1].size()
+                    << " bp_bits=" << fq_pack.bp_param.at("avg_bits")
+                    << " qv_bits=" << fq_pack.qv_param.at("avg_bits")
+                    << endl;
             }
         }
     }
@@ -444,6 +463,14 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                     }
                 }
                 dst_f.add_basecall_events_pack(st, gr, ev_pack);
+                LOG(info)
+                    << "gr=" << gr
+                    << " st=" << st
+                    << " ev_size=" << ev.size()
+                    << " skip_bits=" << ev_pack.skip_param.at("avg_bits")
+                    << " move_bits=" << ev_pack.move_param.at("avg_bits")
+                    << " p_model_state_bits=" << ev_pack.p_model_state_param.at("num_bits")
+                    << endl;
             }
         }
     }

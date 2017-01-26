@@ -146,7 +146,6 @@ struct Model_Parameters
     double var_sd;
 }; // struct Model_Parameters
 
-
 struct Basecall_Fastq_Pack
 {
     fast5_pack::Huffman_Coder::Code_Type bp;

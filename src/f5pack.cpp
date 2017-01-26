@@ -250,20 +250,22 @@ void do_copy_ed(fast5::File const & src_f, fast5::File const & dst_f)
     }
 } // do_copy_ed()
 
-void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f)
+void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
 {
-    for (unsigned st = 0; st < 2; ++st)
+    for (unsigned st = 0; st < 3; ++st)
     {
         auto gr_l = src_f.get_basecall_strand_group_list(st);
         for (auto const & gr : gr_l)
         {
             if (src_f.have_basecall_fastq_pack(st, gr))
             {
+                bc_gr_s.insert(gr);
                 auto fq_pack = src_f.get_basecall_fastq_pack(st, gr);
                 dst_f.add_basecall_fastq_pack(st, gr, fq_pack);
             }
             else if (src_f.have_basecall_fastq_unpack(st, gr))
             {
+                bc_gr_s.insert(gr);
                 auto fq = src_f.get_basecall_fastq(st, gr);
                 auto fq_pack = src_f.pack_fq(fq, opts::qv_bits);
                 if (opts::check)
@@ -320,15 +322,16 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f)
     }
 } // do_pack_fq
 
-void do_unpack_fq(fast5::File const & src_f, fast5::File const & dst_f)
+void do_unpack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
 {
-    for (unsigned st = 0; st < 2; ++st)
+    for (unsigned st = 0; st < 3; ++st)
     {
         auto gr_l = src_f.get_basecall_strand_group_list(st);
         for (auto const & gr : gr_l)
         {
             if (src_f.have_basecall_fastq(st, gr))
             {
+                bc_gr_s.insert(gr);
                 auto fq = src_f.get_basecall_fastq(st, gr);
                 dst_f.add_basecall_fastq(st, gr, fq);
             }
@@ -336,20 +339,22 @@ void do_unpack_fq(fast5::File const & src_f, fast5::File const & dst_f)
     }
 } // do_unpack_fq()
 
-void do_copy_fq(fast5::File const & src_f, fast5::File const & dst_f)
+void do_copy_fq(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
 {
-    for (unsigned st = 0; st < 2; ++st)
+    for (unsigned st = 0; st < 3; ++st)
     {
         auto gr_l = src_f.get_basecall_strand_group_list(st);
         for (auto const & gr : gr_l)
         {
             if (src_f.have_basecall_fastq_unpack(st, gr))
             {
+                bc_gr_s.insert(gr);
                 auto fq = src_f.get_basecall_fastq(st, gr);
                 dst_f.add_basecall_fastq(st, gr, fq);
             }
             else if (src_f.have_basecall_fastq_pack(st, gr))
             {
+                bc_gr_s.insert(gr);
                 auto fq_pack = src_f.get_basecall_fastq_pack(st, gr);
                 dst_f.add_basecall_fastq_pack(st, gr, fq_pack);
             }
@@ -357,25 +362,22 @@ void do_copy_fq(fast5::File const & src_f, fast5::File const & dst_f)
     }
 } // do_copy_fq()
 
-void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f)
+void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
 {
     for (unsigned st = 0; st < 2; ++st)
     {
         auto gr_l = src_f.get_basecall_strand_group_list(st);
         for (auto const & gr : gr_l)
         {
-            if (st == 0)
-            {
-                auto bc_params = src_f.get_basecall_params(gr);
-                dst_f.add_basecall_params(gr, bc_params);
-            }
             if (src_f.have_basecall_events_pack(st, gr))
             {
+                bc_gr_s.insert(gr);
                 auto ev_pack = src_f.get_basecall_events_pack(st, gr);
                 dst_f.add_basecall_events_pack(st, gr, ev_pack);
             }
             else if (src_f.have_basecall_events_unpack(st, gr))
             {
+                bc_gr_s.insert(gr);
                 auto ev = src_f.get_basecall_events(st, gr);
                 auto ev_param = src_f.get_basecall_event_params(st, gr);
                 // sampling rate
@@ -447,41 +449,35 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f)
     }
 } // do_pack_ev
 
-void do_unpack_ev(fast5::File const & src_f, fast5::File const & dst_f)
+void do_unpack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
 {
     for (unsigned st = 0; st < 2; ++st)
     {
         auto gr_l = src_f.get_basecall_strand_group_list(st);
         for (auto const & gr : gr_l)
         {
-            if (st == 0)
+            if (src_f.have_basecall_events(st, gr))
             {
-                auto bc_params = src_f.get_basecall_params(gr);
-                dst_f.add_basecall_params(gr, bc_params);
+                bc_gr_s.insert(gr);
+                auto ev = src_f.get_basecall_events(st, gr);
+                auto ev_param = src_f.get_basecall_event_params(st, gr);
+                dst_f.add_basecall_events(st, gr, ev);
+                dst_f.add_basecall_event_params(st, gr, ev_param);
             }
-            if (not src_f.have_basecall_events(st, gr)) continue;
-            auto ev = src_f.get_basecall_events(st, gr);
-            auto ev_param = src_f.get_basecall_event_params(st, gr);
-            dst_f.add_basecall_events(st, gr, ev);
-            dst_f.add_basecall_event_params(st, gr, ev_param);
         }
     }
 } // do_unpack_ev
 
-void do_copy_ev(fast5::File const & src_f, fast5::File const & dst_f)
+void do_copy_ev(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
 {
     for (unsigned st = 0; st < 2; ++st)
     {
         auto gr_l = src_f.get_basecall_strand_group_list(st);
         for (auto const & gr : gr_l)
         {
-            if (st == 0)
-            {
-                auto bc_params = src_f.get_basecall_params(gr);
-                dst_f.add_basecall_params(gr, bc_params);
-            }
             if (src_f.have_basecall_events_unpack(st, gr))
             {
+                bc_gr_s.insert(gr);
                 auto ev = src_f.get_basecall_events(st, gr);
                 auto ev_param = src_f.get_basecall_event_params(st, gr);
                 dst_f.add_basecall_events(st, gr, ev);
@@ -489,12 +485,22 @@ void do_copy_ev(fast5::File const & src_f, fast5::File const & dst_f)
             }
             else if (src_f.have_basecall_events_pack(st, gr))
             {
+                bc_gr_s.insert(gr);
                 auto ev_pack = src_f.get_basecall_events_pack(st, gr);
                 dst_f.add_basecall_events_pack(st, gr, ev_pack);
             }
         }
     }
 } // do_copy_ev
+
+void do_copy_basecall_params(fast5::File const & src_f, fast5::File const & dst_f, set< string > const & bc_gr_s)
+{
+    for (auto const & gr : bc_gr_s)
+    {
+        auto bc_params = src_f.get_basecall_params(gr);
+        dst_f.add_basecall_params(gr, bc_params);
+    }
+} // do_copy_basecall_params
 
 void real_main()
 {
@@ -510,6 +516,7 @@ void real_main()
         assert(dst_f.is_rw());
         // copy all attributes
         fast5::File::copy_attributes(src_f, dst_f, "/UniqueGlobalKey");
+        set< string > bc_gr_s;
         // process raw samples
         if (opts::rw_pack)
         {
@@ -539,29 +546,31 @@ void real_main()
         // process basecall fastq
         if (opts::fq_pack)
         {
-            do_pack_fq(src_f, dst_f);
+            do_pack_fq(src_f, dst_f, bc_gr_s);
         }
         else if (opts::fq_unpack)
         {
-            do_unpack_fq(src_f, dst_f);
+            do_unpack_fq(src_f, dst_f, bc_gr_s);
         }
         else if (opts::fq_copy)
         {
-            do_copy_fq(src_f, dst_f);
+            do_copy_fq(src_f, dst_f, bc_gr_s);
         }
         // process basecall events
         if (opts::ev_pack)
         {
-            do_pack_ev(src_f, dst_f);
+            do_pack_ev(src_f, dst_f, bc_gr_s);
         }
         else if (opts::ev_unpack)
         {
-            do_unpack_ev(src_f, dst_f);
+            do_unpack_ev(src_f, dst_f, bc_gr_s);
         }
         else if (opts::ev_copy)
         {
-            do_copy_ev(src_f, dst_f);
+            do_copy_ev(src_f, dst_f, bc_gr_s);
         }
+        // copy basecall params
+        do_copy_basecall_params(src_f, dst_f, bc_gr_s);
         // close files
         src_f.close();
         dst_f.close();

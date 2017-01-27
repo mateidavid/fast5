@@ -2006,110 +2006,16 @@ private:
         }
     } // rec_copy_attributes()
 
-    static fast5_pack::Huffman_Coder & rw_coder()
-    {
-        static fast5_pack::Huffman_Coder _rw_coder;
-        static bool initialized = false;
-        if (not initialized)
-        {
-            std::vector< std::string > tmp =
-#include "fast5_cwmap_rw_1.inl"
-                ;
-            _rw_coder.load_codeword_map(tmp, "fast5_cwmap_rw_1.inl");
-            initialized = true;
-        }
-        return _rw_coder;
-    } // rw_coder()
-    
-    static fast5_pack::Huffman_Coder & ed_skip_coder()
-    {
-        static fast5_pack::Huffman_Coder _ed_skip_coder;
-        static bool initialized = false;
-        if (not initialized)
-        {
-            std::vector< std::string > tmp =
-#include "fast5_cwmap_ed_skip_1.inl"
-                ;
-            _ed_skip_coder.load_codeword_map(tmp, "fast5_cwmap_ed_skip_1.inl");
-            initialized = true;
-        }
-        return _ed_skip_coder;
-    } // ed_skip_coder()
-
-    static fast5_pack::Huffman_Coder & ed_len_coder()
-    {
-        static fast5_pack::Huffman_Coder _ed_len_coder;
-        static bool initialized = false;
-        if (not initialized)
-        {
-            std::vector< std::string > tmp =
-#include "fast5_cwmap_ed_len_1.inl"
-                ;
-            _ed_len_coder.load_codeword_map(tmp, "fast5_cwmap_ed_len_1.inl");
-            initialized = true;
-        }
-        return _ed_len_coder;
-    } // ed_len_coder()
-
-    static fast5_pack::Huffman_Coder & fq_bp_coder()
-    {
-        static fast5_pack::Huffman_Coder _fq_bp_coder;
-        static bool initialized = false;
-        if (not initialized)
-        {
-            std::vector< std::string > tmp =
-#include "fast5_cwmap_fq_bp_1.inl"
-                ;
-            _fq_bp_coder.load_codeword_map(tmp, "fast5_cwmap_fq_bp_1.inl");
-            initialized = true;
-        }
-        return _fq_bp_coder;
-    } // fq_bp_coder()
-
-    static fast5_pack::Huffman_Coder & fq_qv_coder()
-    {
-        static fast5_pack::Huffman_Coder _fq_qv_coder;
-        static bool initialized = false;
-        if (not initialized)
-        {
-            std::vector< std::string > tmp =
-#include "fast5_cwmap_fq_qv_1.inl"
-                ;
-            _fq_qv_coder.load_codeword_map(tmp, "fast5_cwmap_fq_qv_1.inl");
-            initialized = true;
-        }
-        return _fq_qv_coder;
-    } // fq_qv_coder()
-
-    static fast5_pack::Huffman_Coder & ev_skip_coder()
-    {
-        static fast5_pack::Huffman_Coder _ev_skip_coder;
-        static bool initialized = false;
-        if (not initialized)
-        {
-            std::vector< std::string > tmp =
-#include "fast5_cwmap_ev_skip_1.inl"
-                ;
-            _ev_skip_coder.load_codeword_map(tmp, "fast5_cwmap_ev_skip_1.inl");
-            initialized = true;
-        }
-        return _ev_skip_coder;
-    } // ev_skip_coder()
-
-    static fast5_pack::Huffman_Coder & ev_move_coder()
-    {
-        static fast5_pack::Huffman_Coder _ev_move_coder;
-        static bool initialized = false;
-        if (not initialized)
-        {
-            std::vector< std::string > tmp =
-#include "fast5_cwmap_ev_move_1.inl"
-                ;
-            _ev_move_coder.load_codeword_map(tmp, "fast5_cwmap_ev_move_1.inl");
-            initialized = true;
-        }
-        return _ev_move_coder;
-    } // ev_move_coder()
+    //
+    // codeword map names
+    //
+    static fast5_pack::Huffman_Coder const & rw_coder()      { return fast5_pack::Huffman_Coder::get_coder("fast5_rw_1"); }
+    static fast5_pack::Huffman_Coder const & ed_skip_coder() { return fast5_pack::Huffman_Coder::get_coder("fast5_ed_skip_1"); }
+    static fast5_pack::Huffman_Coder const & ed_len_coder()  { return fast5_pack::Huffman_Coder::get_coder("fast5_ed_len_1"); }
+    static fast5_pack::Huffman_Coder const & fq_bp_coder()   { return fast5_pack::Huffman_Coder::get_coder("fast5_fq_bp_1"); }
+    static fast5_pack::Huffman_Coder const & fq_qv_coder()   { return fast5_pack::Huffman_Coder::get_coder("fast5_fq_qv_1"); }
+    static fast5_pack::Huffman_Coder const & ev_skip_coder() { return fast5_pack::Huffman_Coder::get_coder("fast5_ev_skip_1"); }
+    static fast5_pack::Huffman_Coder const & ev_move_coder() { return fast5_pack::Huffman_Coder::get_coder("fast5_ev_move_1"); }
 
     static fast5_pack::Bit_Packer & bit_packer()
     {

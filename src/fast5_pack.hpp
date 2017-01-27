@@ -23,14 +23,21 @@ namespace fast5_pack
 
         Huffman_Coder() = default;
         Huffman_Coder(Huffman_Coder const &) = delete;
+        Huffman_Coder(Huffman_Coder &&) = default;
         Huffman_Coder & operator = (Huffman_Coder const &) = delete;
+        Huffman_Coder & operator = (Huffman_Coder &&) = default;
         Huffman_Coder(std::istream & is, std::string const & cwm_name)
         {
             load_codeword_map(is, cwm_name);
         }
         Huffman_Coder(std::vector< std::string > const & v, std::string const & cwm_name)
         {
-            load_codeword_map(v, cwm_name);
+            load_codeword_map(v.begin(), v.end(), cwm_name);
+        }
+        template < typename Iterator >
+        Huffman_Coder(Iterator it_begin, Iterator it_end, std::string const & cwm_name)
+        {
+            load_codeword_map(it_begin, it_end, cwm_name);
         }
 
         void load_codeword_map(std::istream & is, std::string const & cwm_name)
@@ -43,18 +50,19 @@ namespace fast5_pack
                 add_codeword(v_s, cw_s);
             }
         }
-        void load_codeword_map(std::vector< std::string > const & v, std::string const & cwm_name)
+        template < typename Iterator >
+        void load_codeword_map(Iterator it_begin, Iterator it_end, std::string const & cwm_name)
         {
             _cwm_name = cwm_name;
-            for (unsigned i = 0; i < v.size() - 1; i += 2)
+            for (auto it = it_begin; it != it_end and std::next(it) != it_end; it += 2)
             {
-                add_codeword(v[i], v[i + 1]);
+                add_codeword(*it, *next(it));
             }
         }
 
         template < typename Int_Type >
         std::pair< Code_Type, Code_Params_Type >
-        encode(std::vector< Int_Type > const & v, bool encode_diff = false)
+        encode(std::vector< Int_Type > const & v, bool encode_diff = false) const
         {
             Code_Type res;
             Code_Params_Type res_params = id();
@@ -109,7 +117,7 @@ namespace fast5_pack
                         reset = true;
                         //LOG(debug) << "end: reset=1" << std::endl;
                     }
-                    auto p = (not reset? _cwm[x] : _cwm[break_cw()]);
+                    auto p = (not reset? _cwm.at(x) : _cwm.at(break_cw()));
                     buff |= (p.first << buff_len);
                     buff_len += p.second;
                     if (not reset)
@@ -132,7 +140,7 @@ namespace fast5_pack
 
         template < typename Int_Type >
         std::vector< Int_Type >
-        decode(Code_Type const & v, Code_Params_Type const & v_params)
+        decode(Code_Type const & v, Code_Params_Type const & v_params) const
         {
             check_params(v_params);
             bool decode_diff = v_params.at("code_diff") == "1";
@@ -220,6 +228,21 @@ namespace fast5_pack
             }
             return res;
         }
+
+        //
+        // static coder access
+        //
+        static Huffman_Coder const &
+        get_coder(std::string const & cwm_name)
+        {
+            static_init();
+            if (cwm_m().count(cwm_name) == 0)
+            {
+                throw std::invalid_argument(std::string("missing codeword map: ") + cwm_name);
+            }
+            return cwm_m().at(cwm_name);
+        }
+
     private:
         std::map< long long int, std::pair< std::uint64_t, std::uint8_t > > _cwm;
         std::string _cwm_name;
@@ -270,6 +293,47 @@ namespace fast5_pack
             }
             _cwm[v] = std::make_pair(cw, cw_l);
         }
+
+        static std::map< std::string, Huffman_Coder > & cwm_m()
+        {
+            static std::map< std::string, Huffman_Coder > _cwm_m;
+            return _cwm_m;
+        }
+        static void static_init()
+        {
+            static bool inited = false;
+            if (inited) return;
+            std::deque< std::deque< std::string > > dd;
+            dd.push_back(
+#include "cwmap.fast5_rw_1.inl"
+                );
+            dd.push_back(
+#include "cwmap.fast5_ed_skip_1.inl"
+                );
+            dd.push_back(
+#include "cwmap.fast5_ed_len_1.inl"
+                );
+            dd.push_back(
+#include "cwmap.fast5_fq_bp_1.inl"
+                );
+            dd.push_back(
+#include "cwmap.fast5_fq_qv_1.inl"
+                );
+            dd.push_back(
+#include "cwmap.fast5_ev_skip_1.inl"
+                );
+            dd.push_back(
+#include "cwmap.fast5_ev_move_1.inl"
+                );
+            cwm_m().clear();
+            for (auto & d : dd)
+            {
+                auto cwm_name = d.front();
+                Huffman_Coder hc(d.begin() + 1, d.end(), cwm_name);
+                cwm_m()[cwm_name] = std::move(hc);
+            }
+            inited = true;
+        } // static_init()
     }; // class Huffman_Coder
 
     class Bit_Packer

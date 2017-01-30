@@ -344,7 +344,7 @@ namespace fast5_pack
 
         template < typename Int_Type >
         std::pair< Code_Type, Code_Params_Type >
-        encode(std::vector< Int_Type > const & v, unsigned num_bits)
+        encode(std::vector< Int_Type > const & v, unsigned num_bits) const
         {
             Code_Type res;
             Code_Params_Type res_params;
@@ -401,7 +401,7 @@ namespace fast5_pack
 
         template < typename Int_Type >
         std::vector< Int_Type >
-        decode(Code_Type const & v, Code_Params_Type const & v_params)
+        decode(Code_Type const & v, Code_Params_Type const & v_params) const
         {
             std::vector< Int_Type > res;
             unsigned num_bits;
@@ -448,6 +448,16 @@ namespace fast5_pack
             }
             return res;
         } // decode()
+
+        //
+        // static packer access
+        //
+        static Bit_Packer const &
+        get_packer()
+        {
+            static Bit_Packer _packer;
+            return _packer;
+        }
     }; // class Bit_Packer
 } // fast5_pack
 

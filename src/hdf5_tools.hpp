@@ -1409,6 +1409,8 @@ struct Writer< std::vector< In_Data_Type > >
 class File
 {
 public:
+    typedef std::map< std::string, std::string > Attr_Map;
+
     File() : _file_id(0) {}
     File(const std::string& file_name, bool rw = false) : _file_id(0) { open(file_name, rw); }
     File(const File&) = delete;
@@ -1619,6 +1621,27 @@ public:
         }
         return res;
     } // get_attr_list
+    Attr_Map
+    get_attr_map(std::string const & path) const
+    {
+        Attr_Map res;
+        auto a_l = get_attr_list(path);
+        for (auto const & a : a_l)
+        {
+            std::string tmp;
+            read(path + "/" + a, tmp);
+            res[a] = tmp;
+        }
+        return res;
+    } // get_attr_map()
+    void
+    add_attr_map(std::string const & path, Attr_Map const & attr_m) const
+    {
+        for (auto const & p : attr_m)
+        {
+            write_attribute(path + "/" + p.first, p.second);
+        }
+    } // add_attr_map()
     /// Return a list of struct field names in the given dataset/attribute
     std::vector< std::string > get_struct_members(const std::string& loc_full_name) const
     {
@@ -1782,6 +1805,24 @@ public:
         }
     } // copy_attribute
 
+    static void
+    copy_attributes(File const & src_f, File const & dst_f, std::string const & path, bool recurse = false)
+    {
+        auto a_l = src_f.get_attr_list(not path.empty()? path : std::string("/"));
+        for (auto const & a : a_l)
+        {
+            copy_attribute(src_f, dst_f, path + "/" + a);
+        }
+        if (not recurse) return;
+        auto sg_l = src_f.list_group(not path.empty()? path : std::string("/"));
+        for (auto const & sg : sg_l)
+        {
+            if (src_f.group_exists(path + "/" + sg))
+            {
+                copy_attributes(src_f, dst_f, path + "/" + sg, true);
+            }
+        }
+    } // copy_attributes()
 private:
     std::string _file_name;
     hid_t _file_id;

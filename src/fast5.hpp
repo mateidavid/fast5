@@ -29,7 +29,7 @@ namespace
 namespace fast5
 {
 
-typedef std::map< std::string, std::string > Attr_Map;
+typedef hdf5_tools::File::Attr_Map Attr_Map;
 
 struct Channel_Id_Parameters
 {
@@ -1363,12 +1363,12 @@ public:
     /**
      * Copy all attributes from one file to another.
      */
-    static void copy_attributes(File const & src_f, File const & dst_f, std::string const & p = std::string())
+    static void copy_attributes(File const & src_f, File const & dst_f, std::string const & p, bool recurse = false)
     {
         assert(src_f.is_open());
         assert(dst_f.is_open());
         assert(dst_f.is_rw());
-        rec_copy_attributes(src_f, dst_f, p);
+        Base::copy_attributes(src_f, dst_f, p, recurse);
     }
 
     /**
@@ -1787,14 +1787,15 @@ private:
     void detect_eventdetection_group_list()
     {
         if (not Base::group_exists(eventdetection_root_path())) return;
+        auto ed_gr_prefix = eventdetection_group_prefix();
         auto gr_l = Base::list_group(eventdetection_root_path());
         for (auto const & g : gr_l)
         {
-            if (g.size() <= eventdetection_group_prefix().size()) continue;
-            auto p = std::mismatch(eventdetection_group_prefix().begin(),
-                                   eventdetection_group_prefix().end(),
+            if (g.size() <= ed_gr_prefix.size()) continue;
+            auto p = std::mismatch(ed_gr_prefix.begin(),
+                                   ed_gr_prefix.end(),
                                    g.begin());
-            if (p.first != eventdetection_group_prefix().end()) continue;
+            if (p.first != ed_gr_prefix.end()) continue;
             _eventdetection_group_list.emplace_back(p.second, g.end());
         }
     }
@@ -1819,14 +1820,15 @@ private:
     void detect_basecall_group_list()
     {
         if (not Base::group_exists(basecall_root_path())) return;
+        auto bc_gr_prefix = basecall_group_prefix();
         auto gr_l = Base::list_group(basecall_root_path());
         for (auto const & g : gr_l)
         {
-            if (g.size() <= basecall_group_prefix().size()) continue;
-            auto p = std::mismatch(basecall_group_prefix().begin(),
-                                   basecall_group_prefix().end(),
+            if (g.size() <= bc_gr_prefix.size()) continue;
+            auto p = std::mismatch(bc_gr_prefix.begin(),
+                                   bc_gr_prefix.end(),
                                    g.begin());
-            if (p.first != basecall_group_prefix().end()) continue;
+            if (p.first != bc_gr_prefix.end()) continue;
             _basecall_group_list.emplace_back(p.second, g.end());
             for (unsigned st = 0; st < 3; ++st)
             {
@@ -1838,27 +1840,6 @@ private:
         }
     }
 
-    Attr_Map get_attr_map(std::string const & path) const
-    {
-        Attr_Map res;
-        auto a_l = Base::get_attr_list(path);
-        for (auto const & a : a_l)
-        {
-            std::string tmp;
-            Base::read(path + "/" + a, tmp);
-            res[a] = tmp;
-        }
-        return res;
-    }
-
-    void add_attr_map(std::string const & path, Attr_Map const & attr_m) const
-    {
-        for (auto const & p : attr_m)
-        {
-            Base::write_attribute(path + "/" + p.first, p.second);
-        }
-    }
-
     float raw_sample_to_float(int si) const
     {
         assert(have_channel_id_params());
@@ -1866,28 +1847,15 @@ private:
             * _channel_id_params.range / _channel_id_params.digitisation;
     }
 
+    //
     // static paths
-    static std::string const & file_version_path()
-    {
-        static const std::string _file_version_path = "/file_version";
-        return _file_version_path;
-    }
+    //
+    static std::string file_version_path() { return "/file_version"; }
+    static std::string channel_id_path()   { return "/UniqueGlobalKey/channel_id"; }
+    static std::string tracking_id_path()  { return "/UniqueGlobalKey/tracking_id"; }
+    static std::string sequences_path()    { return "/Sequences/Meta"; }
 
-    static std::string const & channel_id_path()
-    {
-        static const std::string _channel_id_path = "/UniqueGlobalKey/channel_id";
-        return _channel_id_path;
-    }
-    static std::string const & tracking_id_path()
-    {
-        static const std::string _tracking_id_path = "/UniqueGlobalKey/tracking_id";
-        return _tracking_id_path;
-    }
-    static std::string const & raw_samples_root_path()
-    {
-        static const std::string _raw_samples_root_path = "/Raw/Reads";
-        return _raw_samples_root_path;
-    }
+    static std::string raw_samples_root_path() { return "/Raw/Reads"; }
     static std::string raw_samples_params_path(std::string const & rn)
     {
         return raw_samples_root_path() + "/" + rn;
@@ -1900,21 +1868,9 @@ private:
     {
         return raw_samples_path(rn) + "_Pack";
     }
-    static std::string const & sequences_path()
-    {
-        static const std::string _sequences_path = "/Sequences/Meta";
-        return _sequences_path;
-    }
-    static std::string const & eventdetection_root_path()
-    {
-        static const std::string _eventdetection_root_path = "/Analyses";
-        return _eventdetection_root_path;
-    }
-    static std::string const & eventdetection_group_prefix()
-    {
-        static const std::string _eventdetection_group_prefix = "EventDetection_";
-        return _eventdetection_group_prefix;
-    }
+
+    static std::string eventdetection_root_path() { return "/Analyses"; }
+    static std::string eventdetection_group_prefix() { return "EventDetection_"; }
     static std::string eventdetection_params_path(std::string const & gr)
     {
         return eventdetection_root_path() + "/" + eventdetection_group_prefix() + gr;
@@ -1932,22 +1888,15 @@ private:
         return eventdetection_events_path(gr, rn) + "_Pack";
     }
 
-    static std::string const & basecall_root_path()
-    {
-        static const std::string _basecall_root_path = "/Analyses";
-        return _basecall_root_path;
-    }
-    static std::string const & basecall_group_prefix()
-    {
-        static const std::string _basecall_group_prefix = "Basecall_";
-        return _basecall_group_prefix;
-    }
-    static std::string const & basecall_strand_subgroup(unsigned st)
+    static std::string basecall_root_path() { return "/Analyses"; }
+    static std::string basecall_group_prefix() { return "Basecall_"; }
+    static std::string basecall_strand_subgroup(unsigned st)
     {
         static const std::array< std::string, 3 > _basecall_strand_subgroup =
             {{ "BaseCalled_template", "BaseCalled_complement", "BaseCalled_2D" }};
-        return _basecall_strand_subgroup[st];
+        return _basecall_strand_subgroup.at(st);
     }
+
     static std::string basecall_fastq_path(std::string const & gr, unsigned st)
     {
         return basecall_root_path() + "/" + basecall_group_prefix() + gr + "/"
@@ -1987,27 +1936,8 @@ private:
         return basecall_alignment_path(gr) + "_Pack";
     }
 
-    static void rec_copy_attributes(File const & src_f, File const & dst_f, std::string const & path)
-    {
-        Base const & src_fb = src_f;
-        Base const & dst_fb = dst_f;
-        auto a_l = src_fb.get_attr_list(not path.empty()? path : std::string("/"));
-        for (auto const & a : a_l)
-        {
-            Base::copy_attribute(src_fb, dst_fb, path + "/" + a);
-        }
-        auto sg_l = src_fb.list_group(not path.empty()? path : std::string("/"));
-        for (auto const & sg : sg_l)
-        {
-            if (src_fb.group_exists(path + "/" + sg))
-            {
-                rec_copy_attributes(src_f, dst_f, path + "/" + sg);
-            }
-        }
-    } // rec_copy_attributes()
-
     //
-    // codeword map names
+    // packers
     //
     static fast5_pack::Huffman_Coder const & rw_coder()      { return fast5_pack::Huffman_Coder::get_coder("fast5_rw_1"); }
     static fast5_pack::Huffman_Coder const & ed_skip_coder() { return fast5_pack::Huffman_Coder::get_coder("fast5_ed_skip_1"); }
@@ -2016,12 +1946,7 @@ private:
     static fast5_pack::Huffman_Coder const & fq_qv_coder()   { return fast5_pack::Huffman_Coder::get_coder("fast5_fq_qv_1"); }
     static fast5_pack::Huffman_Coder const & ev_skip_coder() { return fast5_pack::Huffman_Coder::get_coder("fast5_ev_skip_1"); }
     static fast5_pack::Huffman_Coder const & ev_move_coder() { return fast5_pack::Huffman_Coder::get_coder("fast5_ev_move_1"); }
-
-    static fast5_pack::Bit_Packer & bit_packer()
-    {
-        static fast5_pack::Bit_Packer _bit_packer;
-        return _bit_packer;
-    }
+    static fast5_pack::Bit_Packer    const & bit_packer()    { return fast5_pack::Bit_Packer::get_packer(); }
 }; // class File
 
 } // namespace fast5

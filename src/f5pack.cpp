@@ -105,7 +105,7 @@ void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
         LOG(info)
             << "rn=" << rn
             << " rs_size=" << rsi.size()
-            << " signal_bits=" << rs_pack.signal_param.at("avg_bits")
+            << " signal_bits=" << rs_pack.signal_params.at("avg_bits")
             << endl;
     }
 } // do_pack_rw()
@@ -150,9 +150,9 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
         for (auto const & rn : rn_l)
         {
             auto ed_params = src_f.get_eventdetection_params(gr);
-            auto ede_params = src_f.get_eventdetection_event_params(gr, rn);
+            auto ede_params = src_f.get_eventdetection_events_params(gr, rn);
             dst_f.add_eventdetection_params(gr, ed_params);
-            dst_f.add_eventdetection_event_params(gr, rn, ede_params);
+            dst_f.add_eventdetection_events_params(gr, rn, ede_params);
             if (src_f.have_eventdetection_events_pack(gr, rn))
             {
                 auto ed_pack = src_f.get_eventdetection_events_pack(gr, rn);
@@ -165,8 +165,8 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                 if (opts::check)
                 {
                     auto rs = src_f.get_raw_samples(rn);
-                    auto rs_param = src_f.get_raw_samples_params(rn);
-                    auto ed_unpack = src_f.unpack_ed(ed_pack, ede_params, rs, rs_param);
+                    auto rs_params = src_f.get_raw_samples_params(rn);
+                    auto ed_unpack = src_f.unpack_ed(ed_pack, ede_params, rs, rs_params);
                     if (ed_unpack.size() != ed.size())
                     {
                         LOG(error)
@@ -215,8 +215,8 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
                     << "gr=" << gr
                     << " rn=" << rn
                     << " ed_size=" << ed.size()
-                    << " skip_bits=" << ed_pack.skip_param.at("avg_bits")
-                    << " len_bits=" << ed_pack.len_param.at("avg_bits")
+                    << " skip_bits=" << ed_pack.skip_params.at("avg_bits")
+                    << " len_bits=" << ed_pack.len_params.at("avg_bits")
                     << endl;
             }
         } // for rn
@@ -232,10 +232,10 @@ void do_unpack_ed(fast5::File const & src_f, fast5::File const & dst_f)
         for (auto const & rn : rn_l)
         {
             auto ed_params = src_f.get_eventdetection_params(gr);
-            auto ede_params = src_f.get_eventdetection_event_params(gr, rn);
+            auto ede_params = src_f.get_eventdetection_events_params(gr, rn);
             auto ed = src_f.get_eventdetection_events(gr, rn);
             dst_f.add_eventdetection_params(gr, ed_params);
-            dst_f.add_eventdetection_event_params(gr, rn, ede_params);
+            dst_f.add_eventdetection_events_params(gr, rn, ede_params);
             dst_f.add_eventdetection_events(gr, rn, ed);
         }
     }
@@ -250,9 +250,9 @@ void do_copy_ed(fast5::File const & src_f, fast5::File const & dst_f)
         for (auto const & rn : rn_l)
         {
             auto ed_params = src_f.get_eventdetection_params(gr);
-            auto ede_params = src_f.get_eventdetection_event_params(gr, rn);
+            auto ede_params = src_f.get_eventdetection_events_params(gr, rn);
             dst_f.add_eventdetection_params(gr, ed_params);
-            dst_f.add_eventdetection_event_params(gr, rn, ede_params);
+            dst_f.add_eventdetection_events_params(gr, rn, ede_params);
             if (src_f.have_eventdetection_events_unpack(gr, rn))
             {
                 auto ed = src_f.get_eventdetection_events(gr, rn);
@@ -338,8 +338,8 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                     << "gr=" << gr
                     << " st=" << st
                     << " bp_size=" << fqa[1].size()
-                    << " bp_bits=" << fq_pack.bp_param.at("avg_bits")
-                    << " qv_bits=" << fq_pack.qv_param.at("avg_bits")
+                    << " bp_bits=" << fq_pack.bp_params.at("avg_bits")
+                    << " qv_bits=" << fq_pack.qv_params.at("avg_bits")
                     << endl;
             }
         }
@@ -403,7 +403,7 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
             {
                 bc_gr_s.insert(gr);
                 auto ev = src_f.get_basecall_events(st, gr);
-                auto ev_param = src_f.get_basecall_event_params(st, gr);
+                auto ev_params = src_f.get_basecall_events_params(st, gr);
                 // sampling rate
                 auto channel_id_params = src_f.get_channel_id_params();
                 // basecall fq
@@ -423,7 +423,7 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                     abort();
                 }
                 auto ed = src_f.get_eventdetection_events(ed_gr);
-                auto ev_pack = src_f.pack_ev(ev, fq, ev_param, ed, ed_gr,
+                auto ev_pack = src_f.pack_ev(ev, fq, ev_params, ed, ed_gr,
                                              channel_id_params.sampling_rate, opts::p_model_state_bits);
                 if (opts::check)
                 {
@@ -472,9 +472,9 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
                     << "gr=" << gr
                     << " st=" << st
                     << " ev_size=" << ev.size()
-                    << " skip_bits=" << ev_pack.skip_param.at("avg_bits")
-                    << " move_bits=" << ev_pack.move_param.at("avg_bits")
-                    << " p_model_state_bits=" << ev_pack.p_model_state_param.at("num_bits")
+                    << " skip_bits=" << ev_pack.skip_params.at("avg_bits")
+                    << " move_bits=" << ev_pack.move_params.at("avg_bits")
+                    << " p_model_state_bits=" << ev_pack.p_model_state_params.at("num_bits")
                     << endl;
             }
         }
@@ -492,9 +492,9 @@ void do_unpack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< str
             {
                 bc_gr_s.insert(gr);
                 auto ev = src_f.get_basecall_events(st, gr);
-                auto ev_param = src_f.get_basecall_event_params(st, gr);
+                auto ev_params = src_f.get_basecall_events_params(st, gr);
                 dst_f.add_basecall_events(st, gr, ev);
-                dst_f.add_basecall_event_params(st, gr, ev_param);
+                dst_f.add_basecall_events_params(st, gr, ev_params);
             }
         }
     }
@@ -511,9 +511,9 @@ void do_copy_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
             {
                 bc_gr_s.insert(gr);
                 auto ev = src_f.get_basecall_events(st, gr);
-                auto ev_param = src_f.get_basecall_event_params(st, gr);
+                auto ev_params = src_f.get_basecall_events_params(st, gr);
                 dst_f.add_basecall_events(st, gr, ev);
-                dst_f.add_basecall_event_params(st, gr, ev_param);
+                dst_f.add_basecall_events_params(st, gr, ev_params);
             }
             else if (src_f.have_basecall_events_pack(st, gr))
             {

@@ -111,7 +111,7 @@ int main(int argc, char* argv[])
             {
                 auto ed_params = f.get_eventdetection_params();
                 print_map(cout, ed_params, "eventdetection/");
-                auto ed_ev_params = f.get_eventdetection_event_params();
+                auto ed_ev_params = f.get_eventdetection_events_params();
                 auto ed_ev = f.get_eventdetection_events();
                 cout << "eventdetection/events/abasic_found=" << ed_ev_params.abasic_found << endl
                      << "eventdetection/events/duration=" << ed_ev_params.duration << endl

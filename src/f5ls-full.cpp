@@ -143,7 +143,7 @@ int main(int argc, char* argv[])
                     {
                         std::ostringstream tmp;
                         tmp << "eventdetection/" << ed_gr << "/" << rn;
-                        auto ed_ev_params = f.get_eventdetection_event_params(ed_gr, rn);
+                        auto ed_ev_params = f.get_eventdetection_events_params(ed_gr, rn);
                         auto ed_ev = f.get_eventdetection_events(ed_gr, rn);
                         cout << tmp.str() << "/abasic_found=" << ed_ev_params.abasic_found << endl
                              << tmp.str() << "/duration=" << ed_ev_params.duration << endl

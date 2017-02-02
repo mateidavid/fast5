@@ -170,7 +170,7 @@ void real_main()
         //
         if (opts::ed and f.have_eventdetection_events(opts::gr, opts::rn))
         {
-            auto ede_params = f.get_eventdetection_event_params(opts::gr, opts::rn);
+            auto ede_params = f.get_eventdetection_events_params(opts::gr, opts::rn);
             cout
                 << "#read_id=" << ede_params.read_id << endl
                 << "#read_number=" << ede_params.read_number << endl
@@ -182,7 +182,7 @@ void real_main()
             auto ede = f.get_eventdetection_events(opts::gr, opts::rn);
             cout
                 << "start\tlength\tmean\tstdv" << endl
-                << alg::os_join(ede, "\n", [] (fast5::EventDetection_Event_Entry const & e) {
+                << alg::os_join(ede, "\n", [] (fast5::EventDetection_Event const & e) {
                         ostringstream oss;
                         oss.precision(opts::float_prec);
                         oss << e.start << "\t" << e.length << "\t" << e.mean << "\t" << e.stdv;
@@ -204,7 +204,7 @@ void real_main()
         //
         if (opts::ev and f.have_basecall_events(opts::st, opts::gr))
         {
-            auto bce_params = f.get_basecall_event_params(opts::st, opts::gr);
+            auto bce_params = f.get_basecall_events_params(opts::st, opts::gr);
             if (not opts::time_int)
             {
                 cout
@@ -220,7 +220,7 @@ void real_main()
             auto bce = f.get_basecall_events(opts::st, opts::gr);
             cout
                 << "start\tlength\tmean\tstdv\tstate\tmove\tp_model_state" << endl
-                << alg::os_join(bce, "\n", [&] (fast5::Event_Entry const & e) {
+                << alg::os_join(bce, "\n", [&] (fast5::Basecall_Event const & e) {
                         ostringstream oss;
                         oss.precision(opts::float_prec);
                         if (not opts::time_int)

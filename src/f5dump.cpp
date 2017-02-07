@@ -86,7 +86,7 @@ void real_main()
                         int have_events = (st == 2
                                            ? f.have_basecall_events(0, gr) and f.have_basecall_events(1, gr)
                                            : f.have_basecall_events(st, gr));
-                        string link = (st == 2? f.get_basecall_group_1d(gr) : f.get_basecall_eventdetection_group(gr));
+                        string link = (st == 2? f.get_basecall_1d_group(gr) : f.get_basecall_eventdetection_group(gr));
                         cout
                             << (st == 2? "bc2d" : "bc1d") << "\t"
                             << gr << "\t"
@@ -149,7 +149,7 @@ void real_main()
             }
             else
             {
-                auto rs_int = f.get_raw_samples_int(opts::rn);
+                auto rs_int = f.get_raw_int_samples(opts::rn);
                 if (opts::rw_time)
                 {
                     cout << "start\t";

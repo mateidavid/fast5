@@ -11,7 +11,6 @@
 
 using namespace std;
 
-
 namespace opts
 {
     using namespace TCLAP;
@@ -20,15 +19,6 @@ namespace opts
     //
     MultiArg< string > log_level("", "log", "Log level. (default: info)", false, "string", cmd_parser);
     MultiSwitchArg extra_verbosity("v", "", "Increase verbosity", cmd_parser);
-    //
-    //ValueArg< unsigned > float_prec("", "float-prec", "Float precision.", false, 10, "int", cmd_parser);
-    //SwitchArg rw_time("", "rw-time", "Add timepoints to raw data.", cmd_parser);
-    //SwitchArg curr_int("", "curr-int", "Dump current data encoded as int (raw samples only).", cmd_parser);
-    //SwitchArg time_int("", "time-int", "Dump start/length data encoded as int.", cmd_parser);
-    //
-    //ValueArg< string > rn("", "rn", "Read name.", false, "", "Read_1015|...", cmd_parser);
-    //ValueArg< unsigned > st("", "st", "Strand.", false, 0, "0|1|2", cmd_parser);
-    //ValueArg< string > gr("", "gr", "Group name suffix.", false, "", "000|RNN_001|...", cmd_parser);
     //
     ValueArg< unsigned > p_model_state_bits("", "p-model-state-bits", "P_Model_State bits to keep.", false, 2, "int", cmd_parser);
     //
@@ -70,12 +60,12 @@ namespace opts
     UnlabeledValueArg< string > output_fn("output", "Output fast5 file.", true, "", "file", cmd_parser);
 } // opts
 
-void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
+void do_pack_rw(fast5::File const & src_f, fast5::File & dst_f)
 {
     auto rn_l = src_f.get_raw_samples_read_name_list();
     for (auto const & rn : rn_l)
     {
-        auto rsi = src_f.get_raw_samples_int(rn);
+        auto rsi = src_f.get_raw_int_samples(rn);
         auto rs_params = src_f.get_raw_samples_params(rn);
         auto rs_pack = src_f.pack_rw(rsi);
         if (opts::check)
@@ -110,18 +100,18 @@ void do_pack_rw(fast5::File const & src_f, fast5::File const & dst_f)
     }
 } // do_pack_rw()
 
-void do_unpack_rw(fast5::File const & src_f, fast5::File const & dst_f)
+void do_unpack_rw(fast5::File const & src_f, fast5::File & dst_f)
 {
     auto rn_l = src_f.get_raw_samples_read_name_list();
     for (auto const & rn : rn_l)
     {
         auto rs_params = src_f.get_raw_samples_params(rn);
-        auto rsi = src_f.get_raw_samples_int(rn);
+        auto rsi = src_f.get_raw_int_samples(rn);
         dst_f.add_raw_samples_params(rn, rs_params);
         dst_f.add_raw_samples(rn, rsi);
     }
 } // do_unpack_rw()
-void do_copy_rw(fast5::File const & src_f, fast5::File const & dst_f)
+void do_copy_rw(fast5::File const & src_f, fast5::File & dst_f)
 {
     auto rn_l = src_f.get_raw_samples_read_name_list();
     for (auto const & rn : rn_l)
@@ -130,7 +120,7 @@ void do_copy_rw(fast5::File const & src_f, fast5::File const & dst_f)
         dst_f.add_raw_samples_params(rn, rs_params);
         if (src_f.have_raw_samples_unpack(rn))
         {
-            auto rsi = src_f.get_raw_samples_int(rn);
+            auto rsi = src_f.get_raw_int_samples(rn);
             dst_f.add_raw_samples(rn, rsi);
         }
         else if (src_f.have_raw_samples_pack(rn))
@@ -141,7 +131,7 @@ void do_copy_rw(fast5::File const & src_f, fast5::File const & dst_f)
     }
 } // do_copy_rw()
 
-void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
+void do_pack_ed(fast5::File const & src_f, fast5::File & dst_f)
 {
     auto gr_l = src_f.get_eventdetection_group_list();
     for (auto const & gr : gr_l)
@@ -223,7 +213,7 @@ void do_pack_ed(fast5::File const & src_f, fast5::File const & dst_f)
     } // for gr
 } // do_pack_ed()
 
-void do_unpack_ed(fast5::File const & src_f, fast5::File const & dst_f)
+void do_unpack_ed(fast5::File const & src_f, fast5::File & dst_f)
 {
     auto gr_l = src_f.get_eventdetection_group_list();
     for (auto const & gr : gr_l)
@@ -241,7 +231,7 @@ void do_unpack_ed(fast5::File const & src_f, fast5::File const & dst_f)
     }
 } // do_unpack_ed()
 
-void do_copy_ed(fast5::File const & src_f, fast5::File const & dst_f)
+void do_copy_ed(fast5::File const & src_f, fast5::File & dst_f)
 {
     auto gr_l = src_f.get_eventdetection_group_list();
     for (auto const & gr : gr_l)
@@ -267,7 +257,7 @@ void do_copy_ed(fast5::File const & src_f, fast5::File const & dst_f)
     }
 } // do_copy_ed()
 
-void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+void do_pack_fq(fast5::File const & src_f, fast5::File & dst_f, set< string > & bc_gr_s)
 {
     for (unsigned st = 0; st < 3; ++st)
     {
@@ -346,7 +336,7 @@ void do_pack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
     }
 } // do_pack_fq
 
-void do_unpack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+void do_unpack_fq(fast5::File const & src_f, fast5::File & dst_f, set< string > & bc_gr_s)
 {
     for (unsigned st = 0; st < 3; ++st)
     {
@@ -363,7 +353,7 @@ void do_unpack_fq(fast5::File const & src_f, fast5::File const & dst_f, set< str
     }
 } // do_unpack_fq()
 
-void do_copy_fq(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+void do_copy_fq(fast5::File const & src_f, fast5::File & dst_f, set< string > & bc_gr_s)
 {
     for (unsigned st = 0; st < 3; ++st)
     {
@@ -386,7 +376,7 @@ void do_copy_fq(fast5::File const & src_f, fast5::File const & dst_f, set< strin
     }
 } // do_copy_fq()
 
-void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+void do_pack_ev(fast5::File const & src_f, fast5::File & dst_f, set< string > & bc_gr_s)
 {
     for (unsigned st = 0; st < 2; ++st)
     {
@@ -481,7 +471,7 @@ void do_pack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
     }
 } // do_pack_ev
 
-void do_unpack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+void do_unpack_ev(fast5::File const & src_f, fast5::File & dst_f, set< string > & bc_gr_s)
 {
     for (unsigned st = 0; st < 2; ++st)
     {
@@ -500,7 +490,7 @@ void do_unpack_ev(fast5::File const & src_f, fast5::File const & dst_f, set< str
     }
 } // do_unpack_ev
 
-void do_copy_ev(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+void do_copy_ev(fast5::File const & src_f, fast5::File & dst_f, set< string > & bc_gr_s)
 {
     for (unsigned st = 0; st < 2; ++st)
     {
@@ -525,7 +515,7 @@ void do_copy_ev(fast5::File const & src_f, fast5::File const & dst_f, set< strin
     }
 } // do_copy_ev
 
-void do_pack_al(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+void do_pack_al(fast5::File const & src_f, fast5::File & dst_f, set< string > & bc_gr_s)
 {
     auto gr_l = src_f.get_basecall_strand_group_list(2);
     for (auto const & gr : gr_l)
@@ -592,7 +582,7 @@ void do_pack_al(fast5::File const & src_f, fast5::File const & dst_f, set< strin
     }
 } // do_pack_al()
 
-void do_unpack_al(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+void do_unpack_al(fast5::File const & src_f, fast5::File & dst_f, set< string > & bc_gr_s)
 {
     auto gr_l = src_f.get_basecall_strand_group_list(2);
     for (auto const & gr : gr_l)
@@ -606,7 +596,7 @@ void do_unpack_al(fast5::File const & src_f, fast5::File const & dst_f, set< str
     }
 } // do_unpack_al
 
-void do_copy_al(fast5::File const & src_f, fast5::File const & dst_f, set< string > & bc_gr_s)
+void do_copy_al(fast5::File const & src_f, fast5::File & dst_f, set< string > & bc_gr_s)
 {
     auto gr_l = src_f.get_basecall_strand_group_list(2);
     for (auto const & gr : gr_l)
@@ -626,7 +616,7 @@ void do_copy_al(fast5::File const & src_f, fast5::File const & dst_f, set< strin
     }
 } // do_copy_al
 
-void do_copy_basecall_params(fast5::File const & src_f, fast5::File const & dst_f, set< string > const & bc_gr_s)
+void do_copy_basecall_params(fast5::File const & src_f, fast5::File & dst_f, set< string > const & bc_gr_s)
 {
     for (auto const & gr : bc_gr_s)
     {

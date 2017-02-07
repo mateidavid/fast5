@@ -121,9 +121,9 @@ int main(int argc, char* argv[])
             //
             bool have_eventdetection_events = f.have_eventdetection_events();
             cout << "have_eventdetection_events=" << have_eventdetection_events << endl;
-            bool have_eventdetection_groups = f.have_eventdetection_groups();
-            cout << "have_eventdetection_groups=" << have_eventdetection_groups << endl;
-            if (have_eventdetection_groups)
+            bool have_eventdetection_group = f.have_eventdetection_group();
+            cout << "have_eventdetection_group=" << have_eventdetection_group << endl;
+            if (have_eventdetection_group)
             {
                 auto ed_gr_list = f.get_eventdetection_group_list();
                 cout << "eventdetection_group_list=";
@@ -168,9 +168,9 @@ int main(int argc, char* argv[])
             //
             // inspect basecall groups
             //
-            bool have_basecall_groups = f.have_basecall_groups();
-            cout << "have_basecall_groups=" << have_basecall_groups << endl;
-            if (have_basecall_groups)
+            bool have_basecall_group = f.have_basecall_group();
+            cout << "have_basecall_group=" << have_basecall_group << endl;
+            if (have_basecall_group)
             {
                 auto bc_gr_list = f.get_basecall_group_list();
                 cout << "basecall_group_list=";

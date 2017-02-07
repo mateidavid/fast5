@@ -1423,7 +1423,7 @@ public:
 
     void create(const std::string& file_name, bool truncate = false)
     {
-        assert(not is_open());
+        if (is_open()) close();
         _file_name = file_name;
         _rw = true;
         _file_id = H5Fcreate(file_name.c_str(), truncate? H5F_ACC_TRUNC : H5F_ACC_EXCL, H5P_DEFAULT, H5P_DEFAULT);
@@ -1431,7 +1431,7 @@ public:
     }
     void open(const std::string& file_name, bool rw = false)
     {
-        assert(not is_open());
+        if (is_open()) close();
         _file_name = file_name;
         _rw = rw;
         _file_id = H5Fopen(file_name.c_str(), not rw? H5F_ACC_RDONLY : H5F_ACC_RDWR, H5P_DEFAULT);
@@ -1439,8 +1439,8 @@ public:
     }
     void close()
     {
-        assert(is_open());
-        assert(H5Fget_obj_count(_file_id, H5F_OBJ_ALL | H5F_OBJ_LOCAL) == 1);
+        if (not is_open()) return;
+        if (H5Fget_obj_count(_file_id, H5F_OBJ_ALL | H5F_OBJ_LOCAL) != 1) throw Exception(_file_name + ": HDF5 memory leak");
         int status = H5Fclose(_file_id);
         if (status < 0) throw Exception(_file_name + ": error in H5Fclose");
         _file_id = 0;
@@ -1715,14 +1715,14 @@ public:
     static void copy_attribute(File const & src_f, File const & dst_f,
                                std::string const & src_full_path, std::string const & _dst_full_path = std::string())
     {
-        assert(src_f.is_open());
-        assert(dst_f.is_open());
-        assert(dst_f.is_rw());
+        if (not src_f.is_open()) throw Exception("source file not open");
+        if (not dst_f.is_open()) throw Exception("destination file not open");
+        if (not dst_f.is_rw()) throw Exception("destination file not writeable");
         std::string const & dst_full_path = (_dst_full_path.empty()? src_full_path : _dst_full_path);
-        assert(src_f.attribute_exists(src_full_path));
-        assert(not (dst_f.group_exists(dst_full_path)
-                    or dst_f.dataset_exists(dst_full_path)
-                    or dst_f.attribute_exists(dst_full_path)));
+        if (not src_f.attribute_exists(src_full_path)) throw Exception("source attribute missing");
+        if (dst_f.group_exists(dst_full_path)
+            or dst_f.dataset_exists(dst_full_path)
+            or dst_f.attribute_exists(dst_full_path)) throw Exception("destination path exists");
         // compute paths
         auto src_path = split_full_name(src_full_path);
         auto dst_path = split_full_name(dst_full_path);

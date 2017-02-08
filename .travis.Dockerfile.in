@@ -6,15 +6,21 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=${TZ}
 RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
 
+# enable debian:testing
+RUN echo 'APT::Default-Release "stable";' >/etc/apt/apt.conf.d/99defaultrelease && \
+    mv /etc/apt/sources.list /etc/apt/sources.list.d/stable.list && \
+    sed 's/stable/testing/g' </etc/apt/sources.list.d/stable.list >/etc/apt/sources.list.d/testing.list
+
 # install prerequisites
 RUN apt-get update && \
     apt-get install -y \
         build-essential \
         libhdf5-dev \
-        libboost-python-dev \
         python2.7-minimal \
         python-setuptools \
-        python-virtualenv
+        python-virtualenv && \
+    apt-get install -y -t testing \
+        libboost-python-dev
 
 # expose prerequisites settings
 ENV HDF5_INCLUDE_DIR=/usr/include/hdf5/serial

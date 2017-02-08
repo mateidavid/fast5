@@ -49,7 +49,7 @@ namespace opts
     SwitchArg rw_unpack("", "rw-unpack", "Unpack raw samples data.", cmd_parser);
     SwitchArg rw_pack("", "rw-pack", "Pack raw samples data.", cmd_parser);
     //
-    SwitchArg check("c", "check", "Check packing.", cmd_parser);
+    SwitchArg no_check("n", "no-check", "Don't check packing.", cmd_parser);
     SwitchArg unpack("u", "unpack", "Unpack fast5 file.", cmd_parser);
     SwitchArg pack("p", "pack", "Pack fast5 file (default, if no other pack/unpack/copy options).", cmd_parser);
     SwitchArg force("f", "force", "Overwrite output file if it exists.", cmd_parser);
@@ -232,9 +232,9 @@ int main(int argc, char * argv[])
     LOG(info) << "fq: " << (opts::fq_pack? "pack" : opts::fq_unpack? "unpack" : opts::fq_copy? "copy" : "drop") << endl;
     LOG(info) << "ev: " << (opts::ev_pack? "pack" : opts::ev_unpack? "unpack" : opts::ev_copy? "copy" : "drop") << endl;
     LOG(info) << "al: " << (opts::al_pack? "pack" : opts::al_unpack? "unpack" : opts::al_copy? "copy" : "drop") << endl;
-    LOG(info) << "check: " << (opts::check? "yes" : "no") << endl;
+    LOG(info) << "check: " << (not opts::no_check? "yes" : "no") << endl;
     // set File_Packer options
-    fast5::File_Packer::opts::check() = opts::check;
+    fast5::File_Packer::opts::check() = not opts::no_check;
     fast5::File_Packer::opts::qv_bits() = opts::qv_bits;
     fast5::File_Packer::opts::p_model_state_bits() = opts::p_model_state_bits;
     real_main();

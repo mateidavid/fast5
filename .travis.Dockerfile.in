@@ -6,10 +6,10 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=${TZ}
 RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
 
-# enable debian:testing
-RUN echo 'APT::Default-Release "stable";' >/etc/apt/apt.conf.d/99defaultrelease && \
-    mv /etc/apt/sources.list /etc/apt/sources.list.d/stable.list && \
-    sed 's/stable/testing/g' </etc/apt/sources.list.d/stable.list >/etc/apt/sources.list.d/testing.list
+# enable debian:stretch
+RUN echo 'APT::Default-Release "jessie";' >/etc/apt/apt.conf.d/99defaultrelease && \
+    mv /etc/apt/sources.list /etc/apt/sources.list.d/jessie.list && \
+    sed 's/jessie/stretch/g' </etc/apt/sources.list.d/jessie.list >/etc/apt/sources.list.d/stretch.list
 
 # install prerequisites
 RUN apt-get update && \
@@ -19,7 +19,7 @@ RUN apt-get update && \
         python2.7-minimal \
         python-setuptools \
         python-virtualenv && \
-    apt-get install -y -t testing \
+    apt-get install -y -t stretch \
         libboost-python-dev
 
 # expose prerequisites settings

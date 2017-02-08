@@ -675,7 +675,7 @@ public:
     void
     add_basecall_params(std::string const & gr, Attr_Map const & am) const
     {
-        add_attr_map(basecall_group_path(gr) + gr, am);
+        add_attr_map(basecall_group_path(gr), am);
     }
     //
     // Access Basecall group log
@@ -1158,14 +1158,22 @@ private:
         {
             auto && tmp = bc_params.at("event_detection");
             auto pref = eventdetection_root_path().substr(1) + "/" + eventdetection_group_prefix();
-            if (tmp.size() >= pref.size()
-                and tmp.substr(0, pref.size()) == pref)
+            if (tmp.substr(0, pref.size()) == pref)
             {
                 auto ed_gr = tmp.substr(pref.size());
                 if (have_eventdetection_group(ed_gr))
                 {
                     return ed_gr;
                 }
+            }
+        }
+        if (have_basecall_events_pack(0, gr))
+        {
+            auto ev_pack = get_basecall_events_pack(0, gr);
+            auto ed_gr = ev_pack.ed_gr;
+            if (have_eventdetection_group(ed_gr))
+            {
+                return ed_gr;
             }
         }
         return "";

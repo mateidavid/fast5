@@ -283,11 +283,6 @@ public:
         Base::open(file_name, rw);
         reload();
     }
-    static void
-    copy_attributes(File const & src_f, File const & dst_f, std::string const & p, bool recurse = false)
-    {
-        Base::copy_attributes(src_f, dst_f, p, recurse);
-    }
 
     //
     // Access /file_version

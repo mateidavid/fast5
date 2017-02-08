@@ -71,7 +71,7 @@ void real_main()
         assert(dst_f.is_open());
         assert(dst_f.is_rw());
         // copy all attributes
-        fast5::File::copy_attributes(src_f, dst_f, "/UniqueGlobalKey", true);
+        fast5::File_Packer::copy_attributes(src_f, dst_f, "/UniqueGlobalKey", true);
         set< string > bc_gr_s;
         // process raw samples
         if (opts::rw_pack)

@@ -605,6 +605,11 @@ struct File_Packer
         }
     } // copy_basecall_params()
 
+    static void
+    copy_attributes(File const & src_f, File const & dst_f, std::string const & p, bool recurse = false)
+    {
+        File::Base::copy_attributes(src_f, dst_f, p, recurse);
+    } // copy_attributes()
 }; // class File_Packer
 
 } // namespace fast5

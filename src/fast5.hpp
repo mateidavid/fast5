@@ -206,8 +206,12 @@ struct Basecall_Events_Params
 
 struct Basecall_Events_Pack
 {
+    Huffman_Packer::Code_Type rel_skip;
+    Attr_Map rel_skip_params;
     Huffman_Packer::Code_Type skip;
     Attr_Map skip_params;
+    Huffman_Packer::Code_Type len;
+    Attr_Map len_params;
     Huffman_Packer::Code_Type move;
     Attr_Map move_params;
     Bit_Packer::Code_Type p_model_state;
@@ -215,9 +219,9 @@ struct Basecall_Events_Pack
     //
     std::string ed_gr;
     long long start_time;
-    long long duration;
     unsigned state_size;
     unsigned p_model_state_bits;
+    Basecall_Events_Params bce_params;
 }; // struct Basecall_Events_Pack
 
 //
@@ -850,11 +854,8 @@ public:
         else if (have_basecall_events_pack(st, gr_1d))
         {
             auto path = basecall_events_pack_path(gr_1d, st);
-            Basecall_Events_Pack ev_pack;
-            Base::read(path + "/start_time", ev_pack.start_time);
-            Base::read(path + "/duration", ev_pack.duration);
-            res.start_time = time_to_float(ev_pack.start_time, _channel_id_params.sampling_rate);
-            res.duration = time_to_float(ev_pack.duration, _channel_id_params.sampling_rate);
+            Base::read(path + "/bce_params_start_time", res.start_time);
+            Base::read(path + "/bce_params_duration", res.duration);
         }
         return res;
     }
@@ -1332,32 +1333,56 @@ private:
         Basecall_Events_Pack ev_pack;
         Base::read(p + "/Skip", ev_pack.skip);
         ev_pack.skip_params = get_attr_map(p + "/Skip");
+        if (Base::dataset_exists(p + "/Rel_Skip"))
+        {
+            Base::read(p + "/Rel_Skip", ev_pack.rel_skip);
+            ev_pack.rel_skip_params = get_attr_map(p + "/Rel_Skip");
+        }
+        else
+        {
+            Base::read(p + "/Skip", ev_pack.skip);
+            ev_pack.skip_params = get_attr_map(p + "/Skip");
+            Base::read(p + "/Len", ev_pack.len);
+            ev_pack.len_params = get_attr_map(p + "/Len");
+        }
         Base::read(p + "/Move", ev_pack.move);
         ev_pack.move_params = get_attr_map(p + "/Move");
         Base::read(p + "/P_Model_State", ev_pack.p_model_state);
         ev_pack.p_model_state_params = get_attr_map(p + "/P_Model_State");
         Base::read(p + "/ed_gr", ev_pack.ed_gr);
         Base::read(p + "/start_time", ev_pack.start_time);
-        Base::read(p + "/duration", ev_pack.duration);
         Base::read(p + "/state_size", ev_pack.state_size);
         Base::read(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
+        Base::read(p + "/bce_params_start_time", ev_pack.bce_params.start_time);
+        Base::read(p + "/bce_params_duration", ev_pack.bce_params.duration);
         return ev_pack;
     }
     void
     add_basecall_events(unsigned st, std::string const & gr, Basecall_Events_Pack const & ev_pack)
     {
         auto p = basecall_events_pack_path(gr, st);
-        Base::write_dataset(p + "/Skip", ev_pack.skip);
-        add_attr_map(p + "/Skip", ev_pack.skip_params);
+        if (not ev_pack.rel_skip.empty())
+        {
+            Base::write_dataset(p + "/Rel_Skip", ev_pack.rel_skip);
+            add_attr_map(p + "/Rel_Skip", ev_pack.rel_skip_params);
+        }
+        else
+        {
+            Base::write_dataset(p + "/Skip", ev_pack.skip);
+            add_attr_map(p + "/Skip", ev_pack.skip_params);
+            Base::write_dataset(p + "/Len", ev_pack.len);
+            add_attr_map(p + "/Len", ev_pack.len_params);
+        }
         Base::write_dataset(p + "/Move", ev_pack.move);
         add_attr_map(p + "/Move", ev_pack.move_params);
         Base::write_dataset(p + "/P_Model_State", ev_pack.p_model_state);
         add_attr_map(p + "/P_Model_State", ev_pack.p_model_state_params);
         Base::write_attribute(p + "/ed_gr", ev_pack.ed_gr);
         Base::write_attribute(p + "/start_time", ev_pack.start_time);
-        Base::write_attribute(p + "/duration", ev_pack.duration);
         Base::write_attribute(p + "/state_size", ev_pack.state_size);
         Base::write_attribute(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
+        Base::write_attribute(p + "/bce_params_start_time", ev_pack.bce_params.start_time);
+        Base::write_attribute(p + "/bce_params_duration", ev_pack.bce_params.duration);
         reload();
     }
     bool
@@ -1526,10 +1551,10 @@ private:
             double sampling_rate,
             unsigned p_model_state_bits)
     {
+        //TODO
         Basecall_Events_Pack ev_pack;
         ev_pack.ed_gr = ed_gr;
-        ev_pack.start_time = time_to_int(ev_params.start_time, sampling_rate);
-        ev_pack.duration = time_to_int(ev_params.duration, sampling_rate);
+        ev_pack.bce_params = ev_params;
         ev_pack.state_size = ev[0].get_model_state().size();
         ev_pack.p_model_state_bits = p_model_state_bits;
         auto fqa = split_fq(fq);
@@ -1591,6 +1616,7 @@ private:
               std::vector< EventDetection_Event > const & ed,
               double sampling_rate)
     {
+        //TODO
         std::vector< Basecall_Event > res;
         auto skip = ev_skip_coder().decode< long long >(ev_pack.skip, ev_pack.skip_params);
         auto mv = ev_move_coder().decode< std::uint8_t >(ev_pack.move, ev_pack.move_params);

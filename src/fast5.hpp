@@ -15,7 +15,9 @@
 #include <map>
 
 #include "hdf5_tools.hpp"
-#include "fast5_pack.hpp"
+#include "Huffman_Packer.hpp"
+#include "Bit_Packer.hpp"
+
 #define MAX_K_LEN 8
 
 namespace
@@ -64,7 +66,7 @@ struct Raw_Samples_Params
 
 struct Raw_Samples_Pack
 {
-    fast5_pack::Huffman_Coder::Code_Type signal;
+    Huffman_Packer::Code_Type signal;
     Attr_Map signal_params;
 }; // struct Raw_Samples_Pack
 
@@ -97,9 +99,9 @@ struct EventDetection_Events_Params
 
 struct EventDetection_Events_Pack
 {
-    fast5_pack::Huffman_Coder::Code_Type skip;
+    Huffman_Packer::Code_Type skip;
     Attr_Map skip_params;
-    fast5_pack::Huffman_Coder::Code_Type len;
+    Huffman_Packer::Code_Type len;
     Attr_Map len_params;
 }; // struct EventDetection_Events_Pack
 
@@ -148,9 +150,9 @@ struct Basecall_Model_Params
 
 struct Basecall_Fastq_Pack
 {
-    fast5_pack::Huffman_Coder::Code_Type bp;
+    Huffman_Packer::Code_Type bp;
     Attr_Map bp_params;
-    fast5_pack::Huffman_Coder::Code_Type qv;
+    Huffman_Packer::Code_Type qv;
     Attr_Map qv_params;
     std::string read_name;
     std::uint8_t qv_bits;
@@ -204,11 +206,11 @@ struct Basecall_Events_Params
 
 struct Basecall_Events_Pack
 {
-    fast5_pack::Huffman_Coder::Code_Type skip;
+    Huffman_Packer::Code_Type skip;
     Attr_Map skip_params;
-    fast5_pack::Huffman_Coder::Code_Type move;
+    Huffman_Packer::Code_Type move;
     Attr_Map move_params;
-    fast5_pack::Bit_Packer::Code_Type p_model_state;
+    Bit_Packer::Code_Type p_model_state;
     Attr_Map p_model_state_params;
     //
     std::string ed_gr;
@@ -238,12 +240,12 @@ struct Basecall_Alignment_Entry
 
 struct Basecall_Alignment_Pack
 {
-    fast5_pack::Bit_Packer::Code_Type template_step;
-    fast5_pack::Bit_Packer::Code_Params_Type template_step_params;
-    fast5_pack::Bit_Packer::Code_Type complement_step;
-    fast5_pack::Bit_Packer::Code_Params_Type complement_step_params;
-    fast5_pack::Huffman_Coder::Code_Type move;
-    fast5_pack::Huffman_Coder::Code_Params_Type move_params;
+    Bit_Packer::Code_Type template_step;
+    Bit_Packer::Code_Params_Type template_step_params;
+    Bit_Packer::Code_Type complement_step;
+    Bit_Packer::Code_Params_Type complement_step_params;
+    Huffman_Packer::Code_Type move;
+    Huffman_Packer::Code_Params_Type move_params;
     unsigned template_index_start;
     unsigned complement_index_start;
     unsigned kmer_size;
@@ -1843,14 +1845,14 @@ private:
     //
     // Packers
     //
-    static fast5_pack::Huffman_Coder const & rw_coder()      { return fast5_pack::Huffman_Coder::get_coder("fast5_rw_1"); }
-    static fast5_pack::Huffman_Coder const & ed_skip_coder() { return fast5_pack::Huffman_Coder::get_coder("fast5_ed_skip_1"); }
-    static fast5_pack::Huffman_Coder const & ed_len_coder()  { return fast5_pack::Huffman_Coder::get_coder("fast5_ed_len_1"); }
-    static fast5_pack::Huffman_Coder const & fq_bp_coder()   { return fast5_pack::Huffman_Coder::get_coder("fast5_fq_bp_1"); }
-    static fast5_pack::Huffman_Coder const & fq_qv_coder()   { return fast5_pack::Huffman_Coder::get_coder("fast5_fq_qv_1"); }
-    static fast5_pack::Huffman_Coder const & ev_skip_coder() { return fast5_pack::Huffman_Coder::get_coder("fast5_ev_skip_1"); }
-    static fast5_pack::Huffman_Coder const & ev_move_coder() { return fast5_pack::Huffman_Coder::get_coder("fast5_ev_move_1"); }
-    static fast5_pack::Bit_Packer    const & bit_packer()    { return fast5_pack::Bit_Packer::get_packer(); }
+    static Huffman_Packer const & rw_coder()      { return Huffman_Packer::get_coder("fast5_rw_1"); }
+    static Huffman_Packer const & ed_skip_coder() { return Huffman_Packer::get_coder("fast5_ed_skip_1"); }
+    static Huffman_Packer const & ed_len_coder()  { return Huffman_Packer::get_coder("fast5_ed_len_1"); }
+    static Huffman_Packer const & fq_bp_coder()   { return Huffman_Packer::get_coder("fast5_fq_bp_1"); }
+    static Huffman_Packer const & fq_qv_coder()   { return Huffman_Packer::get_coder("fast5_fq_qv_1"); }
+    static Huffman_Packer const & ev_skip_coder() { return Huffman_Packer::get_coder("fast5_ev_skip_1"); }
+    static Huffman_Packer const & ev_move_coder() { return Huffman_Packer::get_coder("fast5_ev_move_1"); }
+    static Bit_Packer     const & bit_packer()    { return Bit_Packer::get_packer(); }
 }; // class File
 
 } // namespace fast5

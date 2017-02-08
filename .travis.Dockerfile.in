@@ -20,6 +20,7 @@ RUN apt-get update && \
         python-setuptools \
         python-virtualenv && \
     apt-get install -y -t stretch \
+        g++-6 \
         libboost-python-dev
 
 # expose prerequisites settings
@@ -30,8 +31,8 @@ ENV BOOST_LIB_DIR=/usr/lib/x86_64-linux-gnu
 
 # if necessary, specify compiler
 #RUN apt-get install -y g++-4.9 g++-5 g++-6
-#ENV CC=gcc-4.9
-#ENV CXX=g++-4.9
+ENV CC=gcc-6
+ENV CXX=g++-6
 
 # use host id
 RUN groupadd --gid ${GROUP_ID} ${GROUP_NAME}

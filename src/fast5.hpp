@@ -1442,6 +1442,75 @@ private:
     {
         return rw_coder().decode< Raw_Int_Sample >(rsp.signal, rsp.signal_params);
     }
+    static std::pair< std::vector< long long >, std::vector< long long > >
+    pack_event_start_length(
+        unsigned num_events,
+        std::function< long long(unsigned) > get_start,
+        std::function< long long(unsigned) > get_length,
+        long long start_time)
+    {
+        std::pair< std::vector< long long >, std::vector< long long > > res;
+        auto & skip = res.first;
+        auto & len = res.second;
+        for (unsigned i = 0; i < num_events; ++i)
+        {
+            auto si = get_start(i);
+            auto li = get_length(i);
+            skip.push_back(si - start_time);
+            len.push_back(li);
+            start_time = si + li;
+        }
+        return res;
+    }
+    static void
+    unpack_event_start_length(
+        std::vector< long long > const & skip,
+        std::vector< long long > const & len,
+        std::function< void(unsigned, long long) > set_start,
+        std::function< void(unsigned, long long) > set_length,
+        long long start_time)
+    {
+        for (unsigned i = 0; i < skip.size(); ++i)
+        {
+            auto si = start_time + skip[i];
+            auto li = len[i];
+            set_start(i, si);
+            set_length(i, li);
+            start_time = si + li;
+        }
+    }
+    static void
+    unpack_event_mean_stdv(
+        unsigned num_events,
+        std::function< long long(unsigned) > get_start,
+        std::function< long long(unsigned) > get_length,
+        std::function< void(unsigned, double) > set_mean,
+        std::function< void(unsigned, double) > set_stdv,
+        std::vector< Raw_Sample > const & rs,
+        long long rs_start_time,
+        bool off_by_one)
+    {
+        for (unsigned i = 0; i < num_events; ++i)
+        {
+            long long rs_start_idx = get_start(i) - rs_start_time + off_by_one;
+            if (rs_start_idx < 0 or rs_start_idx + get_length(i) > (long long)rs.size() + off_by_one)
+            {
+                throw std::runtime_error("unpack_ed failure: bad rs_start_idx");
+            }
+            double s = 0.0;
+            double s2 = 0.0;
+            unsigned n = get_length(i);
+            if (off_by_one and rs_start_idx + n == (long long)rs.size()) --n;
+            for (unsigned j = 0; j < n; ++j)
+            {
+                auto x = rs[rs_start_idx + j];
+                s += x;
+                s2 += x * x;
+            }
+            set_mean(i, s / n);
+            set_stdv(i, n > 1? std::sqrt((s2 - s*s/n)/(n)) : 0);
+        }
+    }
     static EventDetection_Events_Pack
     pack_ed(std::vector< EventDetection_Event > const & ed,
             EventDetection_Events_Params const & ed_params)
@@ -1449,13 +1518,11 @@ private:
         EventDetection_Events_Pack ed_pack;
         std::vector< long long > skip;
         std::vector< long long > len;
-        long long last_end = ed_params.start_time;
-        for (unsigned i = 0; i < ed.size(); ++i)
-        {
-            skip.push_back(ed[i].start - last_end);
-            len.push_back(ed[i].length);
-            last_end = ed[i].start + ed[i].length;
-        }
+        std::tie(skip, len) = pack_event_start_length(
+            ed.size(),
+            [&ed] (unsigned i) { return ed.at(i).start; },
+            [&ed] (unsigned i) { return ed.at(i).length; },
+            ed_params.start_time);
         std::tie(ed_pack.skip, ed_pack.skip_params) = ed_skip_coder().encode(skip, false);
         std::tie(ed_pack.len, ed_pack.len_params) = ed_len_coder().encode(len, false);
         return ed_pack;
@@ -1473,34 +1540,22 @@ private:
             throw std::runtime_error("unpack_ed failure: skip and length of different size");
         }
         std::vector< EventDetection_Event > ed(skip.size());
-        long long last_end = ed_params.start_time;
-        long long off_by_one = ed_params.start_time == rs_params.start_time; // hack
-        for (unsigned i = 0; i < skip.size(); ++i)
-        {
-            ed[i].start = last_end + skip[i];
-            ed[i].length = len[i];
-            last_end = ed[i].start + ed[i].length;
-            // use rs to reconstruct mean and stdv
-            long long rs_start_idx = ed[i].start - rs_params.start_time + off_by_one;
-            if (rs_start_idx < 0 or rs_start_idx + ed[i].length > (long long)rs.size() + off_by_one)
-            {
-                throw std::runtime_error("unpack_ed failure: bad rs_start_idx");
-            }
-            double s = 0.0;
-            double s2 = 0.0;
-            unsigned n = ed[i].length;
-            if (off_by_one and rs_start_idx + n == (long long)rs.size()) --n;
-            for (unsigned j = 0; j < n; ++j)
-            {
-                auto x = rs[rs_start_idx + j];
-                s += x;
-                s2 += x * x;
-            }
-            ed[i].mean = s / n;
-            ed[i].stdv = n > 1
-                ? std::sqrt((s2 - s*s/n)/(n))
-                : 0;
-        }
+        unpack_event_start_length(
+            skip,
+            len,
+            [&ed] (unsigned i, long long x) { return ed.at(i).start = x; },
+            [&ed] (unsigned i, long long x) { return ed.at(i).length = x; },
+            ed_params.start_time);
+        bool off_by_one = ed_params.start_time == rs_params.start_time; // hack
+        unpack_event_mean_stdv(
+            ed.size(),
+            [&ed] (unsigned i) { return ed.at(i).start; },
+            [&ed] (unsigned i) { return ed.at(i).length; },
+            [&ed] (unsigned i, double x) { return ed.at(i).mean = x; },
+            [&ed] (unsigned i, double x) { return ed.at(i).stdv = x; },
+            rs,
+            rs_params.start_time,
+            off_by_one);
         return ed;
     }
     static Basecall_Fastq_Pack
@@ -1551,29 +1606,50 @@ private:
             double sampling_rate,
             unsigned p_model_state_bits)
     {
-        //TODO
         Basecall_Events_Pack ev_pack;
         ev_pack.ed_gr = ed_gr;
-        ev_pack.bce_params = ev_params;
+        ev_pack.start_time = time_to_int(ev[0].start, sampling_rate);
         ev_pack.state_size = ev[0].get_model_state().size();
         ev_pack.p_model_state_bits = p_model_state_bits;
+        ev_pack.bce_params = ev_params;
         auto fqa = split_fq(fq);
+        std::vector< long long > rel_skip;
         std::vector< long long > skip;
+        std::vector< long long > len;
         std::vector< std::uint8_t > mv;
         std::vector< std::uint16_t > p_model_state;
         std::string bases;
-        long long j = 0;
+        // first pack start/duration
+        if (not ed_gr.empty())
+        {
+            // pack relative to ed events
+            long long j = 0;
+            for (unsigned i = 0; i < ev.size(); ++i)
+            {
+                auto ti = time_to_int(ev[i].start, sampling_rate);
+                auto last_j = j;
+                while (j < (long long)ed.size() and ed[j].start < ti) ++j;
+                if (j == (long long)ed.size())
+                {
+                    throw std::runtime_error("pack_ev failed: no matching ed event");
+                }
+                rel_skip.push_back(j - last_j - 1);
+            }
+            std::tie(ev_pack.rel_skip, ev_pack.rel_skip_params) = ev_skip_coder().encode(rel_skip, false);
+        }
+        else
+        {
+            // pack start&length as for ed events
+            std::tie(skip, len) = pack_event_start_length(
+                ev.size(),
+                [&] (unsigned i) { return time_to_int(ev.at(i).start, sampling_rate); },
+                [&] (unsigned i) { return time_to_int(ev.at(i).length, sampling_rate); },
+                ev_pack.start_time);
+            std::tie(ev_pack.skip, ev_pack.skip_params) = ed_skip_coder().encode(skip, false);
+            std::tie(ev_pack.len, ev_pack.len_params) = ed_len_coder().encode(len, false);
+        }
         for (unsigned i = 0; i < ev.size(); ++i)
         {
-            // skip
-            auto ti = time_to_int(ev[i].start, sampling_rate);
-            auto last_j = j;
-            while (j < (long long)ed.size() and ed[j].start < ti) ++j;
-            if (j == (long long)ed.size())
-            {
-                throw std::runtime_error("pack_ev failed: no matching ed event");
-            }
-            skip.push_back(j - last_j - 1);
             // move
             if (ev[i].move < 0 or ev[i].move > std::numeric_limits< uint8_t >::max())
             {
@@ -1604,8 +1680,6 @@ private:
         {
             throw std::runtime_error("pack_ev failed: sequence of states does not match fastq seq");
         }
-
-        std::tie(ev_pack.skip, ev_pack.skip_params) = ev_skip_coder().encode(skip, false);
         std::tie(ev_pack.move, ev_pack.move_params) = ev_move_coder().encode(mv, false);
         std::tie(ev_pack.p_model_state, ev_pack.p_model_state_params) = bit_packer().encode(p_model_state, p_model_state_bits);
         return ev_pack;

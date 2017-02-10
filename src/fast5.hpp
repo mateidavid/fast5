@@ -14,6 +14,7 @@
 #include <set>
 #include <map>
 
+#include "fast5_version.hpp"
 #include "hdf5_tools.hpp"
 #include "Huffman_Packer.hpp"
 #include "Bit_Packer.hpp"
@@ -465,23 +466,6 @@ public:
                 ? _eventdetection_read_names.at(_gr)
                 : _empty);
     }
-    bool
-    have_eventdetection_events(
-        std::string const & gr = std::string(), std::string const & rn = std::string()) const
-    {
-        auto && _gr = fill_eventdetection_group(gr);
-        auto && _rn = fill_eventdetection_read_name(_gr, rn);
-        return (_eventdetection_read_names.count(_gr)
-                and std::find(
-                    _eventdetection_read_names.at(_gr).begin(),
-                    _eventdetection_read_names.at(_gr).end(),
-                    _rn)
-                != _eventdetection_read_names.at(_gr).end());
-    }
-
-    //
-    // Access EventDetection group params
-    //
     Attr_Map
     get_eventdetection_params(std::string const & gr = std::string()) const
     {
@@ -495,8 +479,21 @@ public:
     }
 
     //
-    // Access EventDetection events params
+    // Access EventDetection events
     //
+    bool
+    have_eventdetection_events(
+        std::string const & gr = std::string(), std::string const & rn = std::string()) const
+    {
+        auto && _gr = fill_eventdetection_group(gr);
+        auto && _rn = fill_eventdetection_read_name(_gr, rn);
+        return (_eventdetection_read_names.count(_gr)
+                and std::find(
+                    _eventdetection_read_names.at(_gr).begin(),
+                    _eventdetection_read_names.at(_gr).end(),
+                    _rn)
+                != _eventdetection_read_names.at(_gr).end());
+    }
     EventDetection_Events_Params
     get_eventdetection_events_params(
         std::string const & gr = std::string(), std::string const & rn = std::string()) const
@@ -550,10 +547,6 @@ public:
         if (ede_params.median_before > 0.0) Base::write_attribute(p + "/median_before", ede_params.median_before);
         if (ede_params.abasic_found < 2) Base::write_attribute(p + "/abasic_found", ede_params.abasic_found);
     }
-
-    //
-    // Access EventDetection events
-    //
     std::vector< EventDetection_Event >
     get_eventdetection_events(
         std::string const & gr = std::string(), std::string const & rn = std::string()) const

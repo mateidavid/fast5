@@ -16,8 +16,7 @@ help: ## This help.
 
 clean: ## Remove build products
 	${PYTHON} setup.py clean
-	rm -rf fast5.egg-info build dist
-	find fast5/ \( -name '*.pyc' -o -name '*.so' \) -delete
+	rm -rf build fast5.egg-info fast5*.so
 
 check_virtualenv:
 	@[ "$$VIRTUAL_ENV" ] || { echo "not in a virtualenv" >&2; exit 1; }

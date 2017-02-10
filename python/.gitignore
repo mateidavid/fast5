@@ -1,5 +1,1 @@
-build/
-dist/
-*.egg-info/
-*.pyc
-*.so
+fast5.cpp

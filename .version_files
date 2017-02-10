@@ -1,2 +1,2 @@
 VERSION
-python/fast5/version.py
+src/fast5_version.hpp

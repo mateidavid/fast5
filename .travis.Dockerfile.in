@@ -6,33 +6,24 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=${TZ}
 RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
 
-# enable debian:stretch
-RUN echo 'APT::Default-Release "jessie";' >/etc/apt/apt.conf.d/99defaultrelease && \
-    mv /etc/apt/sources.list /etc/apt/sources.list.d/jessie.list && \
-    sed 's/jessie/stretch/g' </etc/apt/sources.list.d/jessie.list >/etc/apt/sources.list.d/stretch.list
-
 # install prerequisites
 RUN apt-get update && \
     apt-get install -y \
         build-essential \
+        cython \
         libhdf5-dev \
         python2.7-minimal \
         python-setuptools \
-        python-virtualenv && \
-    apt-get install -y -t stretch \
-        g++-6 \
-        libboost-python-dev
+        python-virtualenv
 
 # expose prerequisites settings
 ENV HDF5_INCLUDE_DIR=/usr/include/hdf5/serial
 ENV HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu/hdf5/serial
-ENV BOOST_INCLUDE_DIR=/usr/include
-ENV BOOST_LIB_DIR=/usr/lib/x86_64-linux-gnu
 
 # if necessary, specify compiler
 #RUN apt-get install -y g++-4.9 g++-5 g++-6
-ENV CC=gcc-6
-ENV CXX=g++-6
+#ENV CC=gcc-6
+#ENV CXX=g++-6
 
 # use host id
 RUN groupadd --gid ${GROUP_ID} ${GROUP_NAME}

@@ -9,7 +9,7 @@ import sys
 
 from setuptools import setup, Extension
 
-use_cython = os.environ.get('USE_CYTHON', '') != ''
+use_cython = True #os.environ.get('USE_CYTHON', '') != ''
 
 # check HDF5 include and lib dirs
 hdf5_dir = os.environ.get('HDF5_DIR', '/usr')

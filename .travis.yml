@@ -12,7 +12,7 @@ before_install:
 
 install:
     - docker run --rm -v $PWD:/data fast5 make -C src -e
-    - docker run --rm -v $PWD:/data fast5 bash -c 'virtualenv build-venv && source build-venv/bin/activate && make -C python -e develop'
+    - docker run --rm -v $PWD:/data fast5 bash -c 'virtualenv build-venv --system-site-packages && source build-venv/bin/activate && make -C python -e develop'
 
 script:
     - docker run --rm -v $PWD:/data fast5 bash -c 'src/hdf5-mod -f file.000.fast5 && src/f5-mod file.000.fast5 && src/f5ls file.000.fast5 && src/f5ls-full file.000.fast5'

@@ -10,11 +10,14 @@ RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezo
 RUN apt-get update && \
     apt-get install -y \
         build-essential \
-        cython \
         libhdf5-dev \
-        python2.7-minimal \
-        python-setuptools \
-        python-virtualenv
+        libpython2.7-dev \
+        python2.7-minimal
+RUN curl https://bootstrap.pypa.io/get-pip.py | python - && \
+    pip install \
+        cython \
+        setuptools \
+        virtualenv
 
 # expose prerequisites settings
 ENV HDF5_INCLUDE_DIR=/usr/include/hdf5/serial

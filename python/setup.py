@@ -8,7 +8,8 @@ import os
 import sys
 
 from setuptools import setup, Extension
-from Cython.Build import cythonize
+
+use_cython = os.environ.get('USE_CYTHON', '') != ''
 
 # check HDF5 include and lib dirs
 hdf5_dir = os.environ.get('HDF5_DIR', '/usr')
@@ -42,17 +43,23 @@ extra_link_args = []
 #if sys.platform == 'darwin':
 #    extra_compile_args.append('-mmacosx-version-min=10.7')
 
-ext = Extension(
-    'fast5',
-    language='c++',
-    sources=['fast5.pyx'],
-    include_dirs=[fast5_src_dir],
-    library_dirs=[hdf5_lib_dir],
-    runtime_library_dirs=[hdf5_lib_dir],
-    libraries=[hdf5_lib],
-    extra_compile_args=extra_compile_args,
-    extra_link_args=extra_link_args,
-)
+extensions = [
+    Extension(
+        'fast5',
+        language='c++',
+        sources=['fast5.' + ['cpp', 'pyx'][use_cython]],
+        include_dirs=[fast5_src_dir],
+        library_dirs=[hdf5_lib_dir],
+        runtime_library_dirs=[hdf5_lib_dir],
+        libraries=[hdf5_lib],
+        extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
+    ),
+]
+
+if use_cython:
+    from Cython.Build import cythonize
+    extensions = cythonize(extensions)
 
 setup(
     name='fast5',
@@ -62,5 +69,5 @@ setup(
     author_email='matei.david at oicr.on.ca',
     license='MIT',
     url='https://github.com/mateidavid/fast5',
-    ext_modules=cythonize(ext),
+    ext_modules=extensions,
 )

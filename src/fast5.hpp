@@ -1818,7 +1818,7 @@ private:
                 }
                 rel_skip.push_back(j - last_j - 1);
             }
-            std::tie(ev_pack.rel_skip, ev_pack.rel_skip_params) = ev_skip_coder().encode(rel_skip, false);
+            std::tie(ev_pack.rel_skip, ev_pack.rel_skip_params) = ev_rel_skip_coder().encode(rel_skip, false);
         }
         else
         {
@@ -2174,14 +2174,14 @@ private:
     //
     // Packers
     //
-    static Huffman_Packer const & rw_coder()      { return Huffman_Packer::get_coder("fast5_rw_1"); }
-    static Huffman_Packer const & ed_skip_coder() { return Huffman_Packer::get_coder("fast5_ed_skip_1"); }
-    static Huffman_Packer const & ed_len_coder()  { return Huffman_Packer::get_coder("fast5_ed_len_1"); }
-    static Huffman_Packer const & fq_bp_coder()   { return Huffman_Packer::get_coder("fast5_fq_bp_1"); }
-    static Huffman_Packer const & fq_qv_coder()   { return Huffman_Packer::get_coder("fast5_fq_qv_1"); }
-    static Huffman_Packer const & ev_skip_coder() { return Huffman_Packer::get_coder("fast5_ev_skip_1"); }
-    static Huffman_Packer const & ev_move_coder() { return Huffman_Packer::get_coder("fast5_ev_move_1"); }
-    static Bit_Packer     const & bit_packer()    { return Bit_Packer::get_packer(); }
+    static Huffman_Packer const & rw_coder()          { return Huffman_Packer::get_coder("fast5_rw_1"); }
+    static Huffman_Packer const & ed_skip_coder()     { return Huffman_Packer::get_coder("fast5_ed_skip_1"); }
+    static Huffman_Packer const & ed_len_coder()      { return Huffman_Packer::get_coder("fast5_ed_len_1"); }
+    static Huffman_Packer const & fq_bp_coder()       { return Huffman_Packer::get_coder("fast5_fq_bp_1"); }
+    static Huffman_Packer const & fq_qv_coder()       { return Huffman_Packer::get_coder("fast5_fq_qv_1"); }
+    static Huffman_Packer const & ev_rel_skip_coder() { return Huffman_Packer::get_coder("fast5_ev_rel_skip_1"); }
+    static Huffman_Packer const & ev_move_coder()     { return Huffman_Packer::get_coder("fast5_ev_move_1"); }
+    static Bit_Packer     const & bit_packer()        { return Bit_Packer::get_packer(); }
 }; // class File
 
 } // namespace fast5

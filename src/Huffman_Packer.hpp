@@ -321,7 +321,7 @@ private:
 #include "cwmap.fast5_fq_qv_1.inl"
             );
         dd.push_back(
-#include "cwmap.fast5_ev_skip_1.inl"
+#include "cwmap.fast5_ev_rel_skip_1.inl"
             );
         dd.push_back(
 #include "cwmap.fast5_ev_move_1.inl"

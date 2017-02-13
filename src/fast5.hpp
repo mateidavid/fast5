@@ -113,6 +113,20 @@ struct EventDetection_Event
             and lhs.start == rhs.start
             and lhs.length == rhs.length;
     }
+    static hdf5_tools::Compound_Map const & compound_map()
+    {
+        static hdf5_tools::Compound_Map m;
+        static bool inited = false;
+        if (not inited)
+        {
+            m.add_member("mean", &EventDetection_Event::mean);
+            m.add_member("start", &EventDetection_Event::start);
+            m.add_member("length", &EventDetection_Event::length);
+            m.add_member("stdv", &EventDetection_Event::stdv);
+            inited = true;
+        }
+        return m;
+    }
 }; // struct EventDetection_Event
 
 struct EventDetection_Events_Params
@@ -201,23 +215,34 @@ struct EventDetection_Events_Pack
 //
 struct Basecall_Model_State
 {
-    long long variant;
     double level_mean;
     double level_stdv;
     double sd_mean;
     double sd_stdv;
-    double weight;
     std::array< char, MAX_K_LEN > kmer;
     std::string get_kmer() const { return array_to_string(kmer); }
     friend bool operator == (Basecall_Model_State const & lhs, Basecall_Model_State const & rhs)
     {
-        return (lhs.variant == rhs.variant
-                and lhs.level_mean == rhs.level_mean
+        return (lhs.level_mean == rhs.level_mean
                 and lhs.level_stdv == rhs.level_stdv
                 and lhs.sd_mean == rhs.sd_mean
                 and lhs.sd_stdv == rhs.sd_stdv
-                and lhs.weight == rhs.weight
                 and lhs.kmer == rhs.kmer);
+    }
+    static hdf5_tools::Compound_Map const & compound_map()
+    {
+        static hdf5_tools::Compound_Map m;
+        static bool inited = false;
+        if (not inited)
+        {
+            m.add_member("level_mean", &Basecall_Model_State::level_mean);
+            m.add_member("level_stdv", &Basecall_Model_State::level_stdv);
+            m.add_member("sd_mean", &Basecall_Model_State::sd_mean);
+            m.add_member("sd_stdv", &Basecall_Model_State::sd_stdv);
+            m.add_member("kmer", &Basecall_Model_State::kmer);
+            inited = true;
+        }
+        return m;
     }
 }; // struct Basecall_Model_State
 
@@ -257,31 +282,35 @@ struct Basecall_Event
     double start;
     double length;
     double p_model_state;
-    double p_mp_state;
-    double p_A;
-    double p_C;
-    double p_G;
-    double p_T;
     long long move;
     std::array< char, MAX_K_LEN > model_state;
-    std::array< char, MAX_K_LEN > mp_state;
     std::string get_model_state() const { return array_to_string(model_state); }
-    std::string get_mp_state() const { return array_to_string(mp_state); }
     friend bool operator == (Basecall_Event const & lhs, Basecall_Event const & rhs)
     {
-        return lhs.mean == rhs.mean
-            and lhs.stdv == rhs.stdv
-            and lhs.start == rhs.start
-            and lhs.length == rhs.length
-            and lhs.p_model_state == rhs.p_model_state
-            and lhs.p_mp_state == rhs.p_mp_state
-            and lhs.p_A == rhs.p_A
-            and lhs.p_C == rhs.p_C
-            and lhs.p_G == rhs.p_G
-            and lhs.p_T == rhs.p_T
-            and lhs.move == rhs.move
-            and lhs.model_state == rhs.model_state
-            and lhs.mp_state == rhs.mp_state;
+        return (lhs.mean == rhs.mean
+                and lhs.stdv == rhs.stdv
+                and lhs.start == rhs.start
+                and lhs.length == rhs.length
+                and lhs.p_model_state == rhs.p_model_state
+                and lhs.move == rhs.move
+                and lhs.model_state == rhs.model_state);
+    }
+    static hdf5_tools::Compound_Map const & compound_map()
+    {
+        static hdf5_tools::Compound_Map m;
+        static bool inited = false;
+        if (not inited)
+        {
+            m.add_member("mean", &Basecall_Event::mean);
+            m.add_member("stdv", &Basecall_Event::stdv);
+            m.add_member("start", &Basecall_Event::start);
+            m.add_member("length", &Basecall_Event::length);
+            m.add_member("p_model_state", &Basecall_Event::p_model_state);
+            m.add_member("move", &Basecall_Event::move);
+            m.add_member("model_state", &Basecall_Event::model_state);
+            inited = true;
+        }
+        return m;
     }
 }; // struct Basecall_Event
 
@@ -358,6 +387,19 @@ struct Basecall_Alignment_Entry
         return lhs.template_index == rhs.template_index
             and lhs.complement_index == rhs.complement_index
             and lhs.kmer == rhs.kmer;
+    }
+    static hdf5_tools::Compound_Map const & compound_map()
+    {
+        static hdf5_tools::Compound_Map m;
+        static bool inited = false;
+        if (not inited)
+        {
+            m.add_member("template", &Basecall_Alignment_Entry::template_index);
+            m.add_member("complement", &Basecall_Alignment_Entry::complement_index);
+            m.add_member("kmer", &Basecall_Alignment_Entry::kmer);
+            inited = true;
+        }
+        return m;
     }
 }; // struct Basecall_Alignment_Entry
 
@@ -557,30 +599,6 @@ public:
         }
         return res;
     }
-    Raw_Int_Samples_Dataset
-    get_raw_int_samples_dataset(std::string const & rn = std::string()) const
-    {
-        Raw_Int_Samples_Dataset res;
-        auto && _rn = fill_raw_samples_read_name(rn);
-        res.first = get_raw_int_samples(_rn);
-        res.second = get_raw_samples_params(_rn);
-        return res;
-    }
-    Raw_Samples_Dataset
-    get_raw_samples_dataset(std::string const & rn = std::string()) const
-    {
-        Raw_Samples_Dataset res;
-        auto && _rn = fill_raw_samples_read_name(rn);
-        res.first = get_raw_samples(_rn);
-        res.second = get_raw_samples_params(_rn);
-        return res;
-    }
-    void
-    add_raw_samples_dataset(std::string const & rn, Raw_Int_Samples_Dataset const & rsi_ds)
-    {
-        add_raw_samples(rn, rsi_ds.first);
-        add_raw_samples_params(rn, rsi_ds.second);
-    }
 
     //
     // Access EventDetection groups
@@ -663,83 +681,29 @@ public:
     get_eventdetection_events(
         std::string const & gr = std::string(), std::string const & rn = std::string()) const
     {
-        std::vector< EventDetection_Event > res;
+        std::vector< EventDetection_Event > ede;
         auto && _gr = fill_eventdetection_group(gr);
         auto && _rn = fill_eventdetection_read_name(_gr, rn);
         if (have_eventdetection_events_unpack(_gr, _rn))
         {
             auto p = eventdetection_events_path(_gr, _rn);
-            auto struct_member_names = Base::get_struct_members(p);
-            bool have_stdv = false;
-            bool have_variance = false;
-            for (auto const & s : struct_member_names)
-            {
-                if (s == "stdv") have_stdv = true;
-                else if (s == "variance") have_variance = true;
-            }
-            hdf5_tools::Compound_Map m;
-            m.add_member("mean", &EventDetection_Event::mean);
-            m.add_member("start", &EventDetection_Event::start);
-            m.add_member("length", &EventDetection_Event::length);
-            if (have_stdv)
-            {
-                m.add_member("stdv", &EventDetection_Event::stdv);
-            }
-            else if (have_variance)
-            {
-                m.add_member("variance", &EventDetection_Event::stdv);
-            }
-            else
-            {
-                // must have stdv or variance
-                abort();
-            }
-            Base::read(p, res, m);
-            if (not have_stdv)
-            {
-                // have read variances
-                for (auto& e : res)
-                {
-                    e.stdv = std::sqrt(e.stdv);
-                }
-            }
-        } // have ed unpack
+            Base::read(p, ede, EventDetection_Event::compound_map());
+        }
         else if (have_eventdetection_events_pack(_gr, _rn))
         {
             auto ede_pack = get_eventdetection_events_pack(_gr, _rn);
             auto rs_ds = get_raw_samples_dataset(_rn);
-            res = unpack_ed(ede_pack, rs_ds).first;
+            ede = unpack_ed(ede_pack, rs_ds).first;
         }
-        return res;
+        return ede;
     } // get_eventdetection_events()
     void
     add_eventdetection_events(
         std::string const & gr, std::string const & rn,
-        std::vector< EventDetection_Event > const & ed)
+        std::vector< EventDetection_Event > const & ede)
     {
-        hdf5_tools::Compound_Map m;
-        m.add_member("mean", &EventDetection_Event::mean);
-        m.add_member("start", &EventDetection_Event::start);
-        m.add_member("length", &EventDetection_Event::length);
-        m.add_member("stdv", &EventDetection_Event::stdv);
-        Base::write_dataset(eventdetection_events_path(gr, rn), ed, m);
+        Base::write_dataset(eventdetection_events_path(gr, rn), ede, EventDetection_Event::compound_map());
         reload();
-    }
-    EventDetection_Events_Dataset
-    get_eventdetection_events_dataset(
-        std::string const & gr, std::string const & rn) const
-    {
-        EventDetection_Events_Dataset ede_ds;
-        ede_ds.first = get_eventdetection_events(gr, rn);
-        ede_ds.second = get_eventdetection_events_params(gr, rn);
-        return ede_ds;
-    }
-    void add_eventdetection_events_dataset(
-        std::string const & gr, std::string const & rn,
-        EventDetection_Events_Dataset const & ede_ds)
-    {
-        add_eventdetection_events(gr, rn, ede_ds.first);
-        add_eventdetection_events_params(gr, rn, ede_ds.second);
     }
 
     //
@@ -921,28 +885,16 @@ public:
     std::vector< Basecall_Model_State >
     get_basecall_model(unsigned st, std::string const & gr = std::string()) const
     {
-        std::vector< Basecall_Model_State > res;
+        std::vector< Basecall_Model_State > mod;
         auto && gr_1d = fill_basecall_1d_group(st, gr);
-        hdf5_tools::Compound_Map m;
-        m.add_member("kmer", &Basecall_Model_State::kmer);
-        m.add_member("level_mean", &Basecall_Model_State::level_mean);
-        m.add_member("level_stdv", &Basecall_Model_State::level_stdv);
-        m.add_member("sd_mean", &Basecall_Model_State::sd_mean);
-        m.add_member("sd_stdv", &Basecall_Model_State::sd_stdv);
-        Base::read(basecall_model_path(gr_1d, st), res, m);
-        return res;
+        Base::read(basecall_model_path(gr_1d, st), mod, Basecall_Model_State::compound_map());
+        return mod;
     }
     template < typename T >
-    void add_basecall_model(unsigned st, std::string const & gr, std::vector< T > const & m)
+    void add_basecall_model(unsigned st, std::string const & gr, std::vector< T > const & mod)
     {
-        hdf5_tools::Compound_Map cm;
-        cm.add_member("kmer", &T::kmer);
-        cm.add_member("level_mean", &T::level_mean);
-        cm.add_member("level_stdv", &T::level_stdv);
-        cm.add_member("sd_mean", &T::sd_mean);
-        cm.add_member("sd_stdv", &T::sd_stdv);
         auto && gr_1d = get_basecall_1d_group(gr);
-        Base::write_dataset(basecall_model_path(gr_1d, st), m, cm);
+        Base::write_dataset(basecall_model_path(gr_1d, st), mod, Basecall_Model_State::compound_map());
         reload();
     }
 
@@ -989,15 +941,7 @@ public:
         auto && gr_1d = fill_basecall_1d_group(st, gr);
         if (have_basecall_events_unpack(st, gr_1d))
         {
-            hdf5_tools::Compound_Map m;
-            m.add_member("mean", &Basecall_Event::mean);
-            m.add_member("start", &Basecall_Event::start);
-            m.add_member("stdv", &Basecall_Event::stdv);
-            m.add_member("length", &Basecall_Event::length);
-            m.add_member("p_model_state", &Basecall_Event::p_model_state);
-            m.add_member("model_state", &Basecall_Event::model_state);
-            m.add_member("move", &Basecall_Event::move);
-            Base::read(basecall_events_path(gr_1d, st), res, m);
+            Base::read(basecall_events_path(gr_1d, st), res, Basecall_Event::compound_map());
         }
         else if (have_basecall_events_pack(st, gr_1d)
                  and have_basecall_fastq(st, gr_1d))
@@ -1028,30 +972,8 @@ public:
     void
     add_basecall_events(unsigned st, std::string const & gr, std::vector< T > const & ev)
     {
-        hdf5_tools::Compound_Map cm;
-        cm.add_member("mean", &T::mean);
-        cm.add_member("start", &T::start);
-        cm.add_member("stdv", &T::stdv);
-        cm.add_member("length", &T::length);
-        cm.add_member("p_model_state", &T::p_model_state);
-        cm.add_member("model_state", &T::model_state);
-        cm.add_member("move", &T::move);
-        Base::write_dataset(basecall_events_path(gr, st), ev, cm);
+        Base::write_dataset(basecall_events_path(gr, st), ev, T::compound_map());
         reload();
-    }
-    Basecall_Events_Dataset
-    get_basecall_events_dataset(unsigned st, std::string const & gr) const
-    {
-        Basecall_Events_Dataset bce_ds;
-        bce_ds.first = get_basecall_events(st, gr);
-        bce_ds.second = get_basecall_events_params(st, gr);
-        return bce_ds;
-    }
-    void
-    add_basecall_events_dataset(unsigned st, std::string const & gr, Basecall_Events_Dataset const & bce_ds)
-    {
-        add_basecall_events(st, gr, bce_ds.first);
-        add_basecall_events_params(st, gr, bce_ds.second);
     }
 
     //
@@ -1070,11 +992,7 @@ public:
         auto && _gr = fill_basecall_group(2, gr);
         if (have_basecall_alignment_unpack(_gr))
         {
-            hdf5_tools::Compound_Map m;
-            m.add_member("template", &Basecall_Alignment_Entry::template_index);
-            m.add_member("complement", &Basecall_Alignment_Entry::complement_index);
-            m.add_member("kmer", &Basecall_Alignment_Entry::kmer);
-            Base::read(basecall_alignment_path(gr), al, m);
+            Base::read(basecall_alignment_path(gr), al, Basecall_Alignment_Entry::compound_map());
         }
         else if (have_basecall_alignment_pack(_gr)
                  and have_basecall_seq(2, _gr))
@@ -1088,11 +1006,7 @@ public:
     void
     add_basecall_alignment(std::string const & gr, std::vector< Basecall_Alignment_Entry > const & al)
     {
-        hdf5_tools::Compound_Map m;
-        m.add_member("template", &Basecall_Alignment_Entry::template_index);
-        m.add_member("complement", &Basecall_Alignment_Entry::complement_index);
-        m.add_member("kmer", &Basecall_Alignment_Entry::kmer);
-        Base::write_dataset(basecall_alignment_path(gr), al, m);
+        Base::write_dataset(basecall_alignment_path(gr), al, Basecall_Alignment_Entry::compound_map());
         reload();
     }
 
@@ -1390,6 +1304,30 @@ private:
         rs_pack.rs_params.write(*this, raw_samples_params_pack_path(rn));
         reload();
     }
+    Raw_Int_Samples_Dataset
+    get_raw_int_samples_dataset(std::string const & rn = std::string()) const
+    {
+        Raw_Int_Samples_Dataset res;
+        auto && _rn = fill_raw_samples_read_name(rn);
+        res.first = get_raw_int_samples(_rn);
+        res.second = get_raw_samples_params(_rn);
+        return res;
+    }
+    Raw_Samples_Dataset
+    get_raw_samples_dataset(std::string const & rn = std::string()) const
+    {
+        Raw_Samples_Dataset res;
+        auto && _rn = fill_raw_samples_read_name(rn);
+        res.first = get_raw_samples(_rn);
+        res.second = get_raw_samples_params(_rn);
+        return res;
+    }
+    void
+    add_raw_samples_dataset(std::string const & rn, Raw_Int_Samples_Dataset const & rsi_ds)
+    {
+        add_raw_samples(rn, rsi_ds.first);
+        add_raw_samples_params(rn, rsi_ds.second);
+    }
     bool
     have_eventdetection_events_unpack(std::string const & gr, std::string const & rn) const
     {
@@ -1424,6 +1362,24 @@ private:
         ede_pack.params.write(*this, eventdetection_events_params_pack_path(gr, rn));
         reload();
     }
+    EventDetection_Events_Dataset
+    get_eventdetection_events_dataset(
+        std::string const & gr, std::string const & rn) const
+    {
+        EventDetection_Events_Dataset ede_ds;
+        ede_ds.first = get_eventdetection_events(gr, rn);
+        ede_ds.second = get_eventdetection_events_params(gr, rn);
+        return ede_ds;
+    }
+    void
+    add_eventdetection_events_dataset(
+        std::string const & gr, std::string const & rn,
+        EventDetection_Events_Dataset const & ede_ds)
+    {
+        add_eventdetection_events(gr, rn, ede_ds.first);
+        add_eventdetection_events_params(gr, rn, ede_ds.second);
+    }
+    //
     bool
     have_basecall_fastq_unpack(unsigned st, std::string const & gr) const
     {
@@ -1459,6 +1415,7 @@ private:
         Base::write_attribute(p + "/qv_bits", fq_pack.qv_bits);
         reload();
     }
+    //
     bool
     have_basecall_events_unpack(unsigned st, std::string const & gr) const
     {
@@ -1526,6 +1483,21 @@ private:
         ev_pack.params.write(*this, basecall_events_params_pack_path(gr, st));
         reload();
     }
+    Basecall_Events_Dataset
+    get_basecall_events_dataset(unsigned st, std::string const & gr) const
+    {
+        Basecall_Events_Dataset bce_ds;
+        bce_ds.first = get_basecall_events(st, gr);
+        bce_ds.second = get_basecall_events_params(st, gr);
+        return bce_ds;
+    }
+    void
+    add_basecall_events_dataset(unsigned st, std::string const & gr, Basecall_Events_Dataset const & bce_ds)
+    {
+        add_basecall_events(st, gr, bce_ds.first);
+        add_basecall_events_params(st, gr, bce_ds.second);
+    }
+    //
     bool
     have_basecall_alignment_unpack(std::string const & gr) const
     {

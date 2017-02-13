@@ -62,13 +62,12 @@ int main(int argc, char* argv[])
             //
             // add basecall events
             //
-            vector< fast5::Basecall_Event > ev(3, {55.0, 1.0, 0.05, 0.01, .5, .5, .7, .1, .1, .1, 0,
-                        array< char, 8 >{"ACGTA"}, array< char, 8 >{"CGTAC"}});
+            vector< fast5::Basecall_Event > ev(3, {55.0, 1.0, 0.05, 0.01, .5, 0, array< char, 8 >{"ACGTA"}});
             f.add_basecall_events(0, test_bc_grp_prefix + test_bc_grp_suffix, ev);
             //
             // add basecall pore model
             //
-            vector< fast5::Basecall_Model_State > mod(3, {0, 56.0, 1.0, 42.0, 1.0, 5.0, array< char, 8 >{"ACGTA"}});
+            vector< fast5::Basecall_Model_State > mod(3, {56.0, 1.0, 42.0, 1.0, array< char, 8 >{"ACGTA"}});
             f.add_basecall_model(0, test_bc_grp_prefix + test_bc_grp_suffix, mod);
             //
             // add basecall pore model params

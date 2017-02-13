@@ -1728,6 +1728,12 @@ private:
             [&] (unsigned i, long long x) { return ede.at(i).length = x; },
             ede_params.start_time);
         bool off_by_one = ede_params.start_time == rs_params.start_time; // hack
+        static bool warned = false;
+        if (off_by_one and not warned)
+        {
+            std::clog << "warning: using workaround for old off-by-one ed events bug\n";
+            warned = true;
+        }
         unpack_event_mean_stdv(
             ede.size(),
             [&] (unsigned i) { return ede.at(i).start; },

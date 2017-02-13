@@ -63,12 +63,41 @@ struct Raw_Samples_Params
     long long start_mux;
     long long start_time;
     long long duration;
+    friend bool operator == (Raw_Samples_Params const & lhs, Raw_Samples_Params const & rhs)
+    {
+        return (lhs.read_id == rhs.read_id
+                and lhs.read_number == rhs.read_number
+                and lhs.start_mux == rhs.start_mux
+                and lhs.start_time == rhs.start_time
+                and lhs.duration == rhs.duration);
+    }
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        f.read(p + "/read_id", read_id);
+        f.read(p + "/read_number", read_number);
+        f.read(p + "/start_mux", start_mux);
+        f.read(p + "/start_time", start_time);
+        f.read(p + "/duration", duration);
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        f.write_attribute(p + "/read_id", read_id);
+        f.write_attribute(p + "/read_number", read_number);
+        f.write_attribute(p + "/start_mux", start_mux);
+        f.write_attribute(p + "/start_time", start_time);
+        f.write_attribute(p + "/duration", duration);
+    }
 }; // struct Raw_Samples_Params
+
+typedef std::pair< std::vector< Raw_Int_Sample >, Raw_Samples_Params > Raw_Int_Samples_Dataset;
+typedef std::pair< std::vector< Raw_Sample >, Raw_Samples_Params > Raw_Samples_Dataset;
 
 struct Raw_Samples_Pack
 {
     Huffman_Packer::Code_Type signal;
     Attr_Map signal_params;
+    //
+    Raw_Samples_Params rs_params;
 }; // struct Raw_Samples_Pack
 
 struct EventDetection_Event
@@ -387,23 +416,21 @@ public:
     {
         Raw_Samples_Params res;
         auto && _rn = fill_raw_samples_read_name(rn);
-        std::string p = raw_samples_params_path(_rn);
-        Base::read(p + "/read_id", res.read_id);
-        Base::read(p + "/read_number", res.read_number);
-        Base::read(p + "/start_mux", res.start_mux);
-        Base::read(p + "/start_time", res.start_time);
-        Base::read(p + "/duration", res.duration);
+        if (have_raw_samples_unpack(_rn))
+        {
+            res.read(*this, raw_samples_params_path(_rn));
+        }
+        else
+        {
+            res.read(*this, raw_samples_params_pack_path(_rn));
+        }
         return res;
     }
     void
     add_raw_samples_params(std::string const & rn, Raw_Samples_Params const & params) const
     {
         std::string p = raw_samples_params_path(rn);
-        Base::write_attribute(p + "/read_id", params.read_id);
-        Base::write_attribute(p + "/read_number", params.read_number);
-        Base::write_attribute(p + "/start_mux", params.start_mux);
-        Base::write_attribute(p + "/start_time", params.start_time);
-        Base::write_attribute(p + "/duration", params.duration);
+        params.write(*this, p);
     }
     std::vector< Raw_Int_Sample >
     get_raw_int_samples(std::string const & rn = std::string()) const
@@ -417,7 +444,7 @@ public:
         else if (have_raw_samples_pack(_rn))
         {
             auto rs_pack = get_raw_samples_pack(_rn);
-            res = unpack_rw(rs_pack);
+            res = unpack_rw(rs_pack).first;
         }
         return res;
     }
@@ -440,6 +467,30 @@ public:
             res.push_back(raw_int_sample_to_float(int_level, _channel_id_params));
         }
         return res;
+    }
+    Raw_Int_Samples_Dataset
+    get_raw_int_samples_dataset(std::string const & rn = std::string()) const
+    {
+        Raw_Int_Samples_Dataset res;
+        auto && _rn = fill_raw_samples_read_name(rn);
+        res.first = get_raw_int_samples(_rn);
+        res.second = get_raw_samples_params(_rn);
+        return res;
+    }
+    Raw_Samples_Dataset
+    get_raw_samples_dataset(std::string const & rn = std::string()) const
+    {
+        Raw_Samples_Dataset res;
+        auto && _rn = fill_raw_samples_read_name(rn);
+        res.first = get_raw_samples(_rn);
+        res.second = get_raw_samples_params(_rn);
+        return res;
+    }
+    void
+    add_raw_samples_dataset(std::string const & rn, Raw_Int_Samples_Dataset const & rsi_ds)
+    {
+        add_raw_samples(rn, rsi_ds.first);
+        add_raw_samples_params(rn, rsi_ds.second);
     }
 
     //
@@ -1231,15 +1282,19 @@ private:
     get_raw_samples_pack(std::string const & rn) const
     {
         Raw_Samples_Pack rs_pack;
-        Base::read(raw_samples_pack_path(rn) + "/Signal", rs_pack.signal);
-        rs_pack.signal_params = get_attr_map(raw_samples_pack_path(rn) + "/Signal");
+        auto path = raw_samples_pack_path(rn);
+        Base::read(path + "/Signal", rs_pack.signal);
+        rs_pack.signal_params = get_attr_map(path + "/Signal");
+        rs_pack.rs_params.read(*this, raw_samples_params_pack_path(rn));
         return rs_pack;
     }
     void
     add_raw_samples(std::string const & rn, Raw_Samples_Pack const & rs_pack)
     {
-        Base::write_dataset(raw_samples_pack_path(rn) + "/Signal", rs_pack.signal);
-        add_attr_map(raw_samples_pack_path(rn) + "/Signal", rs_pack.signal_params);
+        auto path = raw_samples_pack_path(rn);
+        Base::write_dataset(path + "/Signal", rs_pack.signal);
+        add_attr_map(path + "/Signal", rs_pack.signal_params);
+        rs_pack.rs_params.write(*this, raw_samples_params_pack_path(rn));
         reload();
     }
     bool
@@ -1424,16 +1479,20 @@ private:
     // Packers & Unpackers
     //
     static Raw_Samples_Pack
-    pack_rw(std::vector< Raw_Int_Sample > const & rsi)
+    pack_rw(Raw_Int_Samples_Dataset const & rsi_ds)
     {
         Raw_Samples_Pack rsp;
-        std::tie(rsp.signal, rsp.signal_params) = rw_coder().encode(rsi, true);
+        rsp.rs_params = rsi_ds.second;
+        std::tie(rsp.signal, rsp.signal_params) = rw_coder().encode(rsi_ds.first, true);
         return rsp;
     }
-    static std::vector< Raw_Int_Sample >
-    unpack_rw(Raw_Samples_Pack const & rsp)
+    static Raw_Int_Samples_Dataset
+    unpack_rw(Raw_Samples_Pack const & rs_pack)
     {
-        return rw_coder().decode< Raw_Int_Sample >(rsp.signal, rsp.signal_params);
+        Raw_Int_Samples_Dataset rsi_ds;
+        rsi_ds.second = rs_pack.rs_params;
+        rsi_ds.first = rw_coder().decode< Raw_Int_Sample >(rs_pack.signal, rs_pack.signal_params);
+        return rsi_ds;
     }
     static std::pair< std::vector< long long >, std::vector< long long > >
     pack_event_start_length(
@@ -1857,6 +1916,10 @@ private:
     static std::string raw_samples_pack_path(std::string const & rn)
     {
         return raw_samples_path(rn) + "_Pack";
+    }
+    static std::string raw_samples_params_pack_path(std::string const & rn)
+    {
+        return raw_samples_pack_path(rn) + "/rs_params";
     }
     static std::string eventdetection_root_path() { return "/Analyses"; }
     static std::string eventdetection_group_prefix() { return "EventDetection_"; }

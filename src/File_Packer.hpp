@@ -29,38 +29,54 @@ struct File_Packer
         auto rn_l = src_f.get_raw_samples_read_name_list();
         for (auto const & rn : rn_l)
         {
-            auto rsi = src_f.get_raw_int_samples(rn);
-            auto rs_params = src_f.get_raw_samples_params(rn);
-            auto rs_pack = src_f.pack_rw(rsi);
-            if (opts::check())
+            if (src_f.have_raw_samples_pack(rn))
             {
-                auto rs_unpack = src_f.unpack_rw(rs_pack);
-                if (rs_unpack.size() != rsi.size())
+                auto rs_pack = src_f.get_raw_samples_pack(rn);
+                dst_f.add_raw_samples(rn, rs_pack);
+            }
+            else if (src_f.have_raw_samples_unpack(rn))
+            {
+                auto rsi_ds = src_f.get_raw_int_samples_dataset(rn);
+                auto & rsi = rsi_ds.first;
+                auto & rs_params = rsi_ds.second;
+                auto rs_pack = src_f.pack_rw(rsi_ds);
+                if (opts::check())
                 {
-                    LOG(error)
-                        << "check_failed rs_unpack.size=" << rs_unpack.size()
-                        << " rs_orig.size=" << rsi.size() << std::endl;
-                    abort();
-                }
-                for (unsigned i = 0; i < rs_unpack.size(); ++i)
-                {
-                    if (rs_unpack[i] != rsi[i])
+                    auto rsi_ds_unpack = src_f.unpack_rw(rs_pack);
+                    auto & rsi_unpack = rsi_ds_unpack.first;
+                    auto & rs_params_unpack = rsi_ds_unpack.second;
+                    if (not (rs_params_unpack == rs_params))
                     {
                         LOG(error)
-                            << "check_failed i=" << i
-                            << " rs_unpack=" << rs_unpack[i]
-                            << " rs_orig=" << rsi[i] << std::endl;
+                            << "check_failed rs_params_unpack!=rs_params" << std::endl;
                         abort();
                     }
+                    if (rsi_unpack.size() != rsi.size())
+                    {
+                        LOG(error)
+                            << "check_failed rs_unpack.size=" << rsi_unpack.size()
+                            << " rs_orig.size=" << rsi.size() << std::endl;
+                        abort();
+                    }
+                    for (unsigned i = 0; i < rsi_unpack.size(); ++i)
+                    {
+                        if (rsi_unpack[i] != rsi[i])
+                        {
+                            LOG(error)
+                                << "check_failed i=" << i
+                                << " rs_unpack=" << rsi_unpack[i]
+                                << " rs_orig=" << rsi[i] << std::endl;
+                            abort();
+                        }
+                    }
                 }
+                dst_f.add_raw_samples(rn, rs_pack);
+                LOG(info)
+                    << "rn=" << rn
+                    << " rs_size=" << rsi.size()
+                    << " signal_bits=" << rs_pack.signal_params.at("avg_bits")
+                    << std::endl;
             }
-            dst_f.add_raw_samples_params(rn, rs_params);
-            dst_f.add_raw_samples(rn, rs_pack);
-            LOG(info)
-                << "rn=" << rn
-                << " rs_size=" << rsi.size()
-                << " signal_bits=" << rs_pack.signal_params.at("avg_bits")
-                << std::endl;
         }
     } // pack_rw()
 
@@ -70,10 +86,8 @@ struct File_Packer
         auto rn_l = src_f.get_raw_samples_read_name_list();
         for (auto const & rn : rn_l)
         {
-            auto rs_params = src_f.get_raw_samples_params(rn);
-            auto rsi = src_f.get_raw_int_samples(rn);
-            dst_f.add_raw_samples_params(rn, rs_params);
-            dst_f.add_raw_samples(rn, rsi);
+            auto rsi_ds = src_f.get_raw_int_samples_dataset(rn);
+            dst_f.add_raw_samples_dataset(rn, rsi_ds);
         }
     } // unpack_rw()
 
@@ -83,17 +97,15 @@ struct File_Packer
         auto rn_l = src_f.get_raw_samples_read_name_list();
         for (auto const & rn : rn_l)
         {
-            auto rs_params = src_f.get_raw_samples_params(rn);
-            dst_f.add_raw_samples_params(rn, rs_params);
             if (src_f.have_raw_samples_unpack(rn))
             {
-                auto rsi = src_f.get_raw_int_samples(rn);
-                dst_f.add_raw_samples(rn, rsi);
+                auto rsi_ds = src_f.get_raw_int_samples_dataset(rn);
+                dst_f.add_raw_samples_dataset(rn, rsi_ds);
             }
             else if (src_f.have_raw_samples_pack(rn))
             {
-                auto p = src_f.get_raw_samples_pack(rn);
-                dst_f.add_raw_samples(rn, p);
+                auto rs_pack = src_f.get_raw_samples_pack(rn);
+                dst_f.add_raw_samples(rn, rs_pack);
             }
         }
     } // copy_rw()

@@ -456,8 +456,6 @@ struct Basecall_Events_Pack
     //
     void read(hdf5_tools::File const & f, std::string const & p)
     {
-        f.read(p + "/Skip", skip);
-        skip_params = f.get_attr_map(p + "/Skip");
         if (f.dataset_exists(p + "/Rel_Skip"))
         {
             f.read(p + "/Rel_Skip", rel_skip);
@@ -1806,11 +1804,11 @@ private:
         if (not ed_gr.empty())
         {
             // pack relative to ed events
-            long long j = 0;
+            long long j = -1;
             for (unsigned i = 0; i < ev.size(); ++i)
             {
                 auto ti = time_to_int(ev[i].start, sampling_rate);
-                auto last_j = j;
+                auto last_j = j++;
                 while (j < (long long)ed.size() and ed[j].start < ti) ++j;
                 if (j == (long long)ed.size())
                 {
@@ -1907,21 +1905,21 @@ private:
         Basecall_Events_Dataset ev_ds;
         ev_ds.second = ev_pack.params;
         auto & ev = ev_ds.first;
-        std::vector< long long > skip;
-        if (not ev_pack.skip.empty())
+        std::vector< long long > rel_skip;
+        if (not ev_pack.rel_skip.empty())
         {
-            skip = ev_skip_coder().decode< long long >(ev_pack.skip, ev_pack.skip_params);
+            rel_skip = ev_rel_skip_coder().decode< long long >(ev_pack.rel_skip, ev_pack.rel_skip_params);
         }
         auto mv = ev_move_coder().decode< std::uint8_t >(ev_pack.move, ev_pack.move_params);
         auto p_model_state = bit_packer().decode< std::uint16_t >(ev_pack.p_model_state, ev_pack.p_model_state_params);
         auto fqa = split_fq(fq);
         auto const & bases = fqa[1];
-        if ((not skip.empty() and skip.size() != mv.size()) or p_model_state.size() != mv.size())
+        if ((not rel_skip.empty() and rel_skip.size() != mv.size()) or p_model_state.size() != mv.size())
         {
-            throw std::runtime_error("unpack_ev failed: skip and move have different sizes");
+            throw std::runtime_error("unpack_ev failed: rel_skip and move have different sizes");
         }
         ev.resize(mv.size());
-        long long j = 0;
+        long long j = -1;
         std::string s;
         unsigned bases_pos = 0;
         unsigned p_model_state_bits;
@@ -1929,7 +1927,7 @@ private:
         long long unsigned max_p_model_state_int = 1llu << p_model_state_bits;
         for (unsigned i = 0; i < ev.size(); ++i)
         {
-            j += (not skip.empty()? skip[i] : 0) + 1;
+            j += (not rel_skip.empty()? rel_skip[i] : 0) + 1;
             ev[i].start = time_to_float(ed[j].start, sampling_rate);
             ev[i].length = time_to_float(ed[j].length, sampling_rate);
             ev[i].mean = ed[j].mean;
@@ -2086,7 +2084,7 @@ private:
     }
     static std::string raw_samples_params_pack_path(std::string const & rn)
     {
-        return raw_samples_pack_path(rn) + "/rs_params";
+        return raw_samples_pack_path(rn) + "/params";
     }
     static std::string eventdetection_root_path() { return "/Analyses"; }
     static std::string eventdetection_group_prefix() { return "EventDetection_"; }

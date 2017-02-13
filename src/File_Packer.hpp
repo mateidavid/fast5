@@ -459,13 +459,23 @@ struct File_Packer
                         }
                     }
                     dst_f.add_basecall_events(st, gr, ev_pack);
+                    std::ostringstream oss;
+                    if (not ev_pack.rel_skip.empty())
+                    {
+                        oss
+                            << "rel_skip_bits=" << ev_pack.rel_skip_params.at("avg_bits");
+                    }
+                    else
+                    {
+                        oss
+                            << "skip_bits=" << ev_pack.skip_params.at("avg_bits")
+                            << " len_bits=" << ev_pack.len_params.at("avg_bits");
+                    }
                     LOG(info)
                         << "gr=" << gr
                         << " st=" << st
                         << " ev_size=" << ev.size()
-                        << " rel_skip_bits=" << ev_pack.rel_skip_params.at("avg_bits")
-                        << " skip_bits=" << ev_pack.skip_params.at("avg_bits")
-                        << " len_bits=" << ev_pack.len_params.at("avg_bits")
+                        << " " << oss.str()
                         << " move_bits=" << ev_pack.move_params.at("avg_bits")
                         << " p_model_state_bits=" << ev_pack.p_model_state_params.at("num_bits")
                         << std::endl;

@@ -47,6 +47,22 @@ struct Channel_Id_Params
           offset(0.0),
           range(0.0),
           sampling_rate(0.0) {}
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        f.read(p + "/channel_number", channel_number);
+        f.read(p + "/digitisation", digitisation);
+        f.read(p + "/offset", offset);
+        f.read(p + "/range", range);
+        f.read(p + "/sampling_rate", sampling_rate);
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        f.write_attribute(p + "/channel_number", channel_number);
+        f.write_attribute(p + "/digitisation", digitisation);
+        f.write_attribute(p + "/offset", offset);
+        f.write_attribute(p + "/range", range);
+        f.write_attribute(p + "/sampling_rate", sampling_rate);
+    }
 }; // struct Channel_Id_Params
 
 typedef Attr_Map Tracking_Id_Params;
@@ -97,7 +113,20 @@ struct Raw_Samples_Pack
     Huffman_Packer::Code_Type signal;
     Attr_Map signal_params;
     //
-    Raw_Samples_Params rs_params;
+    Raw_Samples_Params params;
+    //
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        f.read(p + "/Signal", signal);
+        signal_params = f.get_attr_map(p + "/Signal");
+        params.read(f, p + "/params");
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        f.write_dataset(p + "/Signal", signal);
+        f.add_attr_map(p + "/Signal", signal_params);
+        params.write(f, p + "/params");
+    }
 }; // struct Raw_Samples_Pack
 
 struct EventDetection_Event
@@ -204,6 +233,23 @@ struct EventDetection_Events_Pack
     Attr_Map len_params;
     //
     EventDetection_Events_Params params;
+    //
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        f.read(p + "/Skip", skip);
+        skip_params = f.get_attr_map(p + "/Skip");
+        f.read(p + "/Len", len);
+        len_params = f.get_attr_map(p + "/Len");
+        params.read(f, p + "/params");
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        f.write_dataset(p + "/Skip", skip);
+        f.add_attr_map(p + "/Skip", skip_params);
+        f.write_dataset(p + "/Len", len);
+        f.add_attr_map(p + "/Len", len_params);
+        params.write(f, p + "/params");
+    }
 }; // struct EventDetection_Events_Pack
 
 //
@@ -258,6 +304,24 @@ struct Basecall_Model_Params
     double var;
     double scale_sd;
     double var_sd;
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        f.read(p + "/scale", scale);
+        f.read(p + "/shift", shift);
+        f.read(p + "/drift", drift);
+        f.read(p + "/var", var);
+        f.read(p + "/scale_sd", scale_sd);
+        f.read(p + "/var_sd", var_sd);
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        f.write_attribute(p + "/scale", scale);
+        f.write_attribute(p + "/shift", shift);
+        f.write_attribute(p + "/drift", drift);
+        f.write_attribute(p + "/var", var);
+        f.write_attribute(p + "/scale_sd", scale_sd);
+        f.write_attribute(p + "/var_sd", var_sd);
+    }
 }; // struct Basecall_Model_Params
 
 struct Basecall_Fastq_Pack
@@ -268,6 +332,25 @@ struct Basecall_Fastq_Pack
     Attr_Map qv_params;
     std::string read_name;
     std::uint8_t qv_bits;
+    //
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        f.read(p + "/BP", bp);
+        bp_params = f.get_attr_map(p + "/BP");
+        f.read(p + "/QV", qv);
+        qv_params = f.get_attr_map(p + "/QV");
+        f.read(p + "/read_name", read_name);
+        f.read(p + "/qv_bits", qv_bits);
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        f.write_dataset(p + "/BP", bp);
+        f.add_attr_map(p + "/BP", bp_params);
+        f.write_dataset(p + "/QV", qv);
+        f.add_attr_map(p + "/QV", qv_params);
+        f.write_attribute(p + "/read_name", read_name);
+        f.write_attribute(p + "/qv_bits", qv_bits);
+    }
 }; // struct Basecall_Fastq_Pack
 
 //
@@ -370,6 +453,57 @@ struct Basecall_Events_Pack
     unsigned p_model_state_bits;
     //
     Basecall_Events_Params params;
+    //
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        f.read(p + "/Skip", skip);
+        skip_params = f.get_attr_map(p + "/Skip");
+        if (f.dataset_exists(p + "/Rel_Skip"))
+        {
+            f.read(p + "/Rel_Skip", rel_skip);
+            rel_skip_params = f.get_attr_map(p + "/Rel_Skip");
+        }
+        else
+        {
+            f.read(p + "/Skip", skip);
+            skip_params = f.get_attr_map(p + "/Skip");
+            f.read(p + "/Len", len);
+            len_params = f.get_attr_map(p + "/Len");
+        }
+        f.read(p + "/Move", move);
+        move_params = f.get_attr_map(p + "/Move");
+        f.read(p + "/P_Model_State", p_model_state);
+        p_model_state_params = f.get_attr_map(p + "/P_Model_State");
+        f.read(p + "/ed_gr", ed_gr);
+        f.read(p + "/start_time", start_time);
+        f.read(p + "/state_size", state_size);
+        f.read(p + "/p_model_state_bits", p_model_state_bits);
+        params.read(f, p + "/params");
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        if (not rel_skip.empty())
+        {
+            f.write_dataset(p + "/Rel_Skip", rel_skip);
+            f.add_attr_map(p + "/Rel_Skip", rel_skip_params);
+        }
+        else
+        {
+            f.write_dataset(p + "/Skip", skip);
+            f.add_attr_map(p + "/Skip", skip_params);
+            f.write_dataset(p + "/Len", len);
+            f.add_attr_map(p + "/Len", len_params);
+        }
+        f.write_dataset(p + "/Move", move);
+        f.add_attr_map(p + "/Move", move_params);
+        f.write_dataset(p + "/P_Model_State", p_model_state);
+        f.add_attr_map(p + "/P_Model_State", p_model_state_params);
+        f.write_attribute(p + "/ed_gr", ed_gr);
+        f.write_attribute(p + "/start_time", start_time);
+        f.write_attribute(p + "/state_size", state_size);
+        f.write_attribute(p + "/p_model_state_bits", p_model_state_bits);
+        params.write(f, p + "/params");
+    }
 }; // struct Basecall_Events_Pack
 
 //
@@ -414,6 +548,31 @@ struct Basecall_Alignment_Pack
     unsigned template_index_start;
     unsigned complement_index_start;
     unsigned kmer_size;
+    //
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        f.read(p + "/Template_Step", template_step);
+        template_step_params = f.get_attr_map(p + "/Template_Step");
+        f.read(p + "/Complement_Step", complement_step);
+        complement_step_params = f.get_attr_map(p + "/Complement_Step");
+        f.read(p + "/Move", move);
+        move_params = f.get_attr_map(p + "/Move");
+        f.read(p + "/template_index_start", template_index_start);
+        f.read(p + "/complement_index_start", complement_index_start);
+        f.read(p + "/kmer_size", kmer_size);
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        f.write_dataset(p + "/Template_Step", template_step);
+        f.add_attr_map(p + "/Template_Step", template_step_params);
+        f.write_dataset(p + "/Complement_Step", complement_step);
+        f.add_attr_map(p + "/Complement_Step", complement_step_params);
+        f.write_dataset(p + "/Move", move);
+        f.add_attr_map(p + "/Move", move_params);
+        f.write_attribute(p + "/template_index_start", template_index_start);
+        f.write_attribute(p + "/complement_index_start", complement_index_start);
+        f.write_attribute(p + "/kmer_size", kmer_size);
+    }
 };
 
 class File
@@ -477,11 +636,7 @@ public:
     add_channel_id_params(Channel_Id_Params const & channel_id_params)
     {
         _channel_id_params = channel_id_params;
-        Base::write_attribute(channel_id_path() + "/channel_number", _channel_id_params.channel_number);
-        Base::write_attribute(channel_id_path() + "/digitisation", _channel_id_params.digitisation);
-        Base::write_attribute(channel_id_path() + "/offset", _channel_id_params.offset);
-        Base::write_attribute(channel_id_path() + "/range", _channel_id_params.range);
-        Base::write_attribute(channel_id_path() + "/sampling_rate", _channel_id_params.sampling_rate);
+        _channel_id_params.write(*this, channel_id_path());
     }
     bool
     have_sampling_rate() const { return have_channel_id_params(); }
@@ -859,28 +1014,17 @@ public:
     Basecall_Model_Params
     get_basecall_model_params(unsigned st, std::string const & gr = std::string()) const
     {
-        Basecall_Model_Params res;
+        Basecall_Model_Params params;
         auto && gr_1d = fill_basecall_1d_group(st, gr);
         std::string path = basecall_model_path(gr_1d, st);
-        Base::read(path + "/scale", res.scale);
-        Base::read(path + "/shift", res.shift);
-        Base::read(path + "/drift", res.drift);
-        Base::read(path + "/var", res.var);
-        Base::read(path + "/scale_sd", res.scale_sd);
-        Base::read(path + "/var_sd", res.var_sd);
-        return res;
+        params.read(*this, path);
+        return params;
     }
-    template < typename T >
     void
-    add_basecall_model_params(unsigned st, std::string const & gr, T const & params) const
+    add_basecall_model_params(unsigned st, std::string const & gr, Basecall_Model_Params const & params) const
     {
         std::string path = basecall_model_path(gr, st);
-        Base::write(path + "/scale", false, params.scale);
-        Base::write(path + "/shift", false, params.shift);
-        Base::write(path + "/drift", false, params.drift);
-        Base::write(path + "/var", false, params.var);
-        Base::write(path + "/scale_sd", false, params.scale_sd);
-        Base::write(path + "/var_sd", false, params.var_sd);
+        params.write(*this, path);
     }
     std::vector< Basecall_Model_State >
     get_basecall_model(unsigned st, std::string const & gr = std::string()) const
@@ -1090,11 +1234,7 @@ private:
     load_channel_id_params()
     {
         if (not Base::group_exists(channel_id_path())) return;
-        Base::read(channel_id_path() + "/channel_number", _channel_id_params.channel_number);
-        Base::read(channel_id_path() + "/digitisation", _channel_id_params.digitisation);
-        Base::read(channel_id_path() + "/offset", _channel_id_params.offset);
-        Base::read(channel_id_path() + "/range", _channel_id_params.range);
-        Base::read(channel_id_path() + "/sampling_rate", _channel_id_params.sampling_rate);
+        _channel_id_params.read(*this, channel_id_path());
     }
     void
     load_raw_samples_read_names()
@@ -1290,18 +1430,14 @@ private:
     {
         Raw_Samples_Pack rs_pack;
         auto path = raw_samples_pack_path(rn);
-        Base::read(path + "/Signal", rs_pack.signal);
-        rs_pack.signal_params = get_attr_map(path + "/Signal");
-        rs_pack.rs_params.read(*this, raw_samples_params_pack_path(rn));
+        rs_pack.read(*this, path);
         return rs_pack;
     }
     void
     add_raw_samples(std::string const & rn, Raw_Samples_Pack const & rs_pack)
     {
         auto path = raw_samples_pack_path(rn);
-        Base::write_dataset(path + "/Signal", rs_pack.signal);
-        add_attr_map(path + "/Signal", rs_pack.signal_params);
-        rs_pack.rs_params.write(*this, raw_samples_params_pack_path(rn));
+        rs_pack.write(*this, path);
         reload();
     }
     Raw_Int_Samples_Dataset
@@ -1343,11 +1479,7 @@ private:
         std::string const & gr, std::string const & rn) const
     {
         EventDetection_Events_Pack ede_pack;
-        Base::read(eventdetection_events_pack_path(gr, rn) + "/Skip", ede_pack.skip);
-        ede_pack.skip_params = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip");
-        Base::read(eventdetection_events_pack_path(gr, rn) + "/Len", ede_pack.len);
-        ede_pack.len_params = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len");
-        ede_pack.params.read(*this, eventdetection_events_params_pack_path(gr, rn));
+        ede_pack.read(*this, eventdetection_events_pack_path(gr, rn));
         return ede_pack;
     }
     void
@@ -1355,11 +1487,7 @@ private:
         std::string const & gr, std::string const & rn,
         EventDetection_Events_Pack const & ede_pack)
     {
-        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Skip", ede_pack.skip);
-        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip", ede_pack.skip_params);
-        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Len", ede_pack.len);
-        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len", ede_pack.len_params);
-        ede_pack.params.write(*this, eventdetection_events_params_pack_path(gr, rn));
+        ede_pack.write(*this, eventdetection_events_pack_path(gr, rn));
         reload();
     }
     EventDetection_Events_Dataset
@@ -1395,24 +1523,14 @@ private:
     {
         Basecall_Fastq_Pack fq_pack;
         auto p = basecall_fastq_pack_path(gr, st);
-        Base::read(p + "/BP", fq_pack.bp);
-        fq_pack.bp_params = get_attr_map(p + "/BP");
-        Base::read(p + "/QV", fq_pack.qv);
-        fq_pack.qv_params = get_attr_map(p + "/QV");
-        Base::read(p + "/read_name", fq_pack.read_name);
-        Base::read(p + "/qv_bits", fq_pack.qv_bits);
+        fq_pack.read(*this, p);
         return fq_pack;        
     }
     void
     add_basecall_fastq(unsigned st, std::string const & gr, Basecall_Fastq_Pack const & fq_pack)
     {
         auto p = basecall_fastq_pack_path(gr, st);
-        Base::write_dataset(p + "/BP", fq_pack.bp);
-        add_attr_map(p + "/BP", fq_pack.bp_params);
-        Base::write_dataset(p + "/QV", fq_pack.qv);
-        add_attr_map(p + "/QV", fq_pack.qv_params);
-        Base::write_attribute(p + "/read_name", fq_pack.read_name);
-        Base::write_attribute(p + "/qv_bits", fq_pack.qv_bits);
+        fq_pack.write(*this, p);
         reload();
     }
     //
@@ -1431,56 +1549,14 @@ private:
     {
         auto p = basecall_events_pack_path(gr, st);
         Basecall_Events_Pack ev_pack;
-        Base::read(p + "/Skip", ev_pack.skip);
-        ev_pack.skip_params = get_attr_map(p + "/Skip");
-        if (Base::dataset_exists(p + "/Rel_Skip"))
-        {
-            Base::read(p + "/Rel_Skip", ev_pack.rel_skip);
-            ev_pack.rel_skip_params = get_attr_map(p + "/Rel_Skip");
-        }
-        else
-        {
-            Base::read(p + "/Skip", ev_pack.skip);
-            ev_pack.skip_params = get_attr_map(p + "/Skip");
-            Base::read(p + "/Len", ev_pack.len);
-            ev_pack.len_params = get_attr_map(p + "/Len");
-        }
-        Base::read(p + "/Move", ev_pack.move);
-        ev_pack.move_params = get_attr_map(p + "/Move");
-        Base::read(p + "/P_Model_State", ev_pack.p_model_state);
-        ev_pack.p_model_state_params = get_attr_map(p + "/P_Model_State");
-        Base::read(p + "/ed_gr", ev_pack.ed_gr);
-        Base::read(p + "/start_time", ev_pack.start_time);
-        Base::read(p + "/state_size", ev_pack.state_size);
-        Base::read(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
-        ev_pack.params.read(*this, basecall_events_params_pack_path(gr, st));
+        ev_pack.read(*this, p);
         return ev_pack;
     }
     void
     add_basecall_events(unsigned st, std::string const & gr, Basecall_Events_Pack const & ev_pack)
     {
         auto p = basecall_events_pack_path(gr, st);
-        if (not ev_pack.rel_skip.empty())
-        {
-            Base::write_dataset(p + "/Rel_Skip", ev_pack.rel_skip);
-            add_attr_map(p + "/Rel_Skip", ev_pack.rel_skip_params);
-        }
-        else
-        {
-            Base::write_dataset(p + "/Skip", ev_pack.skip);
-            add_attr_map(p + "/Skip", ev_pack.skip_params);
-            Base::write_dataset(p + "/Len", ev_pack.len);
-            add_attr_map(p + "/Len", ev_pack.len_params);
-        }
-        Base::write_dataset(p + "/Move", ev_pack.move);
-        add_attr_map(p + "/Move", ev_pack.move_params);
-        Base::write_dataset(p + "/P_Model_State", ev_pack.p_model_state);
-        add_attr_map(p + "/P_Model_State", ev_pack.p_model_state_params);
-        Base::write_attribute(p + "/ed_gr", ev_pack.ed_gr);
-        Base::write_attribute(p + "/start_time", ev_pack.start_time);
-        Base::write_attribute(p + "/state_size", ev_pack.state_size);
-        Base::write_attribute(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
-        ev_pack.params.write(*this, basecall_events_params_pack_path(gr, st));
+        ev_pack.write(*this, p);
         reload();
     }
     Basecall_Events_Dataset
@@ -1513,30 +1589,14 @@ private:
     {
         Basecall_Alignment_Pack al_pack;
         auto p = basecall_alignment_pack_path(gr);
-        Base::read(p + "/Template_Step", al_pack.template_step);
-        al_pack.template_step_params = get_attr_map(p + "/Template_Step");
-        Base::read(p + "/Complement_Step", al_pack.complement_step);
-        al_pack.complement_step_params = get_attr_map(p + "/Complement_Step");
-        Base::read(p + "/Move", al_pack.move);
-        al_pack.move_params = get_attr_map(p + "/Move");
-        Base::read(p + "/template_index_start", al_pack.template_index_start);
-        Base::read(p + "/complement_index_start", al_pack.complement_index_start);
-        Base::read(p + "/kmer_size", al_pack.kmer_size);
+        al_pack.read(*this, p);
         return al_pack;
     }
     void
     add_basecall_alignment(std::string const & gr, Basecall_Alignment_Pack const & al_pack)
     {
         auto p = basecall_alignment_pack_path(gr);
-        Base::write_dataset(p + "/Template_Step", al_pack.template_step);
-        add_attr_map(p + "/Template_Step", al_pack.template_step_params);
-        Base::write_dataset(p + "/Complement_Step", al_pack.complement_step);
-        add_attr_map(p + "/Complement_Step", al_pack.complement_step_params);
-        Base::write_dataset(p + "/Move", al_pack.move);
-        add_attr_map(p + "/Move", al_pack.move_params);
-        Base::write_attribute(p + "/template_index_start", al_pack.template_index_start);
-        Base::write_attribute(p + "/complement_index_start", al_pack.complement_index_start);
-        Base::write_attribute(p + "/kmer_size", al_pack.kmer_size);
+        al_pack.write(*this, p);
         reload();
     }
 
@@ -1547,7 +1607,7 @@ private:
     pack_rw(Raw_Int_Samples_Dataset const & rsi_ds)
     {
         Raw_Samples_Pack rsp;
-        rsp.rs_params = rsi_ds.second;
+        rsp.params = rsi_ds.second;
         std::tie(rsp.signal, rsp.signal_params) = rw_coder().encode(rsi_ds.first, true);
         return rsp;
     }
@@ -1555,7 +1615,7 @@ private:
     unpack_rw(Raw_Samples_Pack const & rs_pack)
     {
         Raw_Int_Samples_Dataset rsi_ds;
-        rsi_ds.second = rs_pack.rs_params;
+        rsi_ds.second = rs_pack.params;
         rsi_ds.first = rw_coder().decode< Raw_Int_Sample >(rs_pack.signal, rs_pack.signal_params);
         return rsi_ds;
     }

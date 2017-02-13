@@ -381,8 +381,9 @@ struct File_Packer
                 else if (src_f.have_basecall_events_unpack(st, gr))
                 {
                     bc_gr_s.insert(gr);
-                    auto ev = src_f.get_basecall_events(st, gr);
-                    auto ev_params = src_f.get_basecall_events_params(st, gr);
+                    auto ev_ds = src_f.get_basecall_events_dataset(st, gr);
+                    auto & ev = ev_ds.first;
+                    auto & ev_params = ev_ds.second;
                     // sampling rate
                     auto channel_id_params = src_f.get_channel_id_params();
                     // basecall fq
@@ -395,18 +396,29 @@ struct File_Packer
                     auto fq = src_f.get_basecall_fastq(st, gr);
                     // ed group
                     auto ed_gr = src_f.get_basecall_eventdetection_group(gr);
-                    if (ed_gr.empty())
+                    std::vector< EventDetection_Event > ed;
+                    if (not ed_gr.empty())
                     {
-                        LOG(error)
-                            << "missing eventdetection events for basecall events: st=" << st << " gr=" << gr << std::endl;
-                        abort();
+                        ed = src_f.get_eventdetection_events(ed_gr);
                     }
-                    auto ed = src_f.get_eventdetection_events(ed_gr);
-                    auto ev_pack = src_f.pack_ev(ev, fq, ev_params, ed, ed_gr,
+                    auto ev_pack = src_f.pack_ev(ev_ds, fq, ed, ed_gr,
                                                  channel_id_params.sampling_rate, opts::p_model_state_bits());
                     if (opts::check())
                     {
-                        auto ev_unpack = src_f.unpack_ev(ev_pack, fq, ed, channel_id_params.sampling_rate);
+                        if (ed_gr.empty())
+                        {
+                            auto rs_ds = src_f.get_raw_samples_dataset("");
+                            ed = src_f.unpack_implicit_ed(ev_pack, rs_ds);
+                        }
+                        auto ev_ds_unpack = src_f.unpack_ev(ev_pack, fq, ed, channel_id_params.sampling_rate);
+                        auto & ev_unpack = ev_ds_unpack.first;
+                        auto & ev_params_unpack = ev_ds_unpack.second;
+                        if (not (ev_params_unpack == ev_params))
+                        {
+                            LOG(error)
+                                << "check_failed ev_params_unpack!=ev_params" << std::endl;
+                            abort();
+                        }
                         if (ev_unpack.size() != ev.size())
                         {
                             LOG(error)
@@ -451,7 +463,9 @@ struct File_Packer
                         << "gr=" << gr
                         << " st=" << st
                         << " ev_size=" << ev.size()
+                        << " rel_skip_bits=" << ev_pack.rel_skip_params.at("avg_bits")
                         << " skip_bits=" << ev_pack.skip_params.at("avg_bits")
+                        << " len_bits=" << ev_pack.len_params.at("avg_bits")
                         << " move_bits=" << ev_pack.move_params.at("avg_bits")
                         << " p_model_state_bits=" << ev_pack.p_model_state_params.at("num_bits")
                         << std::endl;
@@ -471,10 +485,8 @@ struct File_Packer
                 if (src_f.have_basecall_events(st, gr))
                 {
                     bc_gr_s.insert(gr);
-                    auto ev = src_f.get_basecall_events(st, gr);
-                    auto ev_params = src_f.get_basecall_events_params(st, gr);
-                    dst_f.add_basecall_events(st, gr, ev);
-                    dst_f.add_basecall_events_params(st, gr, ev_params);
+                    auto ev_ds = src_f.get_basecall_events_dataset(st, gr);
+                    dst_f.add_basecall_events_dataset(st, gr, ev_ds);
                 }
             }
         }
@@ -491,10 +503,8 @@ struct File_Packer
                 if (src_f.have_basecall_events_unpack(st, gr))
                 {
                     bc_gr_s.insert(gr);
-                    auto ev = src_f.get_basecall_events(st, gr);
-                    auto ev_params = src_f.get_basecall_events_params(st, gr);
-                    dst_f.add_basecall_events(st, gr, ev);
-                    dst_f.add_basecall_events_params(st, gr, ev_params);
+                    auto ev_ds = src_f.get_basecall_events_dataset(st, gr);
+                    dst_f.add_basecall_events_dataset(st, gr, ev_ds);
                 }
                 else if (src_f.have_basecall_events_pack(st, gr))
                 {

@@ -189,7 +189,7 @@ struct EventDetection_Events_Pack
     Huffman_Packer::Code_Type len;
     Attr_Map len_params;
     //
-    EventDetection_Events_Params ev_params;
+    EventDetection_Events_Params params;
 }; // struct EventDetection_Events_Pack
 
 //
@@ -211,13 +211,13 @@ struct Basecall_Model_State
     std::string get_kmer() const { return array_to_string(kmer); }
     friend bool operator == (Basecall_Model_State const & lhs, Basecall_Model_State const & rhs)
     {
-        return lhs.variant == rhs.variant
-            and lhs.level_mean == rhs.level_mean
-            and lhs.level_stdv == rhs.level_stdv
-            and lhs.sd_mean == rhs.sd_mean
-            and lhs.sd_stdv == rhs.sd_stdv
-            and lhs.weight == rhs.weight
-            and lhs.kmer == rhs.kmer;
+        return (lhs.variant == rhs.variant
+                and lhs.level_mean == rhs.level_mean
+                and lhs.level_stdv == rhs.level_stdv
+                and lhs.sd_mean == rhs.sd_mean
+                and lhs.sd_stdv == rhs.sd_stdv
+                and lhs.weight == rhs.weight
+                and lhs.kmer == rhs.kmer);
     }
 }; // struct Basecall_Model_State
 
@@ -289,7 +289,38 @@ struct Basecall_Events_Params
 {
     double start_time;
     double duration;
+    friend bool operator == (Basecall_Events_Params const & lhs, Basecall_Events_Params const & rhs)
+    {
+        return (lhs.start_time == rhs.start_time
+                and lhs.duration == rhs.duration);
+    }
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        if (f.attribute_exists(p + "/start_time"))
+        {
+            f.read(p + "/start_time", start_time);
+        }
+        else
+        {
+            start_time = 0.0;
+        }
+        if (f.attribute_exists(p + "/duration"))
+        {
+            f.read(p + "/duration", duration);
+        }
+        else
+        {
+            duration = 0.0;
+        }
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        if (start_time > 0.0) f.write_attribute(p + "/start_time", start_time);
+        if (duration > 0.0) f.write_attribute(p + "/duration", duration);
+    }
 };
+
+typedef std::pair< std::vector< Basecall_Event >, Basecall_Events_Params > Basecall_Events_Dataset;
 
 struct Basecall_Events_Pack
 {
@@ -308,7 +339,8 @@ struct Basecall_Events_Pack
     long long start_time;
     unsigned state_size;
     unsigned p_model_state_bits;
-    Basecall_Events_Params bce_params;
+    //
+    Basecall_Events_Params params;
 }; // struct Basecall_Events_Pack
 
 //
@@ -927,24 +959,17 @@ public:
     Basecall_Events_Params
     get_basecall_events_params(unsigned st, std::string const & gr = std::string()) const
     {
-        Basecall_Events_Params res;
+        Basecall_Events_Params bce_params;
         auto && gr_1d = fill_basecall_1d_group(st, gr);
         if (have_basecall_events_unpack(st, gr_1d))
         {
-            auto path = basecall_events_path(gr_1d, st);
-            auto params = get_attr_map(path);
-            if (params.count("start_time")) std::istringstream(params["start_time"]) >> res.start_time;
-            else res.start_time = 0.0;
-            if (params.count("duration")) std::istringstream(params["duration"]) >> res.duration;
-            else res.duration = 0.0;
+            bce_params.read(*this, basecall_events_path(gr_1d, st));
         }
         else if (have_basecall_events_pack(st, gr_1d))
         {
-            auto path = basecall_events_pack_path(gr_1d, st);
-            Base::read(path + "/bce_params_start_time", res.start_time);
-            Base::read(path + "/bce_params_duration", res.duration);
+            bce_params.read(*this, basecall_events_params_pack_path(gr_1d, st));
         }
-        return res;
+        return bce_params;
     }
     void
     add_basecall_events_params(unsigned st, std::string const & gr,
@@ -955,8 +980,7 @@ public:
         {
             throw std::runtime_error("basecall events must be added before their params");
         }
-        Base::write_attribute(path + "/start_time", bce_params.start_time);
-        Base::write_attribute(path + "/duration", bce_params.duration);
+        bce_params.write(*this, path);
     }
     std::vector< Basecall_Event >
     get_basecall_events(unsigned st, std::string const & gr = std::string()) const
@@ -980,10 +1004,22 @@ public:
         {
             auto ev_pack = get_basecall_events_pack(st, gr_1d);
             auto fq = get_basecall_fastq(st, gr_1d);
-            if (have_eventdetection_events(ev_pack.ed_gr))
+            if (not ev_pack.ed_gr.empty())
             {
-                auto ed = get_eventdetection_events(ev_pack.ed_gr);
-                res = unpack_ev(ev_pack, fq, ed, _channel_id_params.sampling_rate);
+                if (have_eventdetection_events(ev_pack.ed_gr))
+                {
+                    auto ed = get_eventdetection_events(ev_pack.ed_gr);
+                    res = unpack_ev(ev_pack, fq, ed, _channel_id_params.sampling_rate).first;
+                }
+            }
+            else // ed_gr == "": packed relative to raw samples
+            {
+                if (have_raw_samples())
+                {
+                    auto rs_ds = get_raw_samples_dataset();
+                    auto ed = unpack_implicit_ed(ev_pack, rs_ds);
+                    res = unpack_ev(ev_pack, fq, ed, _channel_id_params.sampling_rate).first;
+                }
             }
         }
         return res;
@@ -1002,6 +1038,20 @@ public:
         cm.add_member("move", &T::move);
         Base::write_dataset(basecall_events_path(gr, st), ev, cm);
         reload();
+    }
+    Basecall_Events_Dataset
+    get_basecall_events_dataset(unsigned st, std::string const & gr) const
+    {
+        Basecall_Events_Dataset bce_ds;
+        bce_ds.first = get_basecall_events(st, gr);
+        bce_ds.second = get_basecall_events_params(st, gr);
+        return bce_ds;
+    }
+    void
+    add_basecall_events_dataset(unsigned st, std::string const & gr, Basecall_Events_Dataset const & bce_ds)
+    {
+        add_basecall_events(st, gr, bce_ds.first);
+        add_basecall_events_params(st, gr, bce_ds.second);
     }
 
     //
@@ -1359,7 +1409,7 @@ private:
         ede_pack.skip_params = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip");
         Base::read(eventdetection_events_pack_path(gr, rn) + "/Len", ede_pack.len);
         ede_pack.len_params = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len");
-        ede_pack.ev_params.read(*this, eventdetection_events_params_pack_path(gr, rn));
+        ede_pack.params.read(*this, eventdetection_events_params_pack_path(gr, rn));
         return ede_pack;
     }
     void
@@ -1371,7 +1421,7 @@ private:
         add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip", ede_pack.skip_params);
         Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Len", ede_pack.len);
         add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len", ede_pack.len_params);
-        ede_pack.ev_params.write(*this, eventdetection_events_params_pack_path(gr, rn));
+        ede_pack.params.write(*this, eventdetection_events_params_pack_path(gr, rn));
         reload();
     }
     bool
@@ -1446,8 +1496,7 @@ private:
         Base::read(p + "/start_time", ev_pack.start_time);
         Base::read(p + "/state_size", ev_pack.state_size);
         Base::read(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
-        Base::read(p + "/bce_params_start_time", ev_pack.bce_params.start_time);
-        Base::read(p + "/bce_params_duration", ev_pack.bce_params.duration);
+        ev_pack.params.read(*this, basecall_events_params_pack_path(gr, st));
         return ev_pack;
     }
     void
@@ -1474,8 +1523,7 @@ private:
         Base::write_attribute(p + "/start_time", ev_pack.start_time);
         Base::write_attribute(p + "/state_size", ev_pack.state_size);
         Base::write_attribute(p + "/p_model_state_bits", ev_pack.p_model_state_bits);
-        Base::write_attribute(p + "/bce_params_start_time", ev_pack.bce_params.start_time);
-        Base::write_attribute(p + "/bce_params_duration", ev_pack.bce_params.duration);
+        ev_pack.params.write(*this, basecall_events_params_pack_path(gr, st));
         reload();
     }
     bool
@@ -1614,7 +1662,7 @@ private:
         EventDetection_Events_Pack ede_pack;
         auto & ede = ede_ds.first;
         auto & ede_params = ede_ds.second;
-        ede_pack.ev_params = ede_params;
+        ede_pack.params = ede_params;
         std::vector< long long > skip;
         std::vector< long long > len;
         std::tie(skip, len) = pack_event_start_length(
@@ -1631,7 +1679,7 @@ private:
               Raw_Samples_Dataset const & rs_ds)
     {
         EventDetection_Events_Dataset res;
-        auto & ede_params = ede_pack.ev_params;
+        auto & ede_params = ede_pack.params;
         auto & rs = rs_ds.first;
         auto & rs_params = rs_ds.second;
         res.second = ede_params;
@@ -1701,20 +1749,20 @@ private:
         return res;
     }
     static Basecall_Events_Pack
-    pack_ev(std::vector< Basecall_Event > const & ev,
+    pack_ev(Basecall_Events_Dataset & ev_ds,
             std::string const & fq,
-            Basecall_Events_Params const & ev_params,
             std::vector< EventDetection_Event > const & ed,
             std::string const & ed_gr,
             double sampling_rate,
             unsigned p_model_state_bits)
     {
         Basecall_Events_Pack ev_pack;
+        ev_pack.params = ev_ds.second;
+        auto & ev = ev_ds.first;
         ev_pack.ed_gr = ed_gr;
         ev_pack.start_time = time_to_int(ev[0].start, sampling_rate);
         ev_pack.state_size = ev[0].get_model_state().size();
         ev_pack.p_model_state_bits = p_model_state_bits;
-        ev_pack.bce_params = ev_params;
         auto fqa = split_fq(fq);
         std::vector< long long > rel_skip;
         std::vector< long long > skip;
@@ -1787,45 +1835,81 @@ private:
         std::tie(ev_pack.p_model_state, ev_pack.p_model_state_params) = bit_packer().encode(p_model_state, p_model_state_bits);
         return ev_pack;
     } // pack_ev()
-    static std::vector< Basecall_Event >
+    static std::vector< EventDetection_Event >
+    unpack_implicit_ed(Basecall_Events_Pack const & ev_pack,
+                       Raw_Samples_Dataset const & rs_ds)
+    {
+        std::vector< EventDetection_Event > ede;
+        auto & rs = rs_ds.first;
+        auto & rs_params = rs_ds.second;
+        auto skip = ed_skip_coder().decode< long long >(ev_pack.skip, ev_pack.skip_params);
+        auto len = ed_len_coder().decode< long long >(ev_pack.len, ev_pack.len_params);
+        if (skip.empty() or skip.size() != len.size())
+        {
+            throw std::runtime_error("unpack_implicit_ed failure: skip or length of wrong size");
+        }
+        ede.resize(skip.size());
+        unpack_event_start_length(
+            skip,
+            len,
+            [&] (unsigned i, long long x) { return ede.at(i).start = x; },
+            [&] (unsigned i, long long x) { return ede.at(i).length = x; },
+            ev_pack.start_time);
+        unpack_event_mean_stdv(
+            ede.size(),
+            [&] (unsigned i) { return ede.at(i).start; },
+            [&] (unsigned i) { return ede.at(i).length; },
+            [&] (unsigned i, double x) { return ede.at(i).mean = x; },
+            [&] (unsigned i, double x) { return ede.at(i).stdv = x; },
+            rs,
+            rs_params.start_time,
+            false);
+        return ede;
+    }
+    static Basecall_Events_Dataset
     unpack_ev(Basecall_Events_Pack const & ev_pack,
               std::string const & fq,
               std::vector< EventDetection_Event > const & ed,
               double sampling_rate)
     {
-        //TODO
-        std::vector< Basecall_Event > res;
-        auto skip = ev_skip_coder().decode< long long >(ev_pack.skip, ev_pack.skip_params);
+        Basecall_Events_Dataset ev_ds;
+        ev_ds.second = ev_pack.params;
+        auto & ev = ev_ds.first;
+        std::vector< long long > skip;
+        if (not ev_pack.skip.empty())
+        {
+            skip = ev_skip_coder().decode< long long >(ev_pack.skip, ev_pack.skip_params);
+        }
         auto mv = ev_move_coder().decode< std::uint8_t >(ev_pack.move, ev_pack.move_params);
         auto p_model_state = bit_packer().decode< std::uint16_t >(ev_pack.p_model_state, ev_pack.p_model_state_params);
         auto fqa = split_fq(fq);
         auto const & bases = fqa[1];
-        if (skip.size() != mv.size() or p_model_state.size() != mv.size())
+        if ((not skip.empty() and skip.size() != mv.size()) or p_model_state.size() != mv.size())
         {
             throw std::runtime_error("unpack_ev failed: skip and move have different sizes");
         }
-        res.resize(skip.size());
+        ev.resize(mv.size());
         long long j = 0;
         std::string s;
         unsigned bases_pos = 0;
         unsigned p_model_state_bits;
         std::istringstream(ev_pack.p_model_state_params.at("num_bits")) >> p_model_state_bits;
         long long unsigned max_p_model_state_int = 1llu << p_model_state_bits;
-        for (unsigned i = 0; i < res.size(); ++i)
+        for (unsigned i = 0; i < ev.size(); ++i)
         {
-            j += skip[i] + 1;
-            res[i].start = time_to_float(ed[j].start, sampling_rate);
-            res[i].length = time_to_float(ed[j].length, sampling_rate);
-            res[i].mean = ed[j].mean;
-            res[i].stdv = ed[j].stdv;
-            res[i].move = mv[i];
+            j += (not skip.empty()? skip[i] : 0) + 1;
+            ev[i].start = time_to_float(ed[j].start, sampling_rate);
+            ev[i].length = time_to_float(ed[j].length, sampling_rate);
+            ev[i].mean = ed[j].mean;
+            ev[i].stdv = ed[j].stdv;
+            ev[i].move = mv[i];
             if (i > 0) s = s.substr(mv[i]); // apply move
             while (s.size() < ev_pack.state_size) s += bases[bases_pos++];
-            std::copy(s.begin(), s.end(), res[i].model_state.begin());
-            if (ev_pack.state_size < MAX_K_LEN) res[i].model_state[ev_pack.state_size] = 0;
-            res[i].p_model_state = (double)p_model_state[i] / max_p_model_state_int;
+            std::copy(s.begin(), s.end(), ev[i].model_state.begin());
+            if (ev_pack.state_size < MAX_K_LEN) ev[i].model_state[ev_pack.state_size] = 0;
+            ev[i].p_model_state = (double)p_model_state[i] / max_p_model_state_int;
         }
-        return res;
+        return ev_ds;
     } // unpack_ev()
     static Basecall_Alignment_Pack
     pack_al(std::vector< Basecall_Alignment_Entry > const & al,
@@ -1992,7 +2076,7 @@ private:
     }
     static std::string eventdetection_events_params_pack_path(std::string const & gr, std::string const & rn)
     {
-        return eventdetection_events_pack_path(gr, rn) + "/ev_params";
+        return eventdetection_events_pack_path(gr, rn) + "/params";
     }
     static std::string basecall_root_path() { return "/Analyses"; }
     static std::string basecall_group_prefix() { return "Basecall_"; }
@@ -2041,6 +2125,10 @@ private:
     static std::string basecall_events_pack_path(std::string const & gr, unsigned st)
     {
         return basecall_events_path(gr, st) + "_Pack";
+    }
+    static std::string basecall_events_params_pack_path(std::string const & gr, unsigned st)
+    {
+        return basecall_events_pack_path(gr, st) + "/params";
     }
     static std::string basecall_alignment_path(std::string const & gr)
     {

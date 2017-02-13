@@ -120,73 +120,80 @@ struct File_Packer
             for (auto const & rn : rn_l)
             {
                 auto ed_params = src_f.get_eventdetection_params(gr);
-                auto ede_params = src_f.get_eventdetection_events_params(gr, rn);
                 dst_f.add_eventdetection_params(gr, ed_params);
-                dst_f.add_eventdetection_events_params(gr, rn, ede_params);
                 if (src_f.have_eventdetection_events_pack(gr, rn))
                 {
-                    auto ed_pack = src_f.get_eventdetection_events_pack(gr, rn);
-                    dst_f.add_eventdetection_events(gr, rn, ed_pack);
+                    auto ede_pack = src_f.get_eventdetection_events_pack(gr, rn);
+                    dst_f.add_eventdetection_events(gr, rn, ede_pack);
                 }
                 else if (src_f.have_eventdetection_events(gr, rn))
                 {
-                    auto ed = src_f.get_eventdetection_events(gr, rn);
-                    auto ed_pack = src_f.pack_ed(ed, ede_params);
+                    auto ede_ds = src_f.get_eventdetection_events_dataset(gr, rn);
+                    auto & ede = ede_ds.first;
+                    auto & ede_params = ede_ds.second;
+                    auto ede_pack = src_f.pack_ed(ede_ds);
                     if (opts::check())
                     {
-                        auto rs = src_f.get_raw_samples(rn);
-                        auto rs_params = src_f.get_raw_samples_params(rn);
-                        auto ed_unpack = src_f.unpack_ed(ed_pack, ede_params, rs, rs_params);
-                        if (ed_unpack.size() != ed.size())
+                        auto rs_ds = src_f.get_raw_samples_dataset(rn);
+                        auto ede_ds_unpack = src_f.unpack_ed(ede_pack, rs_ds);
+                        auto & ede_unpack = ede_ds_unpack.first;
+                        auto & ede_params_unpack = ede_ds_unpack.second;
+                        if (not (ede_params_unpack == ede_params))
+                        {
+                            LOG(error)
+                                << "check_failed ede_params_unpack!=ede_params" << std::endl;
+                            abort();
+                        }
+                        if (ede_unpack.size() != ede.size())
                         {
                             LOG(error)
                                 << "check_failed gr=" << gr
-                                << " ed_unpack.size=" << ed_unpack.size()
-                                << " ed_orig.size=" << ed.size() << std::endl;
+                                << " ede_unpack.size=" << ede_unpack.size()
+                                << " ede_orig.size=" << ede.size() << std::endl;
                             abort();
                         }
-                        for (unsigned i = 0; i + 1 < ed_unpack.size(); ++i) // skip last event
+                        for (unsigned i = 0; i + 1 < ede_unpack.size(); ++i) // skip last event
                         {
                             LOG(debug1)
                                 << "gr=" << gr
                                 << " i=" << i
-                                << " ed_unpack=(" << ed_unpack[i].start
-                                << "," << ed_unpack[i].length
-                                << "," << ed_unpack[i].mean
-                                << "," << ed_unpack[i].stdv
-                                << ") ed_orig=(" << ed[i].start
-                                << "," << ed[i].length
-                                << "," << ed[i].mean
-                                << "," << ed[i].stdv
+                                << " ede_unpack=(" << ede_unpack[i].start
+                                << "," << ede_unpack[i].length
+                                << "," << ede_unpack[i].mean
+                                << "," << ede_unpack[i].stdv
+                                << ") ed_orig=(" << ede[i].start
+                                << "," << ede[i].length
+                                << "," << ede[i].mean
+                                << "," << ede[i].stdv
                                 << ")" << std::endl;
-                            if (ed_unpack[i].start != ed[i].start
-                                or ed_unpack[i].length != ed[i].length
-                                or abs(ed_unpack[i].mean - ed[i].mean) > .1
-                                or abs(ed_unpack[i].stdv - ed[i].stdv) > .1)
+                            if (ede_unpack[i].start != ede[i].start
+                                or ede_unpack[i].length != ede[i].length
+                                or abs(ede_unpack[i].mean - ede[i].mean) > .1
+                                or abs(ede_unpack[i].stdv - ede[i].stdv) > .1)
                             {
                                 LOG(error)
                                     << "check_failed gr=" << gr
                                     << " i=" << i
-                                    << " ed_unpack=(" << ed_unpack[i].start
-                                    << "," << ed_unpack[i].length
-                                    << "," << ed_unpack[i].mean
-                                    << "," << ed_unpack[i].stdv
-                                    << ") ed_orig=(" << ed[i].start
-                                    << "," << ed[i].length
-                                    << "," << ed[i].mean
-                                    << "," << ed[i].stdv
+                                    << " ede_unpack=(" << ede_unpack[i].start
+                                    << "," << ede_unpack[i].length
+                                    << "," << ede_unpack[i].mean
+                                    << "," << ede_unpack[i].stdv
+                                    << ") ed_orig=(" << ede[i].start
+                                    << "," << ede[i].length
+                                    << "," << ede[i].mean
+                                    << "," << ede[i].stdv
                                     << ")" << std::endl;
                                 abort();
                             }
                         }
                     } // if check
-                    dst_f.add_eventdetection_events(gr, rn, ed_pack);
+                    dst_f.add_eventdetection_events(gr, rn, ede_pack);
                     LOG(info)
                         << "gr=" << gr
                         << " rn=" << rn
-                        << " ed_size=" << ed.size()
-                        << " skip_bits=" << ed_pack.skip_params.at("avg_bits")
-                        << " len_bits=" << ed_pack.len_params.at("avg_bits")
+                        << " ed_size=" << ede.size()
+                        << " skip_bits=" << ede_pack.skip_params.at("avg_bits")
+                        << " len_bits=" << ede_pack.len_params.at("avg_bits")
                         << std::endl;
                 }
             } // for rn
@@ -203,11 +210,9 @@ struct File_Packer
             for (auto const & rn : rn_l)
             {
                 auto ed_params = src_f.get_eventdetection_params(gr);
-                auto ede_params = src_f.get_eventdetection_events_params(gr, rn);
-                auto ed = src_f.get_eventdetection_events(gr, rn);
                 dst_f.add_eventdetection_params(gr, ed_params);
-                dst_f.add_eventdetection_events_params(gr, rn, ede_params);
-                dst_f.add_eventdetection_events(gr, rn, ed);
+                auto ede_ds = src_f.get_eventdetection_events_dataset(gr, rn);
+                dst_f.add_eventdetection_events_dataset(gr, rn, ede_ds);
             }
         }
     } // unpack_ed()
@@ -222,18 +227,16 @@ struct File_Packer
             for (auto const & rn : rn_l)
             {
                 auto ed_params = src_f.get_eventdetection_params(gr);
-                auto ede_params = src_f.get_eventdetection_events_params(gr, rn);
                 dst_f.add_eventdetection_params(gr, ed_params);
-                dst_f.add_eventdetection_events_params(gr, rn, ede_params);
                 if (src_f.have_eventdetection_events_unpack(gr, rn))
                 {
-                    auto ed = src_f.get_eventdetection_events(gr, rn);
-                    dst_f.add_eventdetection_events(gr, rn, ed);
+                    auto ede_ds = src_f.get_eventdetection_events_dataset(gr, rn);
+                    dst_f.add_eventdetection_events_dataset(gr, rn, ede_ds);
                 }
                 else if (src_f.have_eventdetection_events_pack(gr, rn))
                 {
-                    auto ed_pack = src_f.get_eventdetection_events_pack(gr, rn);
-                    dst_f.add_eventdetection_events(gr, rn, ed_pack);
+                    auto ede_pack = src_f.get_eventdetection_events_pack(gr, rn);
+                    dst_f.add_eventdetection_events(gr, rn, ede_pack);
                 }
             }
         }

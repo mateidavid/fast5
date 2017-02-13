@@ -125,7 +125,62 @@ struct EventDetection_Events_Params
     long long duration;
     double median_before;
     unsigned abasic_found;
+    friend bool operator == (EventDetection_Events_Params const & lhs, EventDetection_Events_Params const & rhs)
+    {
+        return (lhs.read_id == rhs.read_id
+                and lhs.read_number == rhs.read_number
+                and lhs.scaling_used == rhs.scaling_used
+                and lhs.start_mux == rhs.start_mux
+                and lhs.start_time == rhs.start_time
+                and lhs.duration == rhs.duration
+                and lhs.median_before == rhs.median_before
+                and lhs.abasic_found == rhs.abasic_found);
+    }
+    void read(hdf5_tools::File const & f, std::string const & p)
+    {
+        auto a_v = f.get_attr_list(p);
+        std::set< std::string > a_s(a_v.begin(), a_v.end());
+        f.read(p + "/read_number", read_number);
+        f.read(p + "/scaling_used", scaling_used);
+        f.read(p + "/start_mux", start_mux);
+        f.read(p + "/start_time", start_time);
+        f.read(p + "/duration", duration);
+        // optional fields
+        if (a_s.count("read_id"))
+        {
+            f.read(p + "/read_id", read_id);
+        }
+        if (a_s.count("median_before"))
+        {
+            f.read(p + "/median_before", median_before);
+        }
+        else
+        {
+            median_before = -1;
+        }
+        if (a_s.count("abasic_found"))
+        {
+            f.read(p + "/abasic_found", abasic_found);
+        }
+        else
+        {
+            abasic_found = 2;
+        }
+    }
+    void write(hdf5_tools::File const & f, std::string const & p) const
+    {
+        f.write_attribute(p + "/read_number", read_number);
+        f.write_attribute(p + "/scaling_used", scaling_used);
+        f.write_attribute(p + "/start_mux", start_mux);
+        f.write_attribute(p + "/start_time", start_time);
+        f.write_attribute(p + "/duration", duration);
+        if (not read_id.empty()) f.write_attribute(p + "/read_id", read_id);
+        if (median_before > 0.0) f.write_attribute(p + "/median_before", median_before);
+        if (abasic_found < 2) f.write_attribute(p + "/abasic_found", abasic_found);
+    }
 }; // struct EventDetection_Events_Params
+
+typedef std::pair< std::vector< EventDetection_Event >, EventDetection_Events_Params > EventDetection_Events_Dataset;
 
 struct EventDetection_Events_Pack
 {
@@ -133,6 +188,8 @@ struct EventDetection_Events_Pack
     Attr_Map skip_params;
     Huffman_Packer::Code_Type len;
     Attr_Map len_params;
+    //
+    EventDetection_Events_Params ev_params;
 }; // struct EventDetection_Events_Pack
 
 //
@@ -552,34 +609,13 @@ public:
         EventDetection_Events_Params res;
         auto && _gr = fill_eventdetection_group(gr);
         auto && _rn = fill_eventdetection_read_name(_gr, rn);
-        auto p = eventdetection_events_params_path(_gr, _rn);
-        auto a_v = Base::get_attr_list(p);
-        std::set< std::string > a_s(a_v.begin(), a_v.end());
-        Base::read(p + "/read_number", res.read_number);
-        Base::read(p + "/scaling_used", res.scaling_used);
-        Base::read(p + "/start_mux", res.start_mux);
-        Base::read(p + "/start_time", res.start_time);
-        Base::read(p + "/duration", res.duration);
-        // optional fields
-        if (a_s.count("read_id"))
+        if (have_eventdetection_events_unpack(_gr, _rn))
         {
-            Base::read(p + "/read_id", res.read_id);
+            res.read(*this, eventdetection_events_params_path(_gr, _rn));
         }
-        if (a_s.count("median_before"))
+        else if (have_eventdetection_events_pack(_gr, _rn))
         {
-            Base::read(p + "/median_before", res.median_before);
-        }
-        else
-        {
-            res.median_before = -1;
-        }
-        if (a_s.count("abasic_found"))
-        {
-            Base::read(p + "/abasic_found", res.abasic_found);
-        }
-        else
-        {
-            res.abasic_found = 2;
+            res.read(*this, eventdetection_events_params_pack_path(_gr, _rn));
         }
         return res;
     }
@@ -589,14 +625,7 @@ public:
         EventDetection_Events_Params const & ede_params) const
     {
         auto p = eventdetection_events_params_path(gr, rn);
-        if (not ede_params.read_id.empty()) Base::write_attribute(p + "/read_id", ede_params.read_id);
-        Base::write_attribute(p + "/read_number", ede_params.read_number);
-        Base::write_attribute(p + "/scaling_used", ede_params.scaling_used);
-        Base::write_attribute(p + "/start_mux", ede_params.start_mux);
-        Base::write_attribute(p + "/start_time", ede_params.start_time);
-        Base::write_attribute(p + "/duration", ede_params.duration);
-        if (ede_params.median_before > 0.0) Base::write_attribute(p + "/median_before", ede_params.median_before);
-        if (ede_params.abasic_found < 2) Base::write_attribute(p + "/abasic_found", ede_params.abasic_found);
+        ede_params.write(*this, p);
     }
     std::vector< EventDetection_Event >
     get_eventdetection_events(
@@ -645,11 +674,9 @@ public:
         } // have ed unpack
         else if (have_eventdetection_events_pack(_gr, _rn))
         {
-            auto ed_pack = get_eventdetection_events_pack(_gr, _rn);
-            auto ed_params = get_eventdetection_events_params(_gr, _rn);
-            auto rs = get_raw_samples(_rn);
-            auto rs_params = get_raw_samples_params(_rn);
-            res = unpack_ed(ed_pack, ed_params, rs, rs_params);
+            auto ede_pack = get_eventdetection_events_pack(_gr, _rn);
+            auto rs_ds = get_raw_samples_dataset(_rn);
+            res = unpack_ed(ede_pack, rs_ds).first;
         }
         return res;
     } // get_eventdetection_events()
@@ -665,6 +692,22 @@ public:
         m.add_member("stdv", &EventDetection_Event::stdv);
         Base::write_dataset(eventdetection_events_path(gr, rn), ed, m);
         reload();
+    }
+    EventDetection_Events_Dataset
+    get_eventdetection_events_dataset(
+        std::string const & gr, std::string const & rn) const
+    {
+        EventDetection_Events_Dataset ede_ds;
+        ede_ds.first = get_eventdetection_events(gr, rn);
+        ede_ds.second = get_eventdetection_events_params(gr, rn);
+        return ede_ds;
+    }
+    void add_eventdetection_events_dataset(
+        std::string const & gr, std::string const & rn,
+        EventDetection_Events_Dataset const & ede_ds)
+    {
+        add_eventdetection_events(gr, rn, ede_ds.first);
+        add_eventdetection_events_params(gr, rn, ede_ds.second);
     }
 
     //
@@ -1311,22 +1354,24 @@ private:
     get_eventdetection_events_pack(
         std::string const & gr, std::string const & rn) const
     {
-        EventDetection_Events_Pack ed_pack;
-        Base::read(eventdetection_events_pack_path(gr, rn) + "/Skip", ed_pack.skip);
-        ed_pack.skip_params = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip");
-        Base::read(eventdetection_events_pack_path(gr, rn) + "/Len", ed_pack.len);
-        ed_pack.len_params = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len");
-        return ed_pack;
+        EventDetection_Events_Pack ede_pack;
+        Base::read(eventdetection_events_pack_path(gr, rn) + "/Skip", ede_pack.skip);
+        ede_pack.skip_params = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip");
+        Base::read(eventdetection_events_pack_path(gr, rn) + "/Len", ede_pack.len);
+        ede_pack.len_params = get_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len");
+        ede_pack.ev_params.read(*this, eventdetection_events_params_pack_path(gr, rn));
+        return ede_pack;
     }
     void
     add_eventdetection_events(
         std::string const & gr, std::string const & rn,
-        EventDetection_Events_Pack const & ed_pack)
+        EventDetection_Events_Pack const & ede_pack)
     {
-        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Skip", ed_pack.skip);
-        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip", ed_pack.skip_params);
-        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Len", ed_pack.len);
-        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len", ed_pack.len_params);
+        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Skip", ede_pack.skip);
+        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Skip", ede_pack.skip_params);
+        Base::write_dataset(eventdetection_events_pack_path(gr, rn) + "/Len", ede_pack.len);
+        add_attr_map(eventdetection_events_pack_path(gr, rn) + "/Len", ede_pack.len_params);
+        ede_pack.ev_params.write(*this, eventdetection_events_params_pack_path(gr, rn));
         reload();
     }
     bool
@@ -1564,51 +1609,57 @@ private:
         }
     }
     static EventDetection_Events_Pack
-    pack_ed(std::vector< EventDetection_Event > const & ed,
-            EventDetection_Events_Params const & ed_params)
+    pack_ed(EventDetection_Events_Dataset const & ede_ds)
     {
-        EventDetection_Events_Pack ed_pack;
+        EventDetection_Events_Pack ede_pack;
+        auto & ede = ede_ds.first;
+        auto & ede_params = ede_ds.second;
+        ede_pack.ev_params = ede_params;
         std::vector< long long > skip;
         std::vector< long long > len;
         std::tie(skip, len) = pack_event_start_length(
-            ed.size(),
-            [&ed] (unsigned i) { return ed.at(i).start; },
-            [&ed] (unsigned i) { return ed.at(i).length; },
-            ed_params.start_time);
-        std::tie(ed_pack.skip, ed_pack.skip_params) = ed_skip_coder().encode(skip, false);
-        std::tie(ed_pack.len, ed_pack.len_params) = ed_len_coder().encode(len, false);
-        return ed_pack;
+            ede.size(),
+            [&] (unsigned i) { return ede.at(i).start; },
+            [&] (unsigned i) { return ede.at(i).length; },
+            ede_params.start_time);
+        std::tie(ede_pack.skip, ede_pack.skip_params) = ed_skip_coder().encode(skip, false);
+        std::tie(ede_pack.len, ede_pack.len_params) = ed_len_coder().encode(len, false);
+        return ede_pack;
     }
-    static std::vector< EventDetection_Event >
-    unpack_ed(EventDetection_Events_Pack const & ed_pack,
-              EventDetection_Events_Params const & ed_params,
-              std::vector< Raw_Sample > const & rs,
-              Raw_Samples_Params const & rs_params)
+    static EventDetection_Events_Dataset
+    unpack_ed(EventDetection_Events_Pack const & ede_pack,
+              Raw_Samples_Dataset const & rs_ds)
     {
-        auto skip = ed_skip_coder().decode< long long >(ed_pack.skip, ed_pack.skip_params);
-        auto len = ed_len_coder().decode< long long >(ed_pack.len, ed_pack.len_params);
+        EventDetection_Events_Dataset res;
+        auto & ede_params = ede_pack.ev_params;
+        auto & rs = rs_ds.first;
+        auto & rs_params = rs_ds.second;
+        res.second = ede_params;
+        auto skip = ed_skip_coder().decode< long long >(ede_pack.skip, ede_pack.skip_params);
+        auto len = ed_len_coder().decode< long long >(ede_pack.len, ede_pack.len_params);
         if (skip.size() != len.size())
         {
             throw std::runtime_error("unpack_ed failure: skip and length of different size");
         }
-        std::vector< EventDetection_Event > ed(skip.size());
+        auto & ede = res.first;
+        ede.resize(skip.size());
         unpack_event_start_length(
             skip,
             len,
-            [&ed] (unsigned i, long long x) { return ed.at(i).start = x; },
-            [&ed] (unsigned i, long long x) { return ed.at(i).length = x; },
-            ed_params.start_time);
-        bool off_by_one = ed_params.start_time == rs_params.start_time; // hack
+            [&] (unsigned i, long long x) { return ede.at(i).start = x; },
+            [&] (unsigned i, long long x) { return ede.at(i).length = x; },
+            ede_params.start_time);
+        bool off_by_one = ede_params.start_time == rs_params.start_time; // hack
         unpack_event_mean_stdv(
-            ed.size(),
-            [&ed] (unsigned i) { return ed.at(i).start; },
-            [&ed] (unsigned i) { return ed.at(i).length; },
-            [&ed] (unsigned i, double x) { return ed.at(i).mean = x; },
-            [&ed] (unsigned i, double x) { return ed.at(i).stdv = x; },
+            ede.size(),
+            [&] (unsigned i) { return ede.at(i).start; },
+            [&] (unsigned i) { return ede.at(i).length; },
+            [&] (unsigned i, double x) { return ede.at(i).mean = x; },
+            [&] (unsigned i, double x) { return ede.at(i).stdv = x; },
             rs,
             rs_params.start_time,
             off_by_one);
-        return ed;
+        return res;
     }
     static Basecall_Fastq_Pack
     pack_fq(std::string const & fq, unsigned qv_bits = 5)
@@ -1938,6 +1989,10 @@ private:
     static std::string eventdetection_events_pack_path(std::string const & gr, std::string const & rn)
     {
         return eventdetection_events_path(gr, rn) + "_Pack";
+    }
+    static std::string eventdetection_events_params_pack_path(std::string const & gr, std::string const & rn)
+    {
+        return eventdetection_events_pack_path(gr, rn) + "/ev_params";
     }
     static std::string basecall_root_path() { return "/Analyses"; }
     static std::string basecall_group_prefix() { return "Basecall_"; }

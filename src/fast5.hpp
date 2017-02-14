@@ -1786,7 +1786,7 @@ private:
     }
     static Basecall_Events_Pack
     pack_ev(Basecall_Events_Dataset & ev_ds,
-            std::string const & fq,
+            std::string const & sq,
             std::vector< EventDetection_Event > const & ed,
             std::string const & ed_gr,
             double sampling_rate,
@@ -1799,13 +1799,11 @@ private:
         ev_pack.start_time = time_to_int(ev[0].start, sampling_rate);
         ev_pack.state_size = ev[0].get_model_state().size();
         ev_pack.p_model_state_bits = p_model_state_bits;
-        auto fqa = split_fq(fq);
         std::vector< long long > rel_skip;
         std::vector< long long > skip;
         std::vector< long long > len;
         std::vector< std::uint8_t > mv;
         std::vector< std::uint16_t > p_model_state;
-        std::string bases;
         // first pack start/duration
         if (not ed_gr.empty())
         {
@@ -1835,37 +1833,60 @@ private:
             std::tie(ev_pack.skip, ev_pack.skip_params) = ed_skip_coder().encode(skip, false);
             std::tie(ev_pack.len, ev_pack.len_params) = ed_len_coder().encode(len, false);
         }
+        unsigned sq_pos = 0;
         for (unsigned i = 0; i < ev.size(); ++i)
         {
-            // move
+            auto s = ev[i].get_model_state();
+            if (s.size() != ev_pack.state_size)
+            {
+                throw std::runtime_error("pack_ev failed: unexpected state size");
+            }
+            // check if move is valid
             if (ev[i].move < 0 or ev[i].move > std::numeric_limits< uint8_t >::max())
             {
                 throw std::runtime_error("pack_ev failed: invalid move");
             }
-            mv.push_back(ev[i].move);
-            // state
-            auto s = ev[i].get_model_state();
-            if (s.size() != ev_pack.state_size)
+            int real_move = ev[i].move;
+            if (sq.substr(sq_pos + real_move, ev_pack.state_size) != s)
             {
-                throw std::runtime_error("pack_ev failed: different state sizes");
+                // move is not valid, compute alternative:
+                // allow move > state_size only if previous state is homopolymer
+                auto next_sq_pos = sq.find(s, sq_pos);
+                if (next_sq_pos != std::string::npos
+                    and (next_sq_pos <= sq_pos + ev_pack.state_size
+                         or sq.substr(sq_pos, ev_pack.state_size) == std::string(ev_pack.state_size, sq[sq_pos])))
+                {
+                    real_move = next_sq_pos - sq_pos;
+                }
+                else
+                {
+                    real_move = -1;
+                }
+                std::clog << (real_move >= 0? "warning: using workaround for" : "error:")
+                          << " invalid move: i=" << i
+                          << " sq=" << sq.substr(sq_pos, 2 * ev_pack.state_size)
+                          << " move[i]=" << ev[i].move
+                          << " state[i]=" << s;
+                if (real_move >= 0)
+                {
+                    std::clog << " real_move=" << real_move << std::endl;
+                }
+                else
+                {
+                    std::clog << std::endl;
+                    abort();
+                }
             }
-            int bases_to_skip = 0;
-            if (i > 0 and ev[i].move < (int)ev_pack.state_size)
-            {
-                bases_to_skip = (int)ev_pack.state_size - ev[i].move;
-            }
-            for (auto c : s.substr(bases_to_skip))
-            {
-                bases.push_back(c);
-            }
+            mv.push_back(real_move);
+            sq_pos += real_move;
             // p_model_state
             std::uint16_t p_model_state_val = ev[i].p_model_state * (1u << p_model_state_bits);
             if (p_model_state_val >= (1u << p_model_state_bits)) p_model_state_val = (1u << p_model_state_bits) - 1;
             p_model_state.push_back(p_model_state_val);
         }
-        if (bases != fqa[1])
+        if (sq_pos + ev_pack.state_size != sq.size())
         {
-            throw std::runtime_error("pack_ev failed: sequence of states does not match fastq seq");
+            throw std::runtime_error("pack_ev failed: leftover sequence not covered by state sequence");
         }
         std::tie(ev_pack.move, ev_pack.move_params) = ev_move_coder().encode(mv, false);
         std::tie(ev_pack.p_model_state, ev_pack.p_model_state_params) = bit_packer().encode(p_model_state, p_model_state_bits);
@@ -1904,7 +1925,7 @@ private:
     }
     static Basecall_Events_Dataset
     unpack_ev(Basecall_Events_Pack const & ev_pack,
-              std::string const & fq,
+              std::string const & sq,
               std::vector< EventDetection_Event > const & ed,
               double sampling_rate)
     {
@@ -1918,8 +1939,6 @@ private:
         }
         auto mv = ev_move_coder().decode< std::uint8_t >(ev_pack.move, ev_pack.move_params);
         auto p_model_state = bit_packer().decode< std::uint16_t >(ev_pack.p_model_state, ev_pack.p_model_state_params);
-        auto fqa = split_fq(fq);
-        auto const & bases = fqa[1];
         if ((not rel_skip.empty() and rel_skip.size() != mv.size()) or p_model_state.size() != mv.size())
         {
             throw std::runtime_error("unpack_ev failed: rel_skip and move have different sizes");
@@ -1927,7 +1946,7 @@ private:
         ev.resize(mv.size());
         long long j = -1;
         std::string s;
-        unsigned bases_pos = 0;
+        unsigned sq_pos = 0;
         unsigned p_model_state_bits;
         std::istringstream(ev_pack.p_model_state_params.at("num_bits")) >> p_model_state_bits;
         long long unsigned max_p_model_state_int = 1llu << p_model_state_bits;
@@ -1940,7 +1959,7 @@ private:
             ev[i].stdv = ed[j].stdv;
             ev[i].move = mv[i];
             if (i > 0) s = s.substr(mv[i]); // apply move
-            while (s.size() < ev_pack.state_size) s += bases[bases_pos++];
+            while (s.size() < ev_pack.state_size) s += sq[sq_pos++];
             std::copy(s.begin(), s.end(), ev[i].model_state.begin());
             if (ev_pack.state_size < MAX_K_LEN) ev[i].model_state[ev_pack.state_size] = 0;
             ev[i].p_model_state = (double)p_model_state[i] / max_p_model_state_int;
@@ -1949,7 +1968,7 @@ private:
     } // unpack_ev()
     static Basecall_Alignment_Pack
     pack_al(std::vector< Basecall_Alignment_Entry > const & al,
-            std::string const & seq)
+            std::string const & sq)
     {
         Basecall_Alignment_Pack al_pack;
         std::array< std::vector< uint8_t > , 2 > step_v;
@@ -1990,7 +2009,7 @@ private:
             }
             // compute move
             auto kmer = al[i].get_kmer();
-            size_t next_pos = seq.find(kmer, pos);
+            size_t next_pos = sq.find(kmer, pos);
             if (next_pos == std::string::npos)
             {
                 throw std::runtime_error("pack_al failed: cannot find kmer in 2d seq");
@@ -2020,7 +2039,7 @@ private:
     } // pack_al()
     static std::vector< Basecall_Alignment_Entry >
     unpack_al(Basecall_Alignment_Pack const & al_pack,
-              std::string const & seq)
+              std::string const & sq)
     {
         std::vector< Basecall_Alignment_Entry > al;
         std::array< std::vector< uint8_t >, 2 > step_v =
@@ -2062,7 +2081,7 @@ private:
             }
             // set kmer
             pos += mv[i];
-            std::copy(seq.begin() + pos, seq.begin() + pos + al_pack.kmer_size, al[i].kmer.begin());
+            std::copy(sq.begin() + pos, sq.begin() + pos + al_pack.kmer_size, al[i].kmer.begin());
             if (al_pack.kmer_size < MAX_K_LEN) al[i].kmer[al_pack.kmer_size] = 0;
         }
         return al;

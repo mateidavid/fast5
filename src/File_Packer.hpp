@@ -393,7 +393,7 @@ struct File_Packer
                             << "missing fastq for basecall events: st=" << st << " gr=" << gr << std::endl;
                         abort();
                     }
-                    auto fq = src_f.get_basecall_fastq(st, gr);
+                    auto sq = src_f.get_basecall_seq(st, gr);
                     // ed group
                     auto ed_gr = src_f.get_basecall_eventdetection_group(gr);
                     std::vector< EventDetection_Event > ed;
@@ -401,7 +401,7 @@ struct File_Packer
                     {
                         ed = src_f.get_eventdetection_events(ed_gr);
                     }
-                    auto ev_pack = src_f.pack_ev(ev_ds, fq, ed, ed_gr,
+                    auto ev_pack = src_f.pack_ev(ev_ds, sq, ed, ed_gr,
                                                  channel_id_params.sampling_rate, opts::p_model_state_bits());
                     if (opts::check())
                     {
@@ -410,7 +410,7 @@ struct File_Packer
                             auto rs_ds = src_f.get_raw_samples_dataset("");
                             ed = src_f.unpack_implicit_ed(ev_pack, rs_ds);
                         }
-                        auto ev_ds_unpack = src_f.unpack_ev(ev_pack, fq, ed, channel_id_params.sampling_rate);
+                        auto ev_ds_unpack = src_f.unpack_ev(ev_pack, sq, ed, channel_id_params.sampling_rate);
                         auto & ev_unpack = ev_ds_unpack.first;
                         auto & ev_params_unpack = ev_ds_unpack.second;
                         if (not (ev_params_unpack == ev_params))

@@ -47,26 +47,23 @@ struct File_Packer
                     auto & rs_params_unpack = rsi_ds_unpack.second;
                     if (not (rs_params_unpack == rs_params))
                     {
-                        LOG(error)
+                        LOG_ABORT
                             << "check_failed rs_params_unpack!=rs_params" << std::endl;
-                        abort();
                     }
                     if (rsi_unpack.size() != rsi.size())
                     {
-                        LOG(error)
+                        LOG_ABORT
                             << "check_failed rs_unpack.size=" << rsi_unpack.size()
                             << " rs_orig.size=" << rsi.size() << std::endl;
-                        abort();
                     }
                     for (unsigned i = 0; i < rsi_unpack.size(); ++i)
                     {
                         if (rsi_unpack[i] != rsi[i])
                         {
-                            LOG(error)
+                            LOG_ABORT
                                 << "check_failed i=" << i
                                 << " rs_unpack=" << rsi_unpack[i]
                                 << " rs_orig=" << rsi[i] << std::endl;
-                            abort();
                         }
                     }
                 }
@@ -140,17 +137,15 @@ struct File_Packer
                         auto & ede_params_unpack = ede_ds_unpack.second;
                         if (not (ede_params_unpack == ede_params))
                         {
-                            LOG(error)
+                            LOG_ABORT
                                 << "check_failed ede_params_unpack!=ede_params" << std::endl;
-                            abort();
                         }
                         if (ede_unpack.size() != ede.size())
                         {
-                            LOG(error)
+                            LOG_ABORT
                                 << "check_failed gr=" << gr
                                 << " ede_unpack.size=" << ede_unpack.size()
                                 << " ede_orig.size=" << ede.size() << std::endl;
-                            abort();
                         }
                         for (unsigned i = 0; i + 1 < ede_unpack.size(); ++i) // skip last event
                         {
@@ -171,7 +166,7 @@ struct File_Packer
                                 or abs(ede_unpack[i].mean - ede[i].mean) > .1
                                 or abs(ede_unpack[i].stdv - ede[i].stdv) > .1)
                             {
-                                LOG(error)
+                                LOG_ABORT
                                     << "check_failed gr=" << gr
                                     << " i=" << i
                                     << " ede_unpack=(" << ede_unpack[i].start
@@ -183,7 +178,6 @@ struct File_Packer
                                     << "," << ede[i].mean
                                     << "," << ede[i].stdv
                                     << ")" << std::endl;
-                                abort();
                             }
                         }
                     } // if check
@@ -268,30 +262,27 @@ struct File_Packer
                         auto fqa_unpack = src_f.split_fq(fq_unpack);
                         if (fqa_unpack[0] != fqa[0])
                         {
-                            LOG(error)
+                            LOG_ABORT
                                 << "check_failed st=" << st
                                 << " gr=" << gr
                                 << " fq_unpack_name=" << fqa_unpack[0]
                                 << " fq_orig_name=" << fqa[0] << std::endl;
-                            abort();
                         }
                         if (fqa_unpack[1] != fqa[1])
                         {
-                            LOG(error)
+                            LOG_ABORT
                                 << "check_failed st=" << st
                                 << " gr=" << gr
                                 << " fq_unpack_bp=" << fqa_unpack[1]
                                 << " fq_orig_bp=" << fqa[1] << std::endl;
-                            abort();
                         }
                         if (fqa_unpack[3].size() != fqa[3].size())
                         {
-                            LOG(error)
+                            LOG_ABORT
                                 << "check_failed st=" << st
                                 << " gr=" << gr
                                 << " fq_unpack_qv_size=" << fqa_unpack[3].size()
                                 << " fq_orig_qv_size=" << fqa[3].size() << std::endl;
-                            abort();
                         }
                         auto qv_mask = opts::max_qv() & (opts::max_qv() << (opts::max_qv_bits() - opts::qv_bits()));
                         for (unsigned i = 0; i < fqa_unpack[3].size(); ++i)
@@ -299,13 +290,12 @@ struct File_Packer
                             if ((std::min<std::uint8_t>(fqa_unpack[3][i] - 33, opts::max_qv()) & qv_mask) !=
                                 (std::min<std::uint8_t>(fqa[3][i] - 33, opts::max_qv()) & qv_mask))
                             {
-                                LOG(error)
+                                LOG_ABORT
                                     << "check_failed st=" << st
                                     << " gr=" << gr
                                     << " i=" << i
                                     << " fq_unpack_qv=" << fqa_unpack[3][i]
                                     << " fq_orig_qv=" << fqa[3][i] << std::endl;
-                                abort();
                             }
                         }
                     }
@@ -389,9 +379,8 @@ struct File_Packer
                     // basecall fq
                     if (not src_f.have_basecall_fastq(st, gr))
                     {
-                        LOG(error)
+                        LOG_ABORT
                             << "missing fastq for basecall events: st=" << st << " gr=" << gr << std::endl;
-                        abort();
                     }
                     auto sq = src_f.get_basecall_seq(st, gr);
                     // ed group
@@ -415,18 +404,16 @@ struct File_Packer
                         auto & ev_params_unpack = ev_ds_unpack.second;
                         if (not (ev_params_unpack == ev_params))
                         {
-                            LOG(error)
+                            LOG_ABORT
                                 << "check_failed ev_params_unpack!=ev_params" << std::endl;
-                            abort();
                         }
                         if (ev_unpack.size() != ev.size())
                         {
-                            LOG(error)
+                            LOG_ABORT
                                 << "check_failed st=" << st
                                 << " gr=" << gr
                                 << " ev_unpack.size=" << ev_unpack.size()
                                 << " ev_orig.size=" << ev.size() << std::endl;
-                            abort();
                         }
                         for (unsigned i = 0; i < ev_unpack.size(); ++i)
                         {
@@ -437,7 +424,7 @@ struct File_Packer
                                 //or ev_unpack[i].move != ev[i].move // allow workaround for invalid moves
                                 or ev_unpack[i].model_state != ev[i].model_state)
                             {
-                                LOG(error)
+                                LOG_ABORT
                                     << "check_failed st=" << st
                                     << " gr=" << gr
                                     << " i=" << i
@@ -454,7 +441,6 @@ struct File_Packer
                                     << "," << ev[i].move
                                     << "," << ev[i].get_model_state()
                                     << ")" << std::endl;
-                                abort();
                             }
                         }
                     }
@@ -545,9 +531,8 @@ struct File_Packer
                 // basecall seq
                 if (not src_f.have_basecall_seq(2, gr))
                 {
-                    LOG(error)
+                    LOG_ABORT
                         << "missing fastq for basecall alignment: gr=" << gr << std::endl;
-                    abort();
                 }
                 auto seq = src_f.get_basecall_seq(2, gr);
                 auto al_pack = src_f.pack_al(al, seq);
@@ -556,11 +541,10 @@ struct File_Packer
                     auto al_unpack = src_f.unpack_al(al_pack, seq);
                     if (al_unpack.size() != al.size())
                     {
-                        LOG(error)
+                        LOG_ABORT
                             << "check_failed gr=" << gr
                             << " al_unpack.size=" << al_unpack.size()
                             << " al_orig.size=" << al.size() << std::endl;
-                        abort();
                     }
                     for (unsigned i = 0; i < al.size(); ++i)
                     {
@@ -568,7 +552,7 @@ struct File_Packer
                             or al_unpack[i].complement_index != al[i].complement_index
                             or al_unpack[i].get_kmer() != al[i].get_kmer())
                         {
-                            LOG(error)
+                            LOG_ABORT
                                 << "check_failed gr=" << gr
                                 << " i=" << i
                                 << " al_unpack=(" << al_unpack[i].template_index
@@ -578,7 +562,6 @@ struct File_Packer
                                 << "," << al[i].complement_index
                                 << "," << al[i].get_kmer()
                                 << ")" << std::endl;
-                            abort();
                         }
                     }
                 }

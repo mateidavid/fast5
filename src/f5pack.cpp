@@ -4,7 +4,6 @@
 #include <string>
 
 #include <tclap/CmdLine.h>
-#include "alg.hpp"
 #include "logger.hpp"
 
 #include "fast5.hpp"
@@ -20,9 +19,6 @@ namespace opts
     //
     MultiArg< string > log_level("", "log", "Log level. (default: info)", false, "string", cmd_parser);
     MultiSwitchArg extra_verbosity("v", "", "Increase verbosity", cmd_parser);
-    //
-    ValueArg< unsigned > p_model_state_bits("", "p-model-state-bits", "P_Model_State bits to keep.", false, fast5::File_Packer::opts::p_model_state_bits(), "int", cmd_parser);
-    ValueArg< unsigned > qv_bits("", "qv-bits", "QV bits to keep.", false, fast5::File_Packer::opts::max_qv_bits(), "int", cmd_parser);
     //
     SwitchArg al_drop("", "al-drop", "Drop basecall alignment data.", cmd_parser);
     SwitchArg al_copy("", "al-copy", "Copy basecall alignment data.", cmd_parser);
@@ -49,28 +45,34 @@ namespace opts
     SwitchArg rw_unpack("", "rw-unpack", "Unpack raw samples data.", cmd_parser);
     SwitchArg rw_pack("", "rw-pack", "Pack raw samples data.", cmd_parser);
     //
+    ValueArg< unsigned > p_model_state_bits("", "p-model-state-bits", "P_Model_State bits to keep.", false, fast5::File_Packer::opts::p_model_state_bits(), "int", cmd_parser);
+    ValueArg< unsigned > qv_bits("", "qv-bits", "QV bits to keep.", false, fast5::File_Packer::opts::max_qv_bits(), "int", cmd_parser);
     SwitchArg no_check("n", "no-check", "Don't check packing.", cmd_parser);
-    SwitchArg unpack("u", "unpack", "Unpack fast5 file.", cmd_parser);
-    SwitchArg pack("p", "pack", "Pack fast5 file (default, if no other pack/unpack/copy options).", cmd_parser);
     SwitchArg force("f", "force", "Overwrite output file if it exists.", cmd_parser);
+    //
+    SwitchArg fastq("", "fastq", "Pack fastq data, drop rest.", cmd_parser);
+    SwitchArg archive("", "archive", "Pack raw saples data, drop rest.", cmd_parser);
+    SwitchArg unpack("u", "unpack", "Unpack files.", cmd_parser);
+    SwitchArg pack("p", "pack", "Pack files (default, if no other pack/unpack/copy options).", cmd_parser);
     //
     UnlabeledValueArg< string > input_fn("input", "Input fast5 file.", true, "", "file", cmd_parser);
     UnlabeledValueArg< string > output_fn("output", "Output fast5 file.", true, "", "file", cmd_parser);
 } // opts
 
-void real_main()
+void process_file(std::string const & ifn, std::string const & ofn)
 {
     fast5::File src_f;
     fast5::File dst_f;
     try
     {
         // open files
-        src_f.open(opts::input_fn);
-        dst_f.create(opts::output_fn, opts::force);
+        src_f.open(ifn);
+        dst_f.create(ofn, opts::force);
         assert(src_f.is_open());
         assert(dst_f.is_open());
         assert(dst_f.is_rw());
         // copy all attributes
+        fast5::File_Packer::copy_attributes(src_f, dst_f, "", false);
         fast5::File_Packer::copy_attributes(src_f, dst_f, "/UniqueGlobalKey", true);
         set< string > bc_gr_s;
         // process raw samples
@@ -146,8 +148,7 @@ void real_main()
     }
     catch (hdf5_tools::Exception& e)
     {
-        cerr << opts::input_fn.get() << ": HDF5 error: " << e.what() << endl;
-        exit(EXIT_FAILURE);
+        LOG_EXIT << ifn << ": HDF5 error: " << e.what() << endl;
     }
 } // real_main()
 
@@ -163,37 +164,31 @@ int main(int argc, char * argv[])
     LOG(info) << "version: " << opts::cmd_parser.getVersion() << endl;
     LOG(info) << "args: " << opts::cmd_parser.getOrigArgv() << endl;
     // what to pack/unpack
-    if (opts::pack + opts::unpack > 1)
+    if (opts::pack + opts::unpack + opts::archive + opts::fastq > 1)
     {
-        LOG(error) << "at most one of --pack/--unpack may be given" << endl;
-        exit(EXIT_FAILURE);
+        LOG_EXIT << "at most one of --pack/--unpack/--archive/--fastq may be given" << endl;
     }
     if (opts::rw_pack + opts::rw_unpack + opts::rw_copy + opts::rw_drop > 1)
     {
-        LOG(error) << "at most one of --rw-pack/--rw-unpack/--rw-copy/--rw-drop may be given" << endl;
-        exit(EXIT_FAILURE);
+        LOG_EXIT << "at most one of --rw-pack/--rw-unpack/--rw-copy/--rw-drop may be given" << endl;
     }
     if (opts::ed_pack + opts::ed_unpack + opts::ed_copy + opts::ed_drop > 1)
     {
-        LOG(error) << "at most one of --ed-pack/--ed-unpack/--ed-copy/--ed-drop may be given" << endl;
-        exit(EXIT_FAILURE);
+        LOG_EXIT << "at most one of --ed-pack/--ed-unpack/--ed-copy/--ed-drop may be given" << endl;
     }
     if (opts::fq_pack + opts::fq_unpack + opts::fq_copy + opts::fq_drop > 1)
     {
-        LOG(error) << "at most one of --fq-pack/--fq-unpack/--fq-copy/--fq-drop may be given" << endl;
-        exit(EXIT_FAILURE);
+        LOG_EXIT << "at most one of --fq-pack/--fq-unpack/--fq-copy/--fq-drop may be given" << endl;
     }
     if (opts::ev_pack + opts::ev_unpack + opts::ev_copy + opts::ev_drop > 1)
     {
-        LOG(error) << "at most one of --ev-pack/--ev-unpack/--ev-copy/--ev-drop may be given" << endl;
-        exit(EXIT_FAILURE);
+        LOG_EXIT << "at most one of --ev-pack/--ev-unpack/--ev-copy/--ev-drop may be given" << endl;
     }
     if (opts::al_pack + opts::al_unpack + opts::al_copy + opts::al_drop > 1)
     {
-        LOG(error) << "at most one of --al-pack/--al-unpack/--al-copy/--al-drop may be given" << endl;
-        exit(EXIT_FAILURE);
+        LOG_EXIT << "at most one of --al-pack/--al-unpack/--al-copy/--al-drop may be given" << endl;
     }
-    if (opts::pack + opts::unpack
+    if (opts::pack + opts::unpack + opts::archive + opts::fastq
         + opts::rw_pack + opts::rw_unpack + opts::rw_copy + opts::rw_drop
         + opts::ed_pack + opts::ed_unpack + opts::ed_copy + opts::ed_drop
         + opts::fq_pack + opts::fq_unpack + opts::fq_copy + opts::fq_drop
@@ -219,14 +214,19 @@ int main(int argc, char * argv[])
         opts::ev_unpack.set(true);
         opts::al_unpack.set(true);
     }
-    else
+    if (opts::archive)
     {
-        if (opts::rw_pack + opts::rw_unpack + opts::rw_copy + opts::rw_drop == 0) opts::rw_copy.set(true);
-        if (opts::ed_pack + opts::ed_unpack + opts::ed_copy + opts::ed_drop == 0) opts::ed_copy.set(true);
-        if (opts::fq_pack + opts::fq_unpack + opts::fq_copy + opts::fq_drop == 0) opts::fq_copy.set(true);
-        if (opts::ev_pack + opts::ev_unpack + opts::ev_copy + opts::ev_drop == 0) opts::ev_copy.set(true);
-        if (opts::al_pack + opts::al_unpack + opts::al_copy + opts::al_drop == 0) opts::al_copy.set(true);
+        opts::rw_pack.set(true);
     }
+    if (opts::fastq)
+    {
+        opts::fq_pack.set(true);
+    }
+    if (opts::rw_pack + opts::rw_unpack + opts::rw_copy + opts::rw_drop == 0) opts::rw_drop.set(true);
+    if (opts::ed_pack + opts::ed_unpack + opts::ed_copy + opts::ed_drop == 0) opts::ed_drop.set(true);
+    if (opts::fq_pack + opts::fq_unpack + opts::fq_copy + opts::fq_drop == 0) opts::fq_drop.set(true);
+    if (opts::ev_pack + opts::ev_unpack + opts::ev_copy + opts::ev_drop == 0) opts::ev_drop.set(true);
+    if (opts::al_pack + opts::al_unpack + opts::al_copy + opts::al_drop == 0) opts::al_drop.set(true);
     LOG(info) << "rw: " << (opts::rw_pack? "pack" : opts::rw_unpack? "unpack" : opts::rw_copy? "copy" : "drop") << endl;
     LOG(info) << "ed: " << (opts::ed_pack? "pack" : opts::ed_unpack? "unpack" : opts::ed_copy? "copy" : "drop") << endl;
     LOG(info) << "fq: " << (opts::fq_pack? "pack" : opts::fq_unpack? "unpack" : opts::fq_copy? "copy" : "drop") << endl;
@@ -237,5 +237,5 @@ int main(int argc, char * argv[])
     fast5::File_Packer::opts::check() = not opts::no_check;
     fast5::File_Packer::opts::qv_bits() = opts::qv_bits;
     fast5::File_Packer::opts::p_model_state_bits() = opts::p_model_state_bits;
-    real_main();
+    process_file(opts::input_fn, opts::output_fn);
 }

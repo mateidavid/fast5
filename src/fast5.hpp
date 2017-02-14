@@ -748,7 +748,7 @@ public:
         res.reserve(rsi.size());
         for (auto int_level : rsi)
         {
-            res.push_back(raw_int_sample_to_float(int_level, _channel_id_params));
+            res.push_back(raw_sample_to_float(int_level, _channel_id_params));
         }
         return res;
     }
@@ -1095,7 +1095,7 @@ public:
                 if (have_eventdetection_events(ev_pack.ed_gr))
                 {
                     auto ed = get_eventdetection_events(ev_pack.ed_gr);
-                    res = unpack_ev(ev_pack, fq, ed, _channel_id_params.sampling_rate).first;
+                    res = unpack_ev(ev_pack, fq, ed, _channel_id_params).first;
                 }
             }
             else // ed_gr == "": packed relative to raw samples
@@ -1104,7 +1104,7 @@ public:
                 {
                     auto rs_ds = get_raw_samples_dataset();
                     auto ed = unpack_implicit_ed(ev_pack, rs_ds);
-                    res = unpack_ev(ev_pack, fq, ed, _channel_id_params.sampling_rate).first;
+                    res = unpack_ev(ev_pack, fq, ed, _channel_id_params).first;
                 }
             }
         }
@@ -1155,21 +1155,21 @@ public:
     //
     // Static helpers
     //
-    static long long
-    time_to_int(double tf, double sampling_rate)
+    static inline long long
+    time_to_int(double tf, Channel_Id_Params const & cid_params)
     {
-        return tf * sampling_rate + .5;
+        return tf * cid_params.sampling_rate + .5;
     }
-    static double
-    time_to_float(long long ti, double sampling_rate)
+    static inline double
+    time_to_float(long long ti, Channel_Id_Params const & cid_params)
     {
-        return (long double)ti / sampling_rate;
+        return (long double)ti / cid_params.sampling_rate;
     }
-    static float
-    raw_int_sample_to_float(int si, Channel_Id_Params const & channel_id_params)
+    static inline float
+    raw_sample_to_float(int si, Channel_Id_Params const & cid_params)
     {
-        return ((float)si + channel_id_params.offset)
-            * channel_id_params.range / channel_id_params.digitisation;
+        return ((float)si + cid_params.offset)
+            * cid_params.range / cid_params.digitisation;
     }
     static std::string
     fq2seq(std::string const & fq)
@@ -1789,14 +1789,14 @@ private:
             std::string const & sq,
             std::vector< EventDetection_Event > const & ed,
             std::string const & ed_gr,
-            double sampling_rate,
+            Channel_Id_Params const & cid_params,
             unsigned p_model_state_bits)
     {
         Basecall_Events_Pack ev_pack;
         ev_pack.params = ev_ds.second;
         auto & ev = ev_ds.first;
         ev_pack.ed_gr = ed_gr;
-        ev_pack.start_time = time_to_int(ev[0].start, sampling_rate);
+        ev_pack.start_time = time_to_int(ev[0].start, cid_params);
         ev_pack.state_size = ev[0].get_model_state().size();
         ev_pack.p_model_state_bits = p_model_state_bits;
         std::vector< long long > rel_skip;
@@ -1811,7 +1811,7 @@ private:
             long long j = -1;
             for (unsigned i = 0; i < ev.size(); ++i)
             {
-                auto ti = time_to_int(ev[i].start, sampling_rate);
+                auto ti = time_to_int(ev[i].start, cid_params);
                 auto last_j = j++;
                 while (j < (long long)ed.size() and ed[j].start < ti) ++j;
                 if (j == (long long)ed.size())
@@ -1827,8 +1827,8 @@ private:
             // pack start&length as for ed events
             std::tie(skip, len) = pack_event_start_length(
                 ev.size(),
-                [&] (unsigned i) { return time_to_int(ev.at(i).start, sampling_rate); },
-                [&] (unsigned i) { return time_to_int(ev.at(i).length, sampling_rate); },
+                [&] (unsigned i) { return time_to_int(ev.at(i).start, cid_params); },
+                [&] (unsigned i) { return time_to_int(ev.at(i).length, cid_params); },
                 ev_pack.start_time);
             std::tie(ev_pack.skip, ev_pack.skip_params) = ed_skip_coder().encode(skip, false);
             std::tie(ev_pack.len, ev_pack.len_params) = ed_len_coder().encode(len, false);
@@ -1927,7 +1927,7 @@ private:
     unpack_ev(Basecall_Events_Pack const & ev_pack,
               std::string const & sq,
               std::vector< EventDetection_Event > const & ed,
-              double sampling_rate)
+              Channel_Id_Params const & cid_params)
     {
         Basecall_Events_Dataset ev_ds;
         ev_ds.second = ev_pack.params;
@@ -1953,8 +1953,8 @@ private:
         for (unsigned i = 0; i < ev.size(); ++i)
         {
             j += (not rel_skip.empty()? rel_skip[i] : 0) + 1;
-            ev[i].start = time_to_float(ed[j].start, sampling_rate);
-            ev[i].length = time_to_float(ed[j].length, sampling_rate);
+            ev[i].start = time_to_float(ed[j].start, cid_params);
+            ev[i].length = time_to_float(ed[j].length, cid_params);
             ev[i].mean = ed[j].mean;
             ev[i].stdv = ed[j].stdv;
             ev[i].move = mv[i];

@@ -52,7 +52,7 @@ void real_main()
     {
         // open file
         f.open(opts::input_fn);
-        auto channel_id_params = f.get_channel_id_params();
+        auto cid_params = f.get_channel_id_params();
         //
         // list
         //
@@ -105,11 +105,11 @@ void real_main()
         if (opts::id)
         {
             cout
-                << "channel_id/channel_number=" << channel_id_params.channel_number << endl
-                << "channel_id/digitisation=" << channel_id_params.digitisation << endl
-                << "channel_id/offset=" << channel_id_params.offset << endl
-                << "channel_id/range=" << channel_id_params.range << endl
-                << "channel_id/sampling_rate=" << channel_id_params.sampling_rate << endl
+                << "channel_id/channel_number=" << cid_params.channel_number << endl
+                << "channel_id/digitisation=" << cid_params.digitisation << endl
+                << "channel_id/offset=" << cid_params.offset << endl
+                << "channel_id/range=" << cid_params.range << endl
+                << "channel_id/sampling_rate=" << cid_params.sampling_rate << endl
                 ;
             if (f.have_tracking_id_params())
             {
@@ -214,8 +214,8 @@ void real_main()
             else
             {
                 cout
-                    << "#start_time=" << f.time_to_int(bce_params.start_time, channel_id_params.sampling_rate) << endl
-                    << "#duration=" << f.time_to_int(bce_params.duration, channel_id_params.sampling_rate) << endl;
+                    << "#start_time=" << f.time_to_int(bce_params.start_time, cid_params) << endl
+                    << "#duration=" << f.time_to_int(bce_params.duration, cid_params) << endl;
             }
             auto bce = f.get_basecall_events(opts::st, opts::gr);
             cout
@@ -230,8 +230,8 @@ void real_main()
                         else
                         {
                             oss
-                                << f.time_to_int(e.start, channel_id_params.sampling_rate) << "\t"
-                                << f.time_to_int(e.length, channel_id_params.sampling_rate) << "\t";
+                                << f.time_to_int(e.start, cid_params) << "\t"
+                                << f.time_to_int(e.length, cid_params) << "\t";
                         }
                         oss
                             << e.mean << "\t"

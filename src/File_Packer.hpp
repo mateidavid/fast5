@@ -385,7 +385,7 @@ struct File_Packer
                     auto & ev = ev_ds.first;
                     auto & ev_params = ev_ds.second;
                     // sampling rate
-                    auto channel_id_params = src_f.get_channel_id_params();
+                    auto cid_params = src_f.get_channel_id_params();
                     // basecall fq
                     if (not src_f.have_basecall_fastq(st, gr))
                     {
@@ -402,7 +402,7 @@ struct File_Packer
                         ed = src_f.get_eventdetection_events(ed_gr);
                     }
                     auto ev_pack = src_f.pack_ev(ev_ds, sq, ed, ed_gr,
-                                                 channel_id_params.sampling_rate, opts::p_model_state_bits());
+                                                 cid_params, opts::p_model_state_bits());
                     if (opts::check())
                     {
                         if (ed_gr.empty())
@@ -410,7 +410,7 @@ struct File_Packer
                             auto rs_ds = src_f.get_raw_samples_dataset("");
                             ed = src_f.unpack_implicit_ed(ev_pack, rs_ds);
                         }
-                        auto ev_ds_unpack = src_f.unpack_ev(ev_pack, sq, ed, channel_id_params.sampling_rate);
+                        auto ev_ds_unpack = src_f.unpack_ev(ev_pack, sq, ed, cid_params);
                         auto & ev_unpack = ev_ds_unpack.first;
                         auto & ev_params_unpack = ev_ds_unpack.second;
                         if (not (ev_params_unpack == ev_params))
@@ -434,7 +434,7 @@ struct File_Packer
                                 or abs(ev_unpack[i].length - ev[i].length) > 1e-3
                                 or abs(ev_unpack[i].mean - ev[i].mean) > 1e-1
                                 or abs(ev_unpack[i].stdv - ev[i].stdv) > 1e-1
-                                or ev_unpack[i].move != ev[i].move
+                                //or ev_unpack[i].move != ev[i].move // allow workaround for invalid moves
                                 or ev_unpack[i].model_state != ev[i].model_state)
                             {
                                 LOG(error)

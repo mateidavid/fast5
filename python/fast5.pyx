@@ -60,12 +60,10 @@ cdef extern from "fast5.hpp" namespace "fast5":
         double var_sd
 
     struct Basecall_Model_State:
-        long long variant
         double level_mean
         double level_stdv
         double sd_mean
         double sd_stdv
-        double weight
         #char kmer[8]
 
     struct Basecall_Events_Params:
@@ -78,14 +76,8 @@ cdef extern from "fast5.hpp" namespace "fast5":
         double start
         double length
         double p_model_state
-        double p_mp_state
-        double p_A
-        double p_C
-        double p_G
-        double p_T
         long long move
         #char model_state[8]
-        #char mp_state[8]
 
     struct Basecall_Alignment_Entry:
         long long template_index
@@ -189,6 +181,20 @@ cdef extern from "fast5.hpp" namespace "fast5":
         cbool have_basecall_alignment(string)
         vector[Basecall_Alignment_Entry] get_basecall_alignment()
         vector[Basecall_Alignment_Entry] get_basecall_alignment(string)
+
+cdef extern from "File_Packer.hpp" namespace "fast5":
+
+    cppclass Cpp_File_Packer "fast5::File_Packer":
+        Cpp_File_Packer()
+        Cpp_File_Packer(int)
+        Cpp_File_Packer(int, int, int, int, int)
+
+        void set_check(cbool)
+        void set_force(cbool)
+        void set_qv_bits(unsigned)
+        void set_p_model_state_bits(unsigned)
+
+        void run(string, string)
 
 __version__ = cpp_version
 
@@ -396,3 +402,26 @@ cdef class File:
             return deref(self.thisptr).get_basecall_alignment()
         else:
             return deref(self.thisptr).get_basecall_alignment(gr)
+
+cdef class File_Packer:
+    cdef unique_ptr[Cpp_File_Packer] thisptr
+
+    def __init__(self, a1=None, a2=None, a3=None, a4=None, a5=None):
+        if a1 is None:
+            self.thisptr.reset(new Cpp_File_Packer())
+        elif a2 is None:
+            self.thisptr.reset(new Cpp_File_Packer(a1))
+        else:
+            self.thisptr.reset(new Cpp_File_Packer(a1, a2, a3, a4, a5))
+
+    def set_check(self, _check):
+        deref(self.thisptr).set_check(_check)
+    def set_force(self, _force):
+        deref(self.thisptr).set_force(_force)
+    def set_qv_bits(self, _qv_bits):
+        deref(self.thisptr).set_qv_bits(_qv_bits)
+    def set_p_model_state_bits(self, _p_model_state_bits):
+        deref(self.thisptr).set_p_model_state_bits(_p_model_state_bits)
+
+    def run(self, ifn, ofn):
+        deref(self.thisptr).run(ifn, ofn)

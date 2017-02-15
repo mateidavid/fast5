@@ -1,0 +1,117 @@
+#!/usr/bin/env python
+
+"""
+fast5 setup.py
+(c) 2017: Matei David, Ontario Institute for Cancer Research
+MIT License
+"""
+
+import argparse
+import logging
+import os
+import sys
+
+#import fast5
+
+import signal
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+if __name__ == "__main__":
+    description = """
+    Pack an ONT fast5 files.
+    """
+    parser = argparse.ArgumentParser(description=description, epilog="")
+    parser.add_argument("--log-level", default="info",
+                        help="log level")
+    #
+    parser.add_argument("--pack", action="store_true",
+                        help="Pack data (default: all).")
+    parser.add_argument("--unpack", action="store_true",
+                        help="Unpack data.")
+    parser.add_argument("--archive", action="store_true",
+                        help="Pack raw samples data, drop rest.")
+    parser.add_argument("--fastq", action="store_true",
+                        help="Pack fastq data, drop rest.")
+    #
+    parser.add_argument("--rw", choices=["drop", "pack", "unpack", "copy"],
+                        help="Policy for raw samples.")
+    parser.add_argument("--ed", choices=["drop", "pack", "unpack", "copy"],
+                        help="Policy for eventdetection events.")
+    parser.add_argument("--fq", choices=["drop", "pack", "unpack", "copy"],
+                        help="Policy for fastq.")
+    parser.add_argument("--ev", choices=["drop", "pack", "unpack", "copy"],
+                        help="Policy for basecall events.")
+    parser.add_argument("--al", choices=["drop", "pack", "unpack", "copy"],
+                        help="Policy for basecall alignment.")
+    #
+    parser.add_argument("--force", action="store_true",
+                        help="Overwrite existing destination files.")
+    parser.add_argument("--qv-bits", type=int,
+                        help="QV bits to keep.")
+    parser.add_argument("--p-model-state-bits", type=int,
+                        help="p_model_state bits to keep.")
+    parser.add_argument("-R", "--recurse", action="store_true",
+                        help="Recurse in input directories.")
+    parser.add_argument("-o", "--output",
+                        help="Output directory.")
+    #
+    parser.add_argument("inputs", nargs='*', default=[], action="append",
+                        help="Input directories, fast5 files, or files of fast5 file names.")
+    args = parser.parse_args()
+
+    numeric_log_level = getattr(logging, args.log_level.upper(), None)
+    if not isinstance(numeric_log_level, int):
+        raise ValueError("Invalid log level: '%s'" % args.log_level)
+    logging.basicConfig(level=numeric_log_level,
+                        format="%(asctime)s %(name)s.%(levelname)s %(message)s",
+                        datefmt="%Y/%m/%d %H:%M:%S")
+    logger = logging.getLogger(os.path.basename(__file__))
+    logger.debug("args: " + str(args))
+
+    if args.pack + args.unpack + args.archive + args.fastq > 1:
+        sys.exit("At most one of --pack/--unpack/--archive/--fastq may be specified")
+    if (not args.pack and
+        not args.unpack and
+        not args.archive and
+        not args.fastq and
+        args.rw is None and
+        args.ed is None and
+        args.fq is None and
+        args.ev is None and
+        args.al is None):
+        args.pack = True
+    if args.pack:
+        if args.rw is None: args.rw = "pack"
+        if args.ed is None: args.ed = "pack"
+        if args.fq is None: args.fq = "pack"
+        if args.ev is None: args.ev = "pack"
+        if args.al is None: args.al = "pack"
+    if args.unpack:
+        if args.rw is None: args.rw = "unpack"
+        if args.ed is None: args.ed = "unpack"
+        if args.fq is None: args.fq = "unpack"
+        if args.ev is None: args.ev = "unpack"
+        if args.al is None: args.al = "unpack"
+    if args.archive:
+        if args.rw is None: args.rw = "pack"
+        if args.ed is None: args.ed = "unpack"
+        if args.fq is None: args.fq = "unpack"
+        if args.ev is None: args.ev = "unpack"
+        if args.al is None: args.al = "unpack"
+    if args.fastq:
+        if args.rw is None: args.rw = "unpack"
+        if args.ed is None: args.ed = "unpack"
+        if args.fq is None: args.fq = "pack"
+        if args.ev is None: args.ev = "unpack"
+        if args.al is None: args.al = "unpack"
+    if args.rw is None: args.rw = "drop"
+    if args.ed is None: args.ed = "drop"
+    if args.fq is None: args.fq = "drop"
+    if args.ev is None: args.ev = "drop"
+    if args.al is None: args.al = "drop"
+    logger.info("rw: " + args.rw)
+    logger.info("ed: " + args.ed)
+    logger.info("fq: " + args.fq)
+    logger.info("ev: " + args.ev)
+    logger.info("al: " + args.al)
+    

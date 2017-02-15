@@ -45,8 +45,8 @@ namespace opts
     SwitchArg rw_unpack("", "rw-unpack", "Unpack raw samples data.", cmd_parser);
     SwitchArg rw_pack("", "rw-pack", "Pack raw samples data.", cmd_parser);
     //
-    ValueArg< unsigned > p_model_state_bits("", "p-model-state-bits", "P_Model_State bits to keep.", false, fast5::File_Packer::opts::p_model_state_bits(), "int", cmd_parser);
-    ValueArg< unsigned > qv_bits("", "qv-bits", "QV bits to keep.", false, fast5::File_Packer::opts::max_qv_bits(), "int", cmd_parser);
+    ValueArg< unsigned > p_model_state_bits("", "p-model-state-bits", "P_Model_State bits to keep.", false, fast5::File_Packer::default_p_model_state_bits(), "int", cmd_parser);
+    ValueArg< unsigned > qv_bits("", "qv-bits", "QV bits to keep.", false, fast5::File_Packer::max_qv_bits(), "int", cmd_parser);
     SwitchArg no_check("n", "no-check", "Don't check packing.", cmd_parser);
     SwitchArg force("f", "force", "Overwrite output file if it exists.", cmd_parser);
     //
@@ -59,98 +59,6 @@ namespace opts
     UnlabeledValueArg< string > output_fn("output", "Output fast5 file.", true, "", "file", cmd_parser);
 } // opts
 
-void process_file(std::string const & ifn, std::string const & ofn)
-{
-    fast5::File src_f;
-    fast5::File dst_f;
-    try
-    {
-        // open files
-        src_f.open(ifn);
-        dst_f.create(ofn, opts::force);
-        assert(src_f.is_open());
-        assert(dst_f.is_open());
-        assert(dst_f.is_rw());
-        // copy all attributes
-        fast5::File_Packer::copy_attributes(src_f, dst_f, "", false);
-        fast5::File_Packer::copy_attributes(src_f, dst_f, "/UniqueGlobalKey", true);
-        set< string > bc_gr_s;
-        // process raw samples
-        if (opts::rw_pack)
-        {
-            fast5::File_Packer::pack_rw(src_f, dst_f);
-        }
-        else if (opts::rw_unpack)
-        {
-            fast5::File_Packer::unpack_rw(src_f, dst_f);
-        }
-        else if (opts::rw_copy)
-        {
-            fast5::File_Packer::copy_rw(src_f, dst_f);
-        }
-        // process eventdetection events
-        if (opts::ed_pack)
-        {
-            fast5::File_Packer::pack_ed(src_f, dst_f);
-        }
-        else if (opts::ed_unpack)
-        {
-            fast5::File_Packer::unpack_ed(src_f, dst_f);
-        }
-        else if (opts::ed_copy)
-        {
-            fast5::File_Packer::copy_ed(src_f, dst_f);
-        }
-        // process basecall fastq
-        if (opts::fq_pack)
-        {
-            fast5::File_Packer::pack_fq(src_f, dst_f, bc_gr_s);
-        }
-        else if (opts::fq_unpack)
-        {
-            fast5::File_Packer::unpack_fq(src_f, dst_f, bc_gr_s);
-        }
-        else if (opts::fq_copy)
-        {
-            fast5::File_Packer::copy_fq(src_f, dst_f, bc_gr_s);
-        }
-        // process basecall events
-        if (opts::ev_pack)
-        {
-            fast5::File_Packer::pack_ev(src_f, dst_f, bc_gr_s);
-        }
-        else if (opts::ev_unpack)
-        {
-            fast5::File_Packer::unpack_ev(src_f, dst_f, bc_gr_s);
-        }
-        else if (opts::ev_copy)
-        {
-            fast5::File_Packer::copy_ev(src_f, dst_f, bc_gr_s);
-        }
-        // process basecall alignments
-        if (opts::al_pack)
-        {
-            fast5::File_Packer::pack_al(src_f, dst_f, bc_gr_s);
-        }
-        else if (opts::al_unpack)
-        {
-            fast5::File_Packer::unpack_al(src_f, dst_f, bc_gr_s);
-        }
-        else if (opts::al_copy)
-        {
-            fast5::File_Packer::copy_al(src_f, dst_f, bc_gr_s);
-        }
-        // copy basecall params
-        fast5::File_Packer::copy_basecall_params(src_f, dst_f, bc_gr_s);
-        // close files
-        src_f.close();
-        dst_f.close();
-    }
-    catch (hdf5_tools::Exception& e)
-    {
-        LOG_EXIT << ifn << ": HDF5 error: " << e.what() << endl;
-    }
-} // real_main()
 
 int main(int argc, char * argv[])
 {
@@ -234,8 +142,15 @@ int main(int argc, char * argv[])
     LOG(info) << "al: " << (opts::al_pack? "pack" : opts::al_unpack? "unpack" : opts::al_copy? "copy" : "drop") << endl;
     LOG(info) << "check: " << (not opts::no_check? "yes" : "no") << endl;
     // set File_Packer options
-    fast5::File_Packer::opts::check() = not opts::no_check;
-    fast5::File_Packer::opts::qv_bits() = opts::qv_bits;
-    fast5::File_Packer::opts::p_model_state_bits() = opts::p_model_state_bits;
-    process_file(opts::input_fn, opts::output_fn);
+    int rw_policy = (opts::rw_pack? 1 : opts::rw_unpack? 2 : opts::rw_copy? 3 : 0);
+    int ed_policy = (opts::ed_pack? 1 : opts::ed_unpack? 2 : opts::ed_copy? 3 : 0);
+    int fq_policy = (opts::fq_pack? 1 : opts::fq_unpack? 2 : opts::fq_copy? 3 : 0);
+    int ev_policy = (opts::ev_pack? 1 : opts::ev_unpack? 2 : opts::ev_copy? 3 : 0);
+    int al_policy = (opts::al_pack? 1 : opts::al_unpack? 2 : opts::al_copy? 3 : 0);
+    fast5::File_Packer fp(rw_policy, ed_policy, fq_policy, ev_policy, al_policy);
+    fp.set_check(not opts::no_check);
+    fp.set_force(opts::force);
+    fp.set_qv_bits(opts::qv_bits);
+    fp.set_p_model_state_bits(opts::p_model_state_bits);
+    fp.run(opts::input_fn, opts::output_fn);
 }

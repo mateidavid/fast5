@@ -8,23 +8,151 @@
 
 #include "logger.hpp"
 
+#define STATIC_MEMBER_WRAPPER(_type, _id, _init) \
+    static _type & _id() { static _type _ ## _id = _init; return _ ## _id; }
 
 namespace fast5
 {
 
-struct File_Packer
+class File_Packer
 {
-    struct opts
-    {
-        static bool & check() { static bool _check = true; return _check; }
-        static unsigned const & max_qv_bits() { static unsigned const _max_qv_bits = 5; return _max_qv_bits; }
-        static std::uint8_t const & max_qv() { static std::uint8_t const _max_qv = ((std::uint8_t)1 << max_qv_bits()) - 1; return _max_qv; }
-        static unsigned & qv_bits() { static unsigned _qv_bits = max_qv_bits(); return _qv_bits; }
-        static unsigned & p_model_state_bits() { static unsigned _p_model_state_bits = 2; return _p_model_state_bits; }
-    };
+public:
+    File_Packer() :
+        File_Packer(1)
+    {}
 
-    static void
-    pack_rw(File const & src_f, File & dst_f)
+    File_Packer(int _policy) :
+        File_Packer(_policy, _policy, _policy, _policy, _policy)
+    {}
+
+    File_Packer(int _rw_policy, int _ed_policy, int _fq_policy, int _ev_policy, int _al_policy) :
+        rw_policy(_rw_policy),
+        ed_policy(_ed_policy),
+        fq_policy(_fq_policy),
+        ev_policy(_ev_policy),
+        al_policy(_al_policy),
+        check(true),
+        force(false),
+        qv_bits(max_qv_bits()),
+        p_model_state_bits(default_p_model_state_bits())
+    {}
+
+    void set_check(bool _check) { check = _check; }
+    void set_force(bool _force) { force = _force; }
+    void set_qv_bits(unsigned _qv_bits) { qv_bits = _qv_bits; }
+    void set_p_model_state_bits(unsigned _p_model_state_bits) { p_model_state_bits = _p_model_state_bits; }
+
+    STATIC_MEMBER_WRAPPER(unsigned const, max_qv_bits, 5)
+    STATIC_MEMBER_WRAPPER(unsigned const, max_qv_mask, ((unsigned)1 << max_qv_bits()) - 1)
+    STATIC_MEMBER_WRAPPER(unsigned const, default_p_model_state_bits, 2)
+
+    void
+    run(std::string const & ifn, std::string const & ofn) const
+    {
+        File src_f;
+        File dst_f;
+        try
+        {
+            // open files
+            src_f.open(ifn);
+            dst_f.create(ofn, force);
+            assert(src_f.is_open());
+            assert(dst_f.is_open());
+            assert(dst_f.is_rw());
+            // copy attributes under / and /UniqueGlobalKey
+            copy_attributes(src_f, dst_f, "", false);
+            copy_attributes(src_f, dst_f, "/UniqueGlobalKey", true);
+            std::set< std::string > bc_gr_s;
+            // process raw samples
+            if (rw_policy == 1)
+            {
+                pack_rw(src_f, dst_f);
+            }
+            else if (rw_policy == 2)
+            {
+                unpack_rw(src_f, dst_f);
+            }
+            else if (rw_policy == 3)
+            {
+                copy_rw(src_f, dst_f);
+            }
+            // process eventdetection events
+            if (ed_policy == 1)
+            {
+                pack_ed(src_f, dst_f);
+            }
+            else if (ed_policy == 2)
+            {
+                unpack_ed(src_f, dst_f);
+            }
+            else if (ed_policy == 3)
+            {
+                copy_ed(src_f, dst_f);
+            }
+            // process basecall fastq
+            if (fq_policy == 1)
+            {
+                pack_fq(src_f, dst_f, bc_gr_s);
+            }
+            else if (fq_policy == 2)
+            {
+                unpack_fq(src_f, dst_f, bc_gr_s);
+            }
+            else if (fq_policy == 3)
+            {
+                copy_fq(src_f, dst_f, bc_gr_s);
+            }
+            // process basecall events
+            if (ev_policy == 1)
+            {
+                pack_ev(src_f, dst_f, bc_gr_s);
+            }
+            else if (ev_policy == 2)
+            {
+                unpack_ev(src_f, dst_f, bc_gr_s);
+            }
+            else if (ev_policy == 3)
+            {
+                copy_ev(src_f, dst_f, bc_gr_s);
+            }
+            // process basecall alignments
+            if (al_policy == 1)
+            {
+                pack_al(src_f, dst_f, bc_gr_s);
+            }
+            else if (al_policy == 2)
+            {
+                unpack_al(src_f, dst_f, bc_gr_s);
+            }
+            else if (al_policy == 3)
+            {
+                copy_al(src_f, dst_f, bc_gr_s);
+            }
+            // copy basecall params
+            copy_basecall_params(src_f, dst_f, bc_gr_s);
+            // close files
+            src_f.close();
+            dst_f.close();
+        }
+        catch (hdf5_tools::Exception& e)
+        {
+            LOG_EXIT << ifn << ": HDF5 error: " << e.what() << std::endl;
+        }
+    } // run()
+
+private:
+    int rw_policy;
+    int ed_policy;
+    int fq_policy;
+    int ev_policy;
+    int al_policy;
+    bool check;
+    bool force;
+    unsigned qv_bits;
+    unsigned p_model_state_bits;
+
+    void
+    pack_rw(File const & src_f, File & dst_f) const
     {
         auto rn_l = src_f.get_raw_samples_read_name_list();
         for (auto const & rn : rn_l)
@@ -40,7 +168,7 @@ struct File_Packer
                 auto & rsi = rsi_ds.first;
                 auto & rs_params = rsi_ds.second;
                 auto rs_pack = src_f.pack_rw(rsi_ds);
-                if (opts::check())
+                if (check)
                 {
                     auto rsi_ds_unpack = src_f.unpack_rw(rs_pack);
                     auto & rsi_unpack = rsi_ds_unpack.first;
@@ -77,8 +205,8 @@ struct File_Packer
         }
     } // pack_rw()
 
-    static void
-    unpack_rw(File const & src_f, File & dst_f)
+    void
+    unpack_rw(File const & src_f, File & dst_f) const
     {
         auto rn_l = src_f.get_raw_samples_read_name_list();
         for (auto const & rn : rn_l)
@@ -88,8 +216,8 @@ struct File_Packer
         }
     } // unpack_rw()
 
-    static void
-    copy_rw(File const & src_f, File & dst_f)
+    void
+    copy_rw(File const & src_f, File & dst_f) const
     {
         auto rn_l = src_f.get_raw_samples_read_name_list();
         for (auto const & rn : rn_l)
@@ -107,8 +235,8 @@ struct File_Packer
         }
     } // copy_rw()
 
-    static void
-    pack_ed(File const & src_f, File & dst_f)
+    void
+    pack_ed(File const & src_f, File & dst_f) const
     {
         auto gr_l = src_f.get_eventdetection_group_list();
         for (auto const & gr : gr_l)
@@ -129,7 +257,7 @@ struct File_Packer
                     auto & ede = ede_ds.first;
                     auto & ede_params = ede_ds.second;
                     auto ede_pack = src_f.pack_ed(ede_ds);
-                    if (opts::check())
+                    if (check)
                     {
                         auto rs_ds = src_f.get_raw_samples_dataset(rn);
                         auto ede_ds_unpack = src_f.unpack_ed(ede_pack, rs_ds);
@@ -194,8 +322,8 @@ struct File_Packer
         } // for gr
     } // pack_ed()
 
-    static void
-    unpack_ed(File const & src_f, File & dst_f)
+    void
+    unpack_ed(File const & src_f, File & dst_f) const
     {
         auto gr_l = src_f.get_eventdetection_group_list();
         for (auto const & gr : gr_l)
@@ -211,8 +339,8 @@ struct File_Packer
         }
     } // unpack_ed()
 
-    static void
-    copy_ed(File const & src_f, File & dst_f)
+    void
+    copy_ed(File const & src_f, File & dst_f) const
     {
         auto gr_l = src_f.get_eventdetection_group_list();
         for (auto const & gr : gr_l)
@@ -236,8 +364,8 @@ struct File_Packer
         }
     } // copy_ed()
 
-    static void
-    pack_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s)
+    void
+    pack_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
     {
         for (unsigned st = 0; st < 3; ++st)
         {
@@ -255,8 +383,8 @@ struct File_Packer
                     bc_gr_s.insert(gr);
                     auto fq = src_f.get_basecall_fastq(st, gr);
                     auto fqa = src_f.split_fq(fq);
-                    auto fq_pack = src_f.pack_fq(fq, opts::qv_bits());
-                    if (opts::check())
+                    auto fq_pack = src_f.pack_fq(fq, qv_bits);
+                    if (check)
                     {
                         auto fq_unpack = src_f.unpack_fq(fq_pack);
                         auto fqa_unpack = src_f.split_fq(fq_unpack);
@@ -284,11 +412,11 @@ struct File_Packer
                                 << " fq_unpack_qv_size=" << fqa_unpack[3].size()
                                 << " fq_orig_qv_size=" << fqa[3].size() << std::endl;
                         }
-                        auto qv_mask = opts::max_qv() & (opts::max_qv() << (opts::max_qv_bits() - opts::qv_bits()));
+                        auto qv_mask = max_qv_mask() & (max_qv_mask() << (max_qv_bits() - qv_bits));
                         for (unsigned i = 0; i < fqa_unpack[3].size(); ++i)
                         {
-                            if ((std::min<std::uint8_t>(fqa_unpack[3][i] - 33, opts::max_qv()) & qv_mask) !=
-                                (std::min<std::uint8_t>(fqa[3][i] - 33, opts::max_qv()) & qv_mask))
+                            if ((std::min<unsigned>(fqa_unpack[3][i] - 33, max_qv_mask()) & qv_mask) !=
+                                (std::min<unsigned>(fqa[3][i] - 33, max_qv_mask()) & qv_mask))
                             {
                                 LOG_ABORT
                                     << "check_failed st=" << st
@@ -312,8 +440,8 @@ struct File_Packer
         }
     } // pack_fq()
 
-    static void
-    unpack_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s)
+    void
+    unpack_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
     {
         for (unsigned st = 0; st < 3; ++st)
         {
@@ -330,8 +458,8 @@ struct File_Packer
         }
     } // unpack_fq()
 
-    static void
-    copy_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s)
+    void
+    copy_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
     {
         for (unsigned st = 0; st < 3; ++st)
         {
@@ -354,8 +482,8 @@ struct File_Packer
         }
     } // copy_fq()
 
-    static void
-    pack_ev(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s)
+    void
+    pack_ev(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
     {
         for (unsigned st = 0; st < 2; ++st)
         {
@@ -391,8 +519,8 @@ struct File_Packer
                         ed = src_f.get_eventdetection_events(ed_gr);
                     }
                     auto ev_pack = src_f.pack_ev(ev_ds, sq, ed, ed_gr,
-                                                 cid_params, opts::p_model_state_bits());
-                    if (opts::check())
+                                                 cid_params, p_model_state_bits);
+                    if (check)
                     {
                         if (ed_gr.empty())
                         {
@@ -470,8 +598,8 @@ struct File_Packer
         }
     } // pack_ev()
 
-    static void
-    unpack_ev(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s)
+    void
+    unpack_ev(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
     {
         for (unsigned st = 0; st < 2; ++st)
         {
@@ -488,8 +616,8 @@ struct File_Packer
         }
     } // unpack_ev()
 
-    static void
-    copy_ev(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s)
+    void
+    copy_ev(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
     {
         for (unsigned st = 0; st < 2; ++st)
         {
@@ -512,8 +640,8 @@ struct File_Packer
         }
     } // copy_ev()
 
-    static void
-    pack_al(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s)
+    void
+    pack_al(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
     {
         auto gr_l = src_f.get_basecall_strand_group_list(2);
         for (auto const & gr : gr_l)
@@ -536,7 +664,7 @@ struct File_Packer
                 }
                 auto seq = src_f.get_basecall_seq(2, gr);
                 auto al_pack = src_f.pack_al(al, seq);
-                if (opts::check())
+                if (check)
                 {
                     auto al_unpack = src_f.unpack_al(al_pack, seq);
                     if (al_unpack.size() != al.size())
@@ -577,8 +705,8 @@ struct File_Packer
         }
     } // pack_al()
 
-    static void
-    unpack_al(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s)
+    void
+    unpack_al(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
     {
         auto gr_l = src_f.get_basecall_strand_group_list(2);
         for (auto const & gr : gr_l)
@@ -592,8 +720,8 @@ struct File_Packer
         }
     } // unpack_al()
 
-    static void
-    copy_al(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s)
+    void
+    copy_al(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
     {
         auto gr_l = src_f.get_basecall_strand_group_list(2);
         for (auto const & gr : gr_l)
@@ -613,8 +741,8 @@ struct File_Packer
         }
     } // copy_al()
 
-    static void
-    copy_basecall_params(File const & src_f, File & dst_f, std::set< std::string > const & bc_gr_s)
+    void
+    copy_basecall_params(File const & src_f, File & dst_f, std::set< std::string > const & bc_gr_s) const
     {
         for (auto const & gr : bc_gr_s)
         {
@@ -623,8 +751,8 @@ struct File_Packer
         }
     } // copy_basecall_params()
 
-    static void
-    copy_attributes(File const & src_f, File const & dst_f, std::string const & p, bool recurse = false)
+    void
+    copy_attributes(File const & src_f, File const & dst_f, std::string const & p, bool recurse = false) const
     {
         File::Base::copy_attributes(src_f, dst_f, p, recurse);
     } // copy_attributes()

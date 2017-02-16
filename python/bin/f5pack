@@ -66,7 +66,7 @@ if __name__ == "__main__":
     Pack an ONT fast5 files.
     """
     parser = argparse.ArgumentParser(description=description, epilog="")
-    parser.add_argument("--log-level", default="info",
+    parser.add_argument("--log-level", default="warning",
                         help="log level")
     #
     parser.add_argument("--pack", action="store_true",
@@ -186,4 +186,18 @@ if __name__ == "__main__":
             logger.warning("error packing " + ifn + ": " + str(e))
             os.remove(ofn)
             have_errors = True
+
+    cnt = fp.get_counts()
+    for cl in [["rs_count", "rs_bits"],
+               ["ede_count", "ede_skip_bits", "ede_len_bits"],
+               ["bp_count", "bp_bits", "qv_bits"],
+               ["bce_count", "bce_rel_skip_bits", "bce_skip_bits", "bce_len_bits", "bce_move_bits", "bce_p_model_state_bits"],
+               ["aln_count", "aln_template_step_bits", "aln_complement_step_bits", "aln_move_bits"]]:
+        print(cl[0] + "\t" + str(cnt[cl[0]]))
+        for c in cl[1:]:
+            if cnt[cl[0]] > 0:
+                print((c + "\t%.2f") % (float(cnt[c]) / cnt[cl[0]]))
+            else:
+                print(c + "\t0")
+
     sys.exit(have_errors)

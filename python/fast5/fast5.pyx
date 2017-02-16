@@ -185,7 +185,28 @@ cdef extern from "fast5.hpp" namespace "fast5":
 
 cdef extern from "File_Packer.hpp" namespace "fast5":
 
+    struct Counts "fast5::File_Packer::Counts":
+        size_t rs_count
+        size_t rs_bits
+        size_t ede_count
+        size_t ede_skip_bits
+        size_t ede_len_bits
+        size_t bp_count
+        size_t bp_bits
+        size_t qv_bits
+        size_t bce_count
+        size_t bce_rel_skip_bits
+        size_t bce_skip_bits
+        size_t bce_len_bits
+        size_t bce_move_bits
+        size_t bce_p_model_state_bits
+        size_t aln_count
+        size_t aln_template_step_bits
+        size_t aln_complement_step_bits
+        size_t aln_move_bits
+
     cppclass Cpp_File_Packer "fast5::File_Packer":
+
         Cpp_File_Packer()
         Cpp_File_Packer(int)
         Cpp_File_Packer(int, int, int, int, int)
@@ -196,6 +217,8 @@ cdef extern from "File_Packer.hpp" namespace "fast5":
         void set_p_model_state_bits(unsigned)
 
         void run(string, string) except +
+        void reset_counts()
+        Counts get_counts()
 
 __version__ = cpp_version
 def set_levels_from_options(v):
@@ -428,3 +451,7 @@ cdef class File_Packer:
 
     def run(self, ifn, ofn):
         deref(self.thisptr).run(ifn, ofn)
+    def reset_counts(self):
+        deref(self.thisptr).reset_counts()
+    def get_counts(self):
+        return deref(self.thisptr).get_counts()

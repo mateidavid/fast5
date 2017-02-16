@@ -16,6 +16,59 @@ namespace fast5
 class File_Packer
 {
 public:
+    struct Counts
+    {
+        //
+        size_t rs_count;
+        size_t rs_bits;
+        //
+        size_t ede_count;
+        size_t ede_skip_bits;
+        size_t ede_len_bits;
+        //
+        size_t bp_count;
+        size_t bp_bits;
+        size_t qv_bits;
+        //
+        size_t bce_count;
+        size_t bce_rel_skip_bits;
+        size_t bce_skip_bits;
+        size_t bce_len_bits;
+        size_t bce_move_bits;
+        size_t bce_p_model_state_bits;
+        //
+        size_t aln_count;
+        size_t aln_template_step_bits;
+        size_t aln_complement_step_bits;
+        size_t aln_move_bits;
+        //
+        Counts() :
+            //
+            rs_count(0),
+            rs_bits(0),
+            //
+            ede_count(0),
+            ede_skip_bits(0),
+            ede_len_bits(0),
+            //
+            bp_count(0),
+            bp_bits(0),
+            qv_bits(0),
+            //
+            bce_count(0),
+            bce_rel_skip_bits(0),
+            bce_skip_bits(0),
+            bce_len_bits(0),
+            bce_move_bits(0),
+            bce_p_model_state_bits(0),
+            //
+            aln_count(0),
+            aln_template_step_bits(0),
+            aln_complement_step_bits(0),
+            aln_move_bits(0)
+        {}
+    };
+
     File_Packer() :
         File_Packer(1)
     {}
@@ -141,6 +194,15 @@ public:
         }
     } // run()
 
+    void reset_counts() const
+    {
+        counts = Counts();
+    }
+
+    Counts const & get_counts() const
+    {
+        return counts;
+    }
 private:
     int rw_policy;
     int ed_policy;
@@ -151,6 +213,7 @@ private:
     bool force;
     unsigned qv_bits;
     unsigned p_model_state_bits;
+    mutable Counts counts;
 
     void
     pack_rw(File const & src_f, File & dst_f) const
@@ -198,6 +261,8 @@ private:
                     }
                 }
                 dst_f.add_raw_samples(rn, rs_pack);
+                counts.rs_count += rsi.size();
+                counts.rs_bits += rs_pack.signal.size() * sizeof(rs_pack.signal[0]) * 8;
                 LOG(info)
                     << "rn=" << rn
                     << " rs_size=" << rsi.size()
@@ -312,6 +377,9 @@ private:
                         }
                     } // if check
                     dst_f.add_eventdetection_events(gr, rn, ede_pack);
+                    counts.ede_count += ede.size();
+                    counts.ede_skip_bits += ede_pack.skip.size() * sizeof(ede_pack.skip[0]) * 8;
+                    counts.ede_len_bits += ede_pack.len.size() * sizeof(ede_pack.len[0]) * 8;
                     LOG(info)
                         << "gr=" << gr
                         << " rn=" << rn
@@ -430,6 +498,9 @@ private:
                         }
                     }
                     dst_f.add_basecall_fastq(st, gr, fq_pack);
+                    counts.bp_count += fqa[1].size();
+                    counts.bp_bits += fq_pack.bp.size() * sizeof(fq_pack.bp[0]) * 8;
+                    counts.qv_bits += fq_pack.qv.size() * sizeof(fq_pack.qv[0]) * 8;
                     LOG(info)
                         << "gr=" << gr
                         << " st=" << st
@@ -575,15 +646,21 @@ private:
                         }
                     }
                     dst_f.add_basecall_events(st, gr, ev_pack);
+                    counts.bce_count += ev.size();
+                    counts.bce_rel_skip_bits += ev_pack.rel_skip.size() * sizeof(ev_pack.rel_skip[0]) * 8;
+                    counts.bce_skip_bits += ev_pack.skip.size() * sizeof(ev_pack.skip[0]) * 8;
+                    counts.bce_len_bits += ev_pack.len.size() * sizeof(ev_pack.len[0]) * 8;
+                    counts.bce_move_bits += ev_pack.move.size() * sizeof(ev_pack.move[0]) * 8;
+                    counts.bce_p_model_state_bits += ev_pack.p_model_state.size() * sizeof(ev_pack.p_model_state[0]) * 8;
                     std::ostringstream oss;
                     if (not ev_pack.rel_skip.empty())
                     {
-                        LOG_THROW
+                        oss
                             << "rel_skip_bits=" << ev_pack.rel_skip_params.at("avg_bits");
                     }
                     else
                     {
-                        LOG_THROW
+                        oss
                             << "skip_bits=" << ev_pack.skip_params.at("avg_bits")
                             << " len_bits=" << ev_pack.len_params.at("avg_bits");
                     }
@@ -696,6 +773,10 @@ private:
                     }
                 }
                 dst_f.add_basecall_alignment(gr, al_pack);
+                counts.aln_count += al.size();
+                counts.aln_template_step_bits += al_pack.template_step.size() * sizeof(al_pack.template_step[0]) * 8;
+                counts.aln_complement_step_bits += al_pack.complement_step.size() * sizeof(al_pack.complement_step[0]) * 8;
+                counts.aln_move_bits += al_pack.move.size() * sizeof(al_pack.move[0]) * 8;
                 LOG(info)
                     << "gr=" << gr
                     << " al_size=" << al.size()

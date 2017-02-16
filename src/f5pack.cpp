@@ -153,4 +153,25 @@ int main(int argc, char * argv[])
     fp.set_qv_bits(opts::qv_bits);
     fp.set_p_model_state_bits(opts::p_model_state_bits);
     fp.run(opts::input_fn, opts::output_fn);
+    auto cnt = fp.get_counts();
+    cout
+        << std::fixed << std::setprecision(2)
+        << "rs_count\t" << cnt.rs_count << "\n"
+        << "rs_bits\t" << (double)cnt.rs_bits/cnt.rs_count << "\n"
+        << "ede_count\t" << cnt.ede_count << "\n"
+        << "ede_skip_bits\t" << (double)cnt.ede_skip_bits/cnt.ede_count << "\n"
+        << "ede_len_bits\t" << (double)cnt.ede_len_bits/cnt.ede_count << "\n"
+        << "bp_count\t" << cnt.bp_count << "\n"
+        << "bp_bits\t" << (double)cnt.bp_bits/cnt.bp_count << "\n"
+        << "qv_bits\t" << (double)cnt.qv_bits/cnt.bp_count << "\n"
+        << "bce_count\t" << cnt.bce_count << "\n"
+        << "bce_rel_skip_bits\t" << (double)cnt.bce_rel_skip_bits/cnt.bce_count << "\n"
+        << "bce_skip_bits\t" << (double)cnt.bce_skip_bits/cnt.bce_count << "\n"
+        << "bce_len_bits\t" << (double)cnt.bce_len_bits/cnt.bce_count << "\n"
+        << "bce_move_bits\t" << (double)cnt.bce_move_bits/cnt.bce_count << "\n"
+        << "bce_p_model_state_bits\t" << (double)cnt.bce_p_model_state_bits/cnt.bce_count << "\n"
+        << "aln_count\t" << cnt.aln_count << "\n"
+        << "aln_template_step_bits\t" << (double)cnt.aln_template_step_bits/cnt.aln_count << "\n"
+        << "aln_complement_step_bits\t" << (double)cnt.aln_complement_step_bits/cnt.aln_count << "\n"
+        << "aln_move_bits\t" << (double)cnt.aln_move_bits/cnt.aln_count << "\n";
 }

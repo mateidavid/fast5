@@ -1,9 +1,9 @@
 /// Part of: https://github.com/mateidavid/hpptools
-/// Commit: 663ee05
+/// Commit: 52db162
 
 /// @author    Matei David, Ontario Institute for Cancer Research
 /// @version   1.0
-/// @date      2013-2015
+/// @date      2013-2017
 /// @copyright MIT Public License
 ///
 /// Logger mechanism.
@@ -222,8 +222,9 @@ private:
             else if (s == "debug2") return logger::debug2;
             else
             {
-                std::cerr << "could not parse log level: " << s << "\n";
-                std::exit(1);
+                std::ostringstream oss;
+                oss << "could not parse log level: " << s;
+                throw std::invalid_argument(oss.str());
             }
         }
     }

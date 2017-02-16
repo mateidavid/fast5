@@ -10,7 +10,6 @@
 
 using namespace std;
 
-
 namespace opts
 {
     using namespace TCLAP;

@@ -16,15 +16,21 @@ help: ## This help.
 
 clean: ## Remove build products
 	${PYTHON} setup.py clean
-	rm -rf build fast5.egg-info fast5*.so
+	rm -rf build dist fast5.egg-info fast5*.so
 
 check_virtualenv:
 	@[ "$$VIRTUAL_ENV" ] || { echo "not in a virtualenv" >&2; exit 1; }
 
-develop: check_virtualenv clean ## Install in develop mode to current virtualenv
+install: check_virtualenv ## Install to current virtualenv
+	${PYTHON} setup.py install
+
+install: ## Install to current user
+	${PYTHON} setup.py install --user
+
+develop: check_virtualenv ## Install in develop mode to current virtualenv
 	${PYTHON} setup.py develop
 
-develop-user: clean ## Install in develop mode to current user
+develop-user: ## Install in develop mode to current user
 	${PYTHON} setup.py develop --user
 
 develop-uninstall: check_virtualenv clean ## Uninstall from current virtualenv

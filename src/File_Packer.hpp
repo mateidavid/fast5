@@ -5,7 +5,6 @@
 #include <set>
 
 #include "fast5.hpp"
-
 #include "logger.hpp"
 
 #define STATIC_MEMBER_WRAPPER(_type, _id, _init) \

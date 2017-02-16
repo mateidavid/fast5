@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """
 fast5 setup.py
 (c) 2017: Matei David, Ontario Institute for Cancer Research
@@ -26,11 +28,6 @@ fast5_dir = os.environ.get('FAST5_DIR', '..')
 fast5_src_dir = os.path.join(fast5_dir, 'src')
 fast5_version = open(os.path.join(fast5_dir, 'VERSION')).readline().strip()
 
-hpptools_dir = os.environ.get('HPPTOOLS_DIR', os.path.join(fast5_dir, "hpptools"))
-hpptools_include_dir = os.path.join(hpptools_dir, "include")
-if not os.path.isfile(os.path.join(hpptools_include_dir, "logger.hpp")):
-    sys.exit(hpptools_dir + ': could not find HPPTOOLS header files; use HPPTOOLS_DIR')
-
 extra_compile_args = [
     '-std=c++11',
     '-Wall', '-Wextra', '-Wpedantic',
@@ -52,8 +49,8 @@ extensions = [
     Extension(
         'fast5',
         language='c++',
-        sources=['fast5.' + ['cpp', 'pyx'][use_cython]],
-        include_dirs=[fast5_src_dir, hpptools_include_dir],
+        sources=['fast5/fast5.' + ['cpp', 'pyx'][use_cython]],
+        include_dirs=[fast5_src_dir],
         library_dirs=[hdf5_lib_dir],
         runtime_library_dirs=[hdf5_lib_dir],
         libraries=[hdf5_lib],

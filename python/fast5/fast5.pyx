@@ -10,6 +10,7 @@ from libcpp.vector cimport vector
 cdef extern from "fast5.hpp" namespace "fast5":
 
     cdef string cpp_version "fast5::version"
+    cdef void cpp_set_levels_from_options "logger::Logger::set_levels_from_options"(vector[string]) except +
 
     ctypedef cmap[string, string] Attr_Map
 
@@ -85,18 +86,18 @@ cdef extern from "fast5.hpp" namespace "fast5":
         #char kmer[8]
 
     cppclass Cpp_File "fast5::File":
-        Cpp_File()
-        Cpp_File(string)
-        Cpp_File(string, cbool)
+        Cpp_File() except +
+        Cpp_File(string) except +
+        Cpp_File(string, cbool) except +
 
         cbool is_open()
         cbool is_rw()
         string file_name()
-        void open(string)
-        void open(string, cbool)
-        void create(string)
-        void create(string, cbool)
-        void close()
+        void open(string) except +
+        void open(string, cbool) except +
+        void create(string) except +
+        void create(string, cbool) except +
+        void close() except +
         @staticmethod
         cbool is_valid_file(string)
 
@@ -197,6 +198,8 @@ cdef extern from "File_Packer.hpp" namespace "fast5":
         void run(string, string)
 
 __version__ = cpp_version
+def set_levels_from_options(v):
+    cpp_set_levels_from_options(v)
 
 cdef class File:
     cdef unique_ptr[Cpp_File] thisptr
@@ -229,7 +232,7 @@ cdef class File:
         return deref(self.thisptr).close()
     @staticmethod
     def is_valid_file(s):
-        return File.is_valid_file(s)
+        return Cpp_File.is_valid_file(s)
 
     def file_version(self):
         return deref(self.thisptr).file_version()

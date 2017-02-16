@@ -50,6 +50,7 @@ def add_fofn(fn, args):
                 l += add_fast5(p, "", args)
             else:
                 logger.warning("fofn line not a fast5 file: " + p)
+    return l
 
 def add_paths(pl, args):
     l = list()

@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <cassert>
 
+#include "logger.hpp"
+
 namespace fast5
 {
 
@@ -87,7 +89,8 @@ public:
         std::istringstream(v_params.at("size")) >> sz;
         if (v.size() != (sz * num_bits) / 8 + ((sz * num_bits) % 8 > 0? 1 : 0))
         {
-            throw std::invalid_argument("decoding error: incorrect size");
+            LOG_THROW
+                << "incorrect size: v_size=" << v.size();
         }
         long long unsigned buff = 0;
         unsigned buff_len = 0;

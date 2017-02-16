@@ -14,6 +14,7 @@
 #include <set>
 #include <map>
 
+#include "logger.hpp"
 #include "fast5_version.hpp"
 #include "hdf5_tools.hpp"
 #include "Huffman_Packer.hpp"
@@ -871,7 +872,8 @@ public:
             }
             else
             {
-                throw std::runtime_error("neither stdv nor variance found in eventdetection events table");
+                LOG_THROW
+                    << "neither stdv nor variance found for ed_gr=" << gr;
             }
         }
         else if (have_eventdetection_events_pack(_gr, _rn))
@@ -1104,7 +1106,8 @@ public:
         auto path = basecall_events_path(gr, st);
         if (not Base::dataset_exists(path))
         {
-            throw std::runtime_error("basecall events must be added before their params");
+            LOG_THROW
+                << "basecall events must be added before their params";
         }
         bce_params.write(*this, path);
     }
@@ -1702,7 +1705,12 @@ private:
             long long rs_start_idx = get_start(i) - rs_start_time + off_by_one;
             if (rs_start_idx < 0 or rs_start_idx + get_length(i) > (long long)rs.size() + off_by_one)
             {
-                throw std::runtime_error("unpack_ed failure: bad rs_start_idx");
+                LOG_THROW
+                    << "bad index: rs_start_idx=" << rs_start_idx
+                    << " i=" << i
+                    << " length(i)=" << get_length(i)
+                    << " rs_size=" << rs.size()
+                    << " off_by_one=" << off_by_one;
             }
             double s = 0.0;
             double s2 = 0.0;
@@ -1749,7 +1757,9 @@ private:
         auto len = ed_len_coder().decode< long long >(ede_pack.len, ede_pack.len_params);
         if (skip.size() != len.size())
         {
-            throw std::runtime_error("unpack_ed failure: skip and length of different size");
+            LOG_THROW
+                << "wrong dataset size: skip_size=" << skip.size()
+                << " len_size=" << len.size();
         }
         auto & ede = res.first;
         ede.resize(skip.size());
@@ -1848,7 +1858,13 @@ private:
                 while (j < (long long)ed.size() and ed[j].start < ti) ++j;
                 if (j == (long long)ed.size())
                 {
-                    throw std::runtime_error("pack_ev failed: no matching ed event");
+                    LOG_THROW
+                        << "no matching ed event: i=" << i
+                        << " ev[i]=(" << ti
+                        << "," << time_to_int(ev[i].length, cid_params)
+                        << "," << ev[i].mean
+                        << "," << ev[i].stdv
+                        << ")";
                 }
                 rel_skip.push_back(j - last_j - 1);
             }
@@ -1871,12 +1887,17 @@ private:
             auto s = ev[i].get_model_state();
             if (s.size() != ev_pack.state_size)
             {
-                throw std::runtime_error("pack_ev failed: unexpected state size");
+                LOG_THROW
+                    << "unexpected state size: i=" << i
+                    << " s=" << s
+                    << " expected_size=" << ev_pack.state_size;
             }
             // check if move is valid
             if (ev[i].move < 0 or ev[i].move > std::numeric_limits< uint8_t >::max())
             {
-                throw std::runtime_error("pack_ev failed: invalid move");
+                LOG_THROW
+                    << "invalid move: i=" << i
+                    << "ev[i].move=" << ev[i].move;
             }
             int real_move = ev[i].move;
             if (sq.substr(sq_pos + real_move, ev_pack.state_size) != s)
@@ -1918,7 +1939,9 @@ private:
         }
         if (sq_pos + ev_pack.state_size != sq.size())
         {
-            throw std::runtime_error("pack_ev failed: leftover sequence not covered by state sequence");
+            LOG_THROW
+                << "leftover base sequence: sq_size=" << sq.size()
+                << " sq_end_pos=" << sq_pos + ev_pack.state_size;
         }
         std::tie(ev_pack.move, ev_pack.move_params) = ev_move_coder().encode(mv, false);
         std::tie(ev_pack.p_model_state, ev_pack.p_model_state_params) = bit_packer().encode(p_model_state, p_model_state_bits);
@@ -1935,7 +1958,9 @@ private:
         auto len = ed_len_coder().decode< long long >(ev_pack.len, ev_pack.len_params);
         if (skip.empty() or skip.size() != len.size())
         {
-            throw std::runtime_error("unpack_implicit_ed failure: skip or length of wrong size");
+            LOG_THROW
+                << "wrong dataset size: skip_size=" << skip.size()
+                << " len_size=" << len.size();
         }
         ede.resize(skip.size());
         unpack_event_start_length(
@@ -1973,7 +1998,10 @@ private:
         auto p_model_state = bit_packer().decode< std::uint16_t >(ev_pack.p_model_state, ev_pack.p_model_state_params);
         if ((not rel_skip.empty() and rel_skip.size() != mv.size()) or p_model_state.size() != mv.size())
         {
-            throw std::runtime_error("unpack_ev failed: rel_skip and move have different sizes");
+            LOG_THROW
+                << "wrong dataset size: rel_skip_size=" << rel_skip.size()
+                << " mv_size=" << mv.size()
+                << " p_model_state_size=" << p_model_state.size();
         }
         ev.resize(mv.size());
         long long j = -1;
@@ -2029,7 +2057,9 @@ private:
                     }
                     if (idx != next_index[k])
                     {
-                        throw std::runtime_error("pack_al failed: unexpected index");
+                        LOG_THROW
+                            << "bad index: idx=" << idx
+                            << " next_index=" << next_index[k];
                     }
                     step_v[k].push_back(1);
                     next_index[k] += delta[k];
@@ -2044,22 +2074,27 @@ private:
             size_t next_pos = sq.find(kmer, pos);
             if (next_pos == std::string::npos)
             {
-                throw std::runtime_error("pack_al failed: cannot find kmer in 2d seq");
+                LOG_THROW
+                    << "missing kmer in 2d seq";
             }
             if (next_pos - pos > std::numeric_limits< int8_t >::max())
             {
-                throw std::runtime_error("pack_al failed: move too large");
+                LOG_THROW
+                    << "bad move: next_pos=" << next_pos
+                    << " pos=" << pos;
             }
             mv.push_back(next_pos - pos);
             pos = next_pos;
         }
         if (start_index[0] < 0)
         {
-            throw std::runtime_error("pack_al failed: no template events");
+            LOG_THROW
+                << "no template events";
         }
         if (start_index[1] < 0)
         {
-            throw std::runtime_error("pack_al failed: no complement events");
+            LOG_THROW
+                << "no complement events";
         }
         al_pack.template_index_start = start_index[0];
         al_pack.complement_index_start = start_index[1];
@@ -2081,7 +2116,10 @@ private:
         if (step_v[1].size() != step_v[0].size()
             or mv.size() != step_v[0].size())
         {
-            throw std::runtime_error("unpack_al failed: mismatching size");
+            LOG_THROW
+                << "wrong dataset size: step_v[0]_size=" << step_v[0].size()
+                << " step_v[1]_size=" << step_v[1].size()
+                << " mv_size=" << mv.size();
         }
         al.resize(step_v[0].size());
         std::array< unsigned, 2 > crt_index = {{ al_pack.template_index_start, al_pack.complement_index_start }};

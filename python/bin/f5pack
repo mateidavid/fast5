@@ -172,6 +172,7 @@ if __name__ == "__main__":
     if args.p_model_state_bits: fp.set_p_model_state_bits(args.p_model_state_bits)
     
     l = add_paths(args.inputs[0], args)
+    have_errors = False
     for t in l:
         ifn = t[0]
         ofn = t[1]
@@ -179,4 +180,10 @@ if __name__ == "__main__":
         if not os.path.isdir(odn):
             os.makedirs(odn)
         logger.info("packing ifn=" + ifn + " ofn=" + ofn)
-        fp.run(ifn, ofn)
+        try:
+            fp.run(ifn, ofn)
+        except RuntimeError as e:
+            logger.warning("error packing " + ifn + ": " + str(e))
+            os.remove(ofn)
+            have_errors = True
+    sys.exit(have_errors)

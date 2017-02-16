@@ -1,5 +1,5 @@
 /// Part of: https://github.com/mateidavid/hpptools
-/// Commit: 52db162
+/// Commit: 0f85cd8
 
 /// @author    Matei David, Ontario Institute for Cancer Research
 /// @version   1.0
@@ -77,7 +77,6 @@ enum level
 };
 
 class Logger
-    : public std::ostringstream
 {
 public:
     // Constructor: initialize buffer.
@@ -86,27 +85,27 @@ public:
            std::ostream& os = std::clog)
         : _os_p(&os), _policy(0)
     {
-        *this << "= " << facility << "." << int(msg_level)
-              << " " << file_name << ":" << line_num
-              << " " << func_name << " ";
+        _oss << "= " << facility << "." << int(msg_level)
+             << " " << file_name << ":" << line_num
+             << " " << func_name << " ";
     }
     Logger(int policy, const std::string& file_name, unsigned line_num, const std::string& func_name,
            std::ostream& os = std::cerr)
         : _os_p(&os), _policy(policy)
     {
-        *this << "= main." << int(error)
-              << " " << file_name << ":" << line_num
-              << " " << func_name << " ";
+        _oss << file_name << ":" << line_num
+             << " " << func_name << " ";
     }
     // Destructor: dump buffer to output.
-    ~Logger()
+    ~Logger() noexcept(false)
     {
-        _os_p->write(this->str().c_str(), this->str().size());
-        if (_policy < 0) std::abort();
+        if (_policy == -2) throw std::runtime_error(_oss.str());
+        _os_p->write(_oss.str().c_str(), _oss.str().size());
+        if (_policy == -1) std::abort();
         if (_policy > 0) std::exit(_policy);
     }
     // Produce l-value for output chaining.
-    std::ostream& l_value() { return *this; }
+    std::ostream & l_value() { return _oss; }
 
     // static methods for setting and getting facility log levels.
     static level get_default_level()
@@ -187,6 +186,7 @@ public:
         return _last_level;
     }
 private:
+    std::ostringstream _oss;
     // sink for this Logger object
     std::ostream* _os_p;
     int _policy;
@@ -291,8 +291,9 @@ private:
 
 #define LOG(...) __LOG_aux1(__NARGS(__VA_ARGS__), __VA_ARGS__)
 #define LOG_EXITCODE(c) logger::Logger((c), __FILENAME__, __LINE__, __func__).l_value()
+#define LOG_THROW LOG_EXITCODE(-2)
 #define LOG_ABORT LOG_EXITCODE(-1)
-#define LOG_EXIT LOG_EXITCODE(EXIT_FAILURE)
+#define LOG_EXIT  LOG_EXITCODE(EXIT_FAILURE)
 
 #endif
 

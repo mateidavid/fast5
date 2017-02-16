@@ -195,7 +195,7 @@ cdef extern from "File_Packer.hpp" namespace "fast5":
         void set_qv_bits(unsigned)
         void set_p_model_state_bits(unsigned)
 
-        void run(string, string)
+        void run(string, string) except +
 
 __version__ = cpp_version
 def set_levels_from_options(v):

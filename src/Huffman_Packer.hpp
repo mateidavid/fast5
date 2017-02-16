@@ -9,9 +9,9 @@
 #include <limits>
 #include <stdexcept>
 #include <cassert>
+#include <bitset>
 
-//#include <bitset>
-//#include "logger.hpp"
+#include "logger.hpp"
 
 namespace fast5
 {
@@ -196,7 +196,11 @@ public:
                     }
                     ++it;
                 }
-                if (it == _cwm.end()) throw std::invalid_argument("decoding failure: codeword not found");
+                if (it == _cwm.end())
+                {
+                    LOG_THROW
+                        << "codeword not found: buff=" << std::bitset<64>(buff);
+                }
                 auto x = it->first;
                 auto p = it->second;
                 assert(buff_len >= p.second);
@@ -210,7 +214,8 @@ public:
                         and (x < (long long)std::numeric_limits< Int_Type >::min()
                              or x > (long long)std::numeric_limits< Int_Type >::max()))
                     {
-                        throw std::invalid_argument("decoding failure: overflow");
+                        LOG_THROW
+                            << "overflow";
                     }
                     res.push_back(x);
                     last = x;
@@ -239,7 +244,8 @@ public:
         static_init();
         if (cwm_m().count(cwm_name) == 0)
         {
-            throw std::invalid_argument(std::string("missing codeword map: ") + cwm_name);
+            LOG_THROW
+                << "missing codeword map: " + cwm_name;
         }
         return cwm_m().at(cwm_name);
     }
@@ -267,7 +273,8 @@ private:
             or params.at("format_version") != _id.at("format_version")
             or params.at("codeword_map_name") != _id.at("codeword_map_name"))
         {
-            throw std::invalid_argument("decode id mismatch");
+            LOG_THROW
+                << "decode id mismatch";
         }
     }
     void add_codeword(std::string const & v_s, std::string const & cw_s)
@@ -284,7 +291,8 @@ private:
         std::uint64_t cw = 0;
         if (cw_s.size() > 57)
         {
-            throw std::invalid_argument(std::string("codeword too long: ") + v_s + " " + cw_s);
+            LOG_THROW
+                << "codeword too long: " + v_s + " " + cw_s;
         }
         std::uint8_t cw_l = cw_s.size();
         for (int i = cw_s.size() - 1; i >= 0; --i)

@@ -133,9 +133,11 @@ public:
             src_f.close();
             dst_f.close();
         }
-        catch (hdf5_tools::Exception& e)
+        catch (hdf5_tools::Exception & e)
         {
-            LOG_EXIT << ifn << ": HDF5 error: " << e.what() << std::endl;
+            std::ostringstream oss;
+            oss << ifn << ": HDF5 error: " << e.what();
+            throw std::runtime_error(oss.str());
         }
     } // run()
 
@@ -174,23 +176,24 @@ private:
                     auto & rs_params_unpack = rsi_ds_unpack.second;
                     if (not (rs_params_unpack == rs_params))
                     {
-                        LOG_ABORT
-                            << "check_failed rs_params_unpack!=rs_params" << std::endl;
+                        LOG_THROW
+                            << "rs_params_unpack!=rs_params";
                     }
                     if (rsi_unpack.size() != rsi.size())
                     {
-                        LOG_ABORT
-                            << "check_failed rs_unpack.size=" << rsi_unpack.size()
-                            << " rs_orig.size=" << rsi.size() << std::endl;
+                        LOG_THROW
+                            << "pack_rw failed: rs_unpack.size=" << rsi_unpack.size()
+                            << " rs_orig.size=" << rsi.size();
+
                     }
                     for (unsigned i = 0; i < rsi_unpack.size(); ++i)
                     {
                         if (rsi_unpack[i] != rsi[i])
                         {
-                            LOG_ABORT
-                                << "check_failed i=" << i
+                            LOG_THROW
+                                << "pack_rw failed: i=" << i
                                 << " rs_unpack=" << rsi_unpack[i]
-                                << " rs_orig=" << rsi[i] << std::endl;
+                                << " rs_orig=" << rsi[i];
                         }
                     }
                 }
@@ -264,15 +267,15 @@ private:
                         auto & ede_params_unpack = ede_ds_unpack.second;
                         if (not (ede_params_unpack == ede_params))
                         {
-                            LOG_ABORT
-                                << "check_failed ede_params_unpack!=ede_params" << std::endl;
+                            LOG_THROW
+                                << "ede_params_unpack!=ede_params";
                         }
                         if (ede_unpack.size() != ede.size())
                         {
-                            LOG_ABORT
-                                << "check_failed gr=" << gr
+                            LOG_THROW
+                                << "pack_ed failed: gr=" << gr
                                 << " ede_unpack.size=" << ede_unpack.size()
-                                << " ede_orig.size=" << ede.size() << std::endl;
+                                << " ede_orig.size=" << ede.size();
                         }
                         for (unsigned i = 0; i + 1 < ede_unpack.size(); ++i) // skip last event
                         {
@@ -293,8 +296,8 @@ private:
                                 or abs(ede_unpack[i].mean - ede[i].mean) > .1
                                 or abs(ede_unpack[i].stdv - ede[i].stdv) > .1)
                             {
-                                LOG_ABORT
-                                    << "check_failed gr=" << gr
+                                LOG_THROW
+                                    << "pack_ed failed: gr=" << gr
                                     << " i=" << i
                                     << " ede_unpack=(" << ede_unpack[i].start
                                     << "," << ede_unpack[i].length
@@ -304,7 +307,7 @@ private:
                                     << "," << ede[i].length
                                     << "," << ede[i].mean
                                     << "," << ede[i].stdv
-                                    << ")" << std::endl;
+                                    << ")";
                             }
                         }
                     } // if check
@@ -389,27 +392,27 @@ private:
                         auto fqa_unpack = src_f.split_fq(fq_unpack);
                         if (fqa_unpack[0] != fqa[0])
                         {
-                            LOG_ABORT
-                                << "check_failed st=" << st
+                            LOG_THROW
+                                << "pack_fq failed: st=" << st
                                 << " gr=" << gr
                                 << " fq_unpack_name=" << fqa_unpack[0]
-                                << " fq_orig_name=" << fqa[0] << std::endl;
+                                << " fq_orig_name=" << fqa[0];
                         }
                         if (fqa_unpack[1] != fqa[1])
                         {
-                            LOG_ABORT
-                                << "check_failed st=" << st
+                            LOG_THROW
+                                << "pack_fq failed: st=" << st
                                 << " gr=" << gr
                                 << " fq_unpack_bp=" << fqa_unpack[1]
-                                << " fq_orig_bp=" << fqa[1] << std::endl;
+                                << " fq_orig_bp=" << fqa[1];
                         }
                         if (fqa_unpack[3].size() != fqa[3].size())
                         {
-                            LOG_ABORT
-                                << "check_failed st=" << st
+                            LOG_THROW
+                                << "pack_fq failed: st=" << st
                                 << " gr=" << gr
                                 << " fq_unpack_qv_size=" << fqa_unpack[3].size()
-                                << " fq_orig_qv_size=" << fqa[3].size() << std::endl;
+                                << " fq_orig_qv_size=" << fqa[3].size();
                         }
                         auto qv_mask = max_qv_mask() & (max_qv_mask() << (max_qv_bits() - qv_bits));
                         for (unsigned i = 0; i < fqa_unpack[3].size(); ++i)
@@ -417,12 +420,12 @@ private:
                             if ((std::min<unsigned>(fqa_unpack[3][i] - 33, max_qv_mask()) & qv_mask) !=
                                 (std::min<unsigned>(fqa[3][i] - 33, max_qv_mask()) & qv_mask))
                             {
-                                LOG_ABORT
-                                    << "check_failed st=" << st
+                                LOG_THROW
+                                    << "pack_fq failed: st=" << st
                                     << " gr=" << gr
                                     << " i=" << i
                                     << " fq_unpack_qv=" << fqa_unpack[3][i]
-                                    << " fq_orig_qv=" << fqa[3][i] << std::endl;
+                                    << " fq_orig_qv=" << fqa[3][i];
                             }
                         }
                     }
@@ -506,8 +509,8 @@ private:
                     // basecall fq
                     if (not src_f.have_basecall_fastq(st, gr))
                     {
-                        LOG_ABORT
-                            << "missing fastq for basecall events: st=" << st << " gr=" << gr << std::endl;
+                        LOG_THROW
+                            << "pack_ev error: missing fastq for basecall events: st=" << st << " gr=" << gr;
                     }
                     auto sq = src_f.get_basecall_seq(st, gr);
                     // ed group
@@ -531,16 +534,16 @@ private:
                         auto & ev_params_unpack = ev_ds_unpack.second;
                         if (not (ev_params_unpack == ev_params))
                         {
-                            LOG_ABORT
-                                << "check_failed ev_params_unpack!=ev_params" << std::endl;
+                            LOG_THROW
+                                << "check failed: ev_params_unpack!=ev_params";
                         }
                         if (ev_unpack.size() != ev.size())
                         {
-                            LOG_ABORT
-                                << "check_failed st=" << st
+                            LOG_THROW
+                                << "pack_ev failed: st=" << st
                                 << " gr=" << gr
                                 << " ev_unpack.size=" << ev_unpack.size()
-                                << " ev_orig.size=" << ev.size() << std::endl;
+                                << " ev_orig.size=" << ev.size();
                         }
                         for (unsigned i = 0; i < ev_unpack.size(); ++i)
                         {
@@ -551,8 +554,8 @@ private:
                                 //or ev_unpack[i].move != ev[i].move // allow workaround for invalid moves
                                 or ev_unpack[i].model_state != ev[i].model_state)
                             {
-                                LOG_ABORT
-                                    << "check_failed st=" << st
+                                LOG_THROW
+                                    << "check failed: st=" << st
                                     << " gr=" << gr
                                     << " i=" << i
                                     << " ev_unpack=(" << ev_unpack[i].start
@@ -567,7 +570,7 @@ private:
                                     << "," << ev[i].stdv
                                     << "," << ev[i].move
                                     << "," << ev[i].get_model_state()
-                                    << ")" << std::endl;
+                                    << ")";
                             }
                         }
                     }
@@ -575,12 +578,12 @@ private:
                     std::ostringstream oss;
                     if (not ev_pack.rel_skip.empty())
                     {
-                        oss
+                        LOG_THROW
                             << "rel_skip_bits=" << ev_pack.rel_skip_params.at("avg_bits");
                     }
                     else
                     {
-                        oss
+                        LOG_THROW
                             << "skip_bits=" << ev_pack.skip_params.at("avg_bits")
                             << " len_bits=" << ev_pack.len_params.at("avg_bits");
                     }
@@ -658,8 +661,8 @@ private:
                 // basecall seq
                 if (not src_f.have_basecall_seq(2, gr))
                 {
-                    LOG_ABORT
-                        << "missing fastq for basecall alignment: gr=" << gr << std::endl;
+                    LOG_THROW
+                        << "pack_al error: missing fastq for basecall alignment: gr=" << gr;
                 }
                 auto seq = src_f.get_basecall_seq(2, gr);
                 auto al_pack = src_f.pack_al(al, seq);
@@ -668,10 +671,10 @@ private:
                     auto al_unpack = src_f.unpack_al(al_pack, seq);
                     if (al_unpack.size() != al.size())
                     {
-                        LOG_ABORT
+                        LOG_THROW
                             << "check_failed gr=" << gr
                             << " al_unpack.size=" << al_unpack.size()
-                            << " al_orig.size=" << al.size() << std::endl;
+                            << " al_orig.size=" << al.size();
                     }
                     for (unsigned i = 0; i < al.size(); ++i)
                     {
@@ -679,7 +682,7 @@ private:
                             or al_unpack[i].complement_index != al[i].complement_index
                             or al_unpack[i].get_kmer() != al[i].get_kmer())
                         {
-                            LOG_ABORT
+                            LOG_THROW
                                 << "check_failed gr=" << gr
                                 << " i=" << i
                                 << " al_unpack=(" << al_unpack[i].template_index
@@ -688,7 +691,7 @@ private:
                                 << ") al_orig=(" << al[i].template_index
                                 << "," << al[i].complement_index
                                 << "," << al[i].get_kmer()
-                                << ")" << std::endl;
+                                << ")";
                         }
                     }
                 }

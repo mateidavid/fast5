@@ -156,6 +156,20 @@ struct EventDetection_Event
         }
         return m;
     }
+    static hdf5_tools::Compound_Map const & alt_compound_map()
+    {
+        static hdf5_tools::Compound_Map m;
+        static bool inited = false;
+        if (not inited)
+        {
+            m.add_member("mean", &EventDetection_Event::mean);
+            m.add_member("start", &EventDetection_Event::start);
+            m.add_member("length", &EventDetection_Event::length);
+            m.add_member("variance", &EventDetection_Event::stdv);
+            inited = true;
+        }
+        return m;
+    }
 }; // struct EventDetection_Event
 
 struct EventDetection_Events_Params
@@ -840,7 +854,25 @@ public:
         if (have_eventdetection_events_unpack(_gr, _rn))
         {
             auto p = eventdetection_events_path(_gr, _rn);
-            Base::read(p, ede, EventDetection_Event::compound_map());
+            // accept either stdv or variance
+            auto meml = get_struct_members(p);
+            std::set< std::string > mems(meml.begin(), meml.end());
+            if (mems.count("stdv"))
+            {
+                Base::read(p, ede, EventDetection_Event::compound_map());
+            }
+            else if (mems.count("variance"))
+            {
+                Base::read(p, ede, EventDetection_Event::alt_compound_map());
+                for (auto & e : ede)
+                {
+                    e.stdv = std::sqrt(e.stdv);
+                }
+            }
+            else
+            {
+                throw std::runtime_error("neither stdv nor variance found in eventdetection events table");
+            }
         }
         else if (have_eventdetection_events_pack(_gr, _rn))
         {

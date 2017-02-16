@@ -24,7 +24,7 @@ check_virtualenv:
 install: check_virtualenv ## Install to current virtualenv
 	${PYTHON} setup.py install
 
-install: ## Install to current user
+install-user: ## Install to current user
 	${PYTHON} setup.py install --user
 
 develop: check_virtualenv ## Install in develop mode to current virtualenv

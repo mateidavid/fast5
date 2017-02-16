@@ -11,10 +11,55 @@ import logging
 import os
 import sys
 
-#import fast5
+import fast5
 
 import signal
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+policy_d = {
+    "drop": 0,
+    "pack": 1,
+    "unpack": 2,
+    "copy": 3,
+}
+
+def add_fast5(fn, rel_dn, args):
+    logger.info("adding fast5 fn=" + fn + " rel_dn=" + rel_dn)
+    return [(fn, os.path.normpath(os.path.join(args.output, rel_dn, os.path.basename(fn))))]
+
+def add_dir(dn, args):
+    l = list()
+    logger.info("processing dir dn=" + dn)
+    for t in os.walk(dn):
+        rel_dn = os.path.relpath(t[0], dn)
+        for rel_fn in t[2]:
+            fn = os.path.join(t[0], rel_fn)
+            if fast5.File.is_valid_file(fn):
+                l += add_fast5(fn, rel_dn, args)
+        if not args.recurse:
+            break
+    return l
+
+def add_fofn(fn, args):
+    l = list()
+    logger.info("processing fofn fn=" + fn)
+    with open(fn) as f:
+        for p in f:
+            if fast5.File.is_valid_file(p):
+                l += add_fast5(p, "", args)
+            else:
+                log.warning("fofn line not a fast5 file: " + l)
+
+def add_paths(pl, args):
+    l = list()
+    for p in pl:
+        if os.path.isdir(p):
+            l += add_dir(p, args)
+        elif fast5.File.is_valid_file(p):
+            l += add_fast5(p, "", args)
+        else:
+            l += add_fofn(p, args)
+    return l
 
 if __name__ == "__main__":
     description = """
@@ -52,10 +97,10 @@ if __name__ == "__main__":
                         help="p_model_state bits to keep.")
     parser.add_argument("-R", "--recurse", action="store_true",
                         help="Recurse in input directories.")
-    parser.add_argument("-o", "--output",
+    parser.add_argument("-o", "--output", required=True,
                         help="Output directory.")
     #
-    parser.add_argument("inputs", nargs='*', default=[], action="append",
+    parser.add_argument("inputs", nargs="*", default=[], action="append",
                         help="Input directories, fast5 files, or files of fast5 file names.")
     args = parser.parse_args()
 
@@ -66,6 +111,7 @@ if __name__ == "__main__":
                         format="%(asctime)s %(name)s.%(levelname)s %(message)s",
                         datefmt="%Y/%m/%d %H:%M:%S")
     logger = logging.getLogger(os.path.basename(__file__))
+    fast5.set_levels_from_options([args.log_level.lower()])
     logger.debug("args: " + str(args))
 
     if args.pack + args.unpack + args.archive + args.fastq > 1:
@@ -94,16 +140,16 @@ if __name__ == "__main__":
         if args.al is None: args.al = "unpack"
     if args.archive:
         if args.rw is None: args.rw = "pack"
-        if args.ed is None: args.ed = "unpack"
-        if args.fq is None: args.fq = "unpack"
-        if args.ev is None: args.ev = "unpack"
-        if args.al is None: args.al = "unpack"
+        if args.ed is None: args.ed = "drop"
+        if args.fq is None: args.fq = "drop"
+        if args.ev is None: args.ev = "drop"
+        if args.al is None: args.al = "drop"
     if args.fastq:
-        if args.rw is None: args.rw = "unpack"
-        if args.ed is None: args.ed = "unpack"
+        if args.rw is None: args.rw = "drop"
+        if args.ed is None: args.ed = "drop"
         if args.fq is None: args.fq = "pack"
-        if args.ev is None: args.ev = "unpack"
-        if args.al is None: args.al = "unpack"
+        if args.ev is None: args.ev = "drop"
+        if args.al is None: args.al = "drop"
     if args.rw is None: args.rw = "drop"
     if args.ed is None: args.ed = "drop"
     if args.fq is None: args.fq = "drop"
@@ -114,4 +160,23 @@ if __name__ == "__main__":
     logger.info("fq: " + args.fq)
     logger.info("ev: " + args.ev)
     logger.info("al: " + args.al)
+    fp = fast5.File_Packer(
+        policy_d[args.rw],
+        policy_d[args.ed],
+        policy_d[args.fq],
+        policy_d[args.ev],
+        policy_d[args.al],
+    )
+    if args.force: fp.set_force(True)
+    if args.qv_bits: fp.set_qv_bits(args.qv_bits)
+    if args.p_model_state_bits: fp.set_p_model_state_bits(args.p_model_state_bits)
     
+    l = add_paths(args.inputs[0], args)
+    for t in l:
+        ifn = t[0]
+        ofn = t[1]
+        odn = os.path.dirname(t[1])
+        if not os.path.isdir(odn):
+            os.makedirs(odn)
+        logger.info("packing ifn=" + ifn + " ofn=" + ofn)
+        fp.run(ifn, ofn)

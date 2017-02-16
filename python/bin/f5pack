@@ -45,6 +45,7 @@ def add_fofn(fn, args):
     logger.info("processing fofn fn=" + fn)
     with open(fn) as f:
         for p in f:
+            p = p.strip()
             if fast5.File.is_valid_file(p):
                 l += add_fast5(p, "", args)
             else:

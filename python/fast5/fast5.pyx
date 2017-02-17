@@ -101,7 +101,7 @@ cdef extern from "fast5.hpp" namespace "fast5":
         @staticmethod
         cbool is_valid_file(string)
 
-        string file_version()
+        string file_version() except +
 
         cbool have_channel_id_params()
         Channel_Id_Params get_channel_id_params()
@@ -109,20 +109,20 @@ cdef extern from "fast5.hpp" namespace "fast5":
         double get_sampling_rate()
 
         cbool have_tracking_id_params()
-        Tracking_Id_Params get_tracking_id_params()
+        Tracking_Id_Params get_tracking_id_params() except +
 
         cbool have_sequences_params()
-        Sequences_Params get_sequences_params()
+        Sequences_Params get_sequences_params() except +
 
         vector[string] get_raw_samples_read_name_list()
         cbool have_raw_samples()
         cbool have_raw_samples(string)
-        Raw_Samples_Params get_raw_samples_params()
-        Raw_Samples_Params get_raw_samples_params(string)
-        vector[Raw_Int_Sample] get_raw_int_samples()
-        vector[Raw_Int_Sample] get_raw_int_samples(string)
-        vector[Raw_Sample] get_raw_samples()
-        vector[Raw_Sample] get_raw_samples(string)
+        Raw_Samples_Params get_raw_samples_params() except +
+        Raw_Samples_Params get_raw_samples_params(string) except +
+        vector[Raw_Int_Sample] get_raw_int_samples() except +
+        vector[Raw_Int_Sample] get_raw_int_samples(string) except +
+        vector[Raw_Sample] get_raw_samples() except +
+        vector[Raw_Sample] get_raw_samples(string) except +
 
         vector[string] get_eventdetection_group_list()
         cbool have_eventdetection_group()
@@ -132,14 +132,14 @@ cdef extern from "fast5.hpp" namespace "fast5":
         cbool have_eventdetection_events()
         cbool have_eventdetection_events(string)
         cbool have_eventdetection_events(string, string)
-        Attr_Map get_eventdetection_params()
-        Attr_Map get_eventdetection_params(string)
-        EventDetection_Events_Params get_eventdetection_events_params()
-        EventDetection_Events_Params get_eventdetection_events_params(string)
-        EventDetection_Events_Params get_eventdetection_events_params(string, string)
-        vector[EventDetection_Event] get_eventdetection_events()
-        vector[EventDetection_Event] get_eventdetection_events(string)
-        vector[EventDetection_Event] get_eventdetection_events(string, string)
+        Attr_Map get_eventdetection_params() except +
+        Attr_Map get_eventdetection_params(string) except +
+        EventDetection_Events_Params get_eventdetection_events_params() except +
+        EventDetection_Events_Params get_eventdetection_events_params(string) except +
+        EventDetection_Events_Params get_eventdetection_events_params(string, string) except +
+        vector[EventDetection_Event] get_eventdetection_events() except +
+        vector[EventDetection_Event] get_eventdetection_events(string) except +
+        vector[EventDetection_Event] get_eventdetection_events(string, string) except +
 
         vector[string] get_basecall_group_list()
         cbool have_basecall_group()
@@ -149,39 +149,39 @@ cdef extern from "fast5.hpp" namespace "fast5":
         cbool have_basecall_strand_group(unsigned, string)
         string get_basecall_1d_group(string)
         string get_basecall_eventdetection_group(string)
-        Attr_Map get_basecall_params(string)
+        Attr_Map get_basecall_params(string) except +
         cbool have_basecall_log(string)
-        string get_basecall_log(string)
+        string get_basecall_log(string) except +
 
         cbool have_basecall_fastq(unsigned)
         cbool have_basecall_fastq(unsigned, string)
-        string get_basecall_fastq(unsigned)
-        string get_basecall_fastq(unsigned, string)
+        string get_basecall_fastq(unsigned) except +
+        string get_basecall_fastq(unsigned, string) except +
         cbool have_basecall_seq(unsigned)
         cbool have_basecall_seq(unsigned, string)
-        string get_basecall_seq(unsigned)
-        string get_basecall_seq(unsigned, string)
+        string get_basecall_seq(unsigned) except +
+        string get_basecall_seq(unsigned, string) except +
 
         cbool have_basecall_model(unsigned)
         cbool have_basecall_model(unsigned, string)
-        string get_basecall_model_file(unsigned)
-        string get_basecall_model_file(unsigned, string)
-        Basecall_Model_Params get_basecall_model_params(unsigned)
-        Basecall_Model_Params get_basecall_model_params(unsigned, string)
-        vector[Basecall_Model_State] get_basecall_model(unsigned)
-        vector[Basecall_Model_State] get_basecall_model(unsigned, string)
+        string get_basecall_model_file(unsigned) except +
+        string get_basecall_model_file(unsigned, string) except +
+        Basecall_Model_Params get_basecall_model_params(unsigned) except +
+        Basecall_Model_Params get_basecall_model_params(unsigned, string) except +
+        vector[Basecall_Model_State] get_basecall_model(unsigned) except +
+        vector[Basecall_Model_State] get_basecall_model(unsigned, string) except +
 
         cbool have_basecall_events(unsigned)
         cbool have_basecall_events(unsigned, string)
-        Basecall_Events_Params get_basecall_events_params(unsigned)
-        Basecall_Events_Params get_basecall_events_params(unsigned, string)
-        vector[Basecall_Event] get_basecall_events(unsigned)
-        vector[Basecall_Event] get_basecall_events(unsigned, string)
+        Basecall_Events_Params get_basecall_events_params(unsigned) except +
+        Basecall_Events_Params get_basecall_events_params(unsigned, string) except +
+        vector[Basecall_Event] get_basecall_events(unsigned) except +
+        vector[Basecall_Event] get_basecall_events(unsigned, string) except +
 
         cbool have_basecall_alignment()
         cbool have_basecall_alignment(string)
-        vector[Basecall_Alignment_Entry] get_basecall_alignment()
-        vector[Basecall_Alignment_Entry] get_basecall_alignment(string)
+        vector[Basecall_Alignment_Entry] get_basecall_alignment() except +
+        vector[Basecall_Alignment_Entry] get_basecall_alignment(string) except +
 
 cdef extern from "File_Packer.hpp" namespace "fast5":
 

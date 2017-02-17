@@ -174,7 +174,7 @@ if __name__ == "__main__":
     if args.p_model_state_bits: fp.set_p_model_state_bits(args.p_model_state_bits)
     
     l = add_paths(args.inputs[0], args)
-    have_errors = False
+    errored_files_cnt = 0
     for t in l:
         ifn = t[0]
         ofn = t[1]
@@ -187,7 +187,7 @@ if __name__ == "__main__":
         except RuntimeError as e:
             logger.warning("error packing " + ifn + ": " + str(e))
             os.remove(ofn)
-            have_errors = True
+            errored_files_cnt += 1
 
     cnt = fp.get_counts()
     for cl in [["rs_count", "rs_bits"],
@@ -195,11 +195,14 @@ if __name__ == "__main__":
                ["bp_count", "bp_bits", "qv_bits"],
                ["bce_count", "bce_rel_skip_bits", "bce_skip_bits", "bce_len_bits", "bce_move_bits", "bce_p_model_state_bits"],
                ["aln_count", "aln_template_step_bits", "aln_complement_step_bits", "aln_move_bits"]]:
+        if cnt[cl[0]] == 0:
+            continue
         print(cl[0] + "\t" + str(cnt[cl[0]]))
         for c in cl[1:]:
-            if cnt[cl[0]] > 0:
-                print((c + "\t%.2f") % (float(cnt[c]) / cnt[cl[0]]))
-            else:
-                print(c + "\t0")
+            if cnt[c] == 0:
+                continue
+            print((c + "\t%.2f") % (float(cnt[c]) / cnt[cl[0]]))
+    if errored_files_cnt > 0:
+        print("errored_files\t" + str(errored_files_cnt))
 
-    sys.exit(have_errors)
+    sys.exit(errored_files_cnt > 0)

@@ -41,7 +41,7 @@ public:
         size_t aln_template_step_bits;
         size_t aln_complement_step_bits;
         size_t aln_move_bits;
-        //
+
         Counts() :
             //
             rs_count(0),
@@ -67,6 +67,34 @@ public:
             aln_complement_step_bits(0),
             aln_move_bits(0)
         {}
+        Counts & operator += (Counts const & other)
+        {
+            //
+            rs_count += other.rs_count;
+            rs_bits += other.rs_bits;
+            //
+            ede_count += other.ede_count;
+            ede_skip_bits += other.ede_skip_bits;
+            ede_len_bits += other.ede_len_bits;
+            //
+            bp_count += other.bp_count;
+            bp_bits += other.bp_bits;
+            qv_bits += other.qv_bits;
+            //
+            bce_count += other.bce_count;
+            bce_rel_skip_bits += other.bce_rel_skip_bits;
+            bce_skip_bits += other.bce_skip_bits;
+            bce_len_bits += other.bce_len_bits;
+            bce_move_bits += other.bce_move_bits;
+            bce_p_model_state_bits += other.bce_p_model_state_bits;
+            //
+            aln_count += other.aln_count;
+            aln_template_step_bits += other.aln_template_step_bits;
+            aln_complement_step_bits += other.aln_complement_step_bits;
+            aln_move_bits += other.aln_move_bits;
+            //
+            return *this;
+        }
     };
 
     File_Packer() :
@@ -103,6 +131,7 @@ public:
     {
         File src_f;
         File dst_f;
+        Counts cnt;
         try
         {
             // open files
@@ -118,7 +147,7 @@ public:
             // process raw samples
             if (rw_policy == 1)
             {
-                pack_rw(src_f, dst_f);
+                pack_rw(src_f, dst_f, cnt);
             }
             else if (rw_policy == 2)
             {
@@ -131,7 +160,7 @@ public:
             // process eventdetection events
             if (ed_policy == 1)
             {
-                pack_ed(src_f, dst_f);
+                pack_ed(src_f, dst_f, cnt);
             }
             else if (ed_policy == 2)
             {
@@ -144,7 +173,7 @@ public:
             // process basecall fastq
             if (fq_policy == 1)
             {
-                pack_fq(src_f, dst_f, bc_gr_s);
+                pack_fq(src_f, dst_f, bc_gr_s, cnt);
             }
             else if (fq_policy == 2)
             {
@@ -157,7 +186,7 @@ public:
             // process basecall events
             if (ev_policy == 1)
             {
-                pack_ev(src_f, dst_f, bc_gr_s);
+                pack_ev(src_f, dst_f, bc_gr_s, cnt);
             }
             else if (ev_policy == 2)
             {
@@ -170,7 +199,7 @@ public:
             // process basecall alignments
             if (al_policy == 1)
             {
-                pack_al(src_f, dst_f, bc_gr_s);
+                pack_al(src_f, dst_f, bc_gr_s, cnt);
             }
             else if (al_policy == 2)
             {
@@ -192,6 +221,7 @@ public:
             oss << ifn << ": HDF5 error: " << e.what();
             throw std::runtime_error(oss.str());
         }
+        counts += cnt;
     } // run()
 
     void reset_counts() const
@@ -216,7 +246,7 @@ private:
     mutable Counts counts;
 
     void
-    pack_rw(File const & src_f, File & dst_f) const
+    pack_rw(File const & src_f, File & dst_f, Counts & cnt) const
     {
         auto rn_l = src_f.get_raw_samples_read_name_list();
         for (auto const & rn : rn_l)
@@ -261,8 +291,8 @@ private:
                     }
                 }
                 dst_f.add_raw_samples(rn, rs_pack);
-                counts.rs_count += rsi.size();
-                counts.rs_bits += rs_pack.signal.size() * sizeof(rs_pack.signal[0]) * 8;
+                cnt.rs_count += rsi.size();
+                cnt.rs_bits += rs_pack.signal.size() * sizeof(rs_pack.signal[0]) * 8;
                 LOG(info)
                     << "rn=" << rn
                     << " rs_size=" << rsi.size()
@@ -303,7 +333,7 @@ private:
     } // copy_rw()
 
     void
-    pack_ed(File const & src_f, File & dst_f) const
+    pack_ed(File const & src_f, File & dst_f, Counts & cnt) const
     {
         auto gr_l = src_f.get_eventdetection_group_list();
         for (auto const & gr : gr_l)
@@ -377,9 +407,9 @@ private:
                         }
                     } // if check
                     dst_f.add_eventdetection_events(gr, rn, ede_pack);
-                    counts.ede_count += ede.size();
-                    counts.ede_skip_bits += ede_pack.skip.size() * sizeof(ede_pack.skip[0]) * 8;
-                    counts.ede_len_bits += ede_pack.len.size() * sizeof(ede_pack.len[0]) * 8;
+                    cnt.ede_count += ede.size();
+                    cnt.ede_skip_bits += ede_pack.skip.size() * sizeof(ede_pack.skip[0]) * 8;
+                    cnt.ede_len_bits += ede_pack.len.size() * sizeof(ede_pack.len[0]) * 8;
                     LOG(info)
                         << "gr=" << gr
                         << " rn=" << rn
@@ -435,7 +465,7 @@ private:
     } // copy_ed()
 
     void
-    pack_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
+    pack_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s, Counts & cnt) const
     {
         for (unsigned st = 0; st < 3; ++st)
         {
@@ -498,9 +528,9 @@ private:
                         }
                     }
                     dst_f.add_basecall_fastq(st, gr, fq_pack);
-                    counts.bp_count += fqa[1].size();
-                    counts.bp_bits += fq_pack.bp.size() * sizeof(fq_pack.bp[0]) * 8;
-                    counts.qv_bits += fq_pack.qv.size() * sizeof(fq_pack.qv[0]) * 8;
+                    cnt.bp_count += fqa[1].size();
+                    cnt.bp_bits += fq_pack.bp.size() * sizeof(fq_pack.bp[0]) * 8;
+                    cnt.qv_bits += fq_pack.qv.size() * sizeof(fq_pack.qv[0]) * 8;
                     LOG(info)
                         << "gr=" << gr
                         << " st=" << st
@@ -556,7 +586,7 @@ private:
     } // copy_fq()
 
     void
-    pack_ev(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
+    pack_ev(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s, Counts & cnt) const
     {
         for (unsigned st = 0; st < 2; ++st)
         {
@@ -646,12 +676,12 @@ private:
                         }
                     }
                     dst_f.add_basecall_events(st, gr, ev_pack);
-                    counts.bce_count += ev.size();
-                    counts.bce_rel_skip_bits += ev_pack.rel_skip.size() * sizeof(ev_pack.rel_skip[0]) * 8;
-                    counts.bce_skip_bits += ev_pack.skip.size() * sizeof(ev_pack.skip[0]) * 8;
-                    counts.bce_len_bits += ev_pack.len.size() * sizeof(ev_pack.len[0]) * 8;
-                    counts.bce_move_bits += ev_pack.move.size() * sizeof(ev_pack.move[0]) * 8;
-                    counts.bce_p_model_state_bits += ev_pack.p_model_state.size() * sizeof(ev_pack.p_model_state[0]) * 8;
+                    cnt.bce_count += ev.size();
+                    cnt.bce_rel_skip_bits += ev_pack.rel_skip.size() * sizeof(ev_pack.rel_skip[0]) * 8;
+                    cnt.bce_skip_bits += ev_pack.skip.size() * sizeof(ev_pack.skip[0]) * 8;
+                    cnt.bce_len_bits += ev_pack.len.size() * sizeof(ev_pack.len[0]) * 8;
+                    cnt.bce_move_bits += ev_pack.move.size() * sizeof(ev_pack.move[0]) * 8;
+                    cnt.bce_p_model_state_bits += ev_pack.p_model_state.size() * sizeof(ev_pack.p_model_state[0]) * 8;
                     std::ostringstream oss;
                     if (not ev_pack.rel_skip.empty())
                     {
@@ -720,7 +750,7 @@ private:
     } // copy_ev()
 
     void
-    pack_al(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s) const
+    pack_al(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s, Counts & cnt) const
     {
         auto gr_l = src_f.get_basecall_strand_group_list(2);
         for (auto const & gr : gr_l)
@@ -773,10 +803,10 @@ private:
                     }
                 }
                 dst_f.add_basecall_alignment(gr, al_pack);
-                counts.aln_count += al.size();
-                counts.aln_template_step_bits += al_pack.template_step.size() * sizeof(al_pack.template_step[0]) * 8;
-                counts.aln_complement_step_bits += al_pack.complement_step.size() * sizeof(al_pack.complement_step[0]) * 8;
-                counts.aln_move_bits += al_pack.move.size() * sizeof(al_pack.move[0]) * 8;
+                cnt.aln_count += al.size();
+                cnt.aln_template_step_bits += al_pack.template_step.size() * sizeof(al_pack.template_step[0]) * 8;
+                cnt.aln_complement_step_bits += al_pack.complement_step.size() * sizeof(al_pack.complement_step[0]) * 8;
+                cnt.aln_move_bits += al_pack.move.size() * sizeof(al_pack.move[0]) * 8;
                 LOG(info)
                     << "gr=" << gr
                     << " al_size=" << al.size()

@@ -1773,7 +1773,7 @@ private:
         static bool warned = false;
         if (off_by_one and not warned)
         {
-            std::clog << "warning: using workaround for old off-by-one ed events bug\n";
+            LOG(warning) << "using workaround for old off-by-one ed events bug\n";
             warned = true;
         }
         unpack_event_mean_stdv(
@@ -1915,19 +1915,22 @@ private:
                 {
                     real_move = -1;
                 }
-                std::clog << (real_move >= 0? "warning: using workaround for" : "error:")
-                          << " invalid move: i=" << i
-                          << " sq=" << sq.substr(sq_pos, 2 * ev_pack.state_size)
-                          << " move[i]=" << ev[i].move
-                          << " state[i]=" << s;
                 if (real_move >= 0)
                 {
-                    std::clog << " real_move=" << real_move << std::endl;
+                    LOG(warning)
+                        << "using workaround for invalid move: i=" << i
+                        << " sq=" << sq.substr(sq_pos, 2 * ev_pack.state_size)
+                        << " move[i]=" << ev[i].move
+                        << " state[i]=" << s
+                        << " real_move=" << real_move << std::endl;
                 }
                 else
                 {
-                    std::clog << std::endl;
-                    abort();
+                    LOG_THROW
+                        << "invalid move: i=" << i
+                        << " sq=" << sq.substr(sq_pos, 2 * ev_pack.state_size)
+                        << " move[i]=" << ev[i].move
+                        << " state[i]=" << s;
                 }
             }
             mv.push_back(real_move);

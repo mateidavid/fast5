@@ -1796,7 +1796,7 @@ private:
             [&] (unsigned i, long long x) { return ede.at(i).start = x; },
             [&] (unsigned i, long long x) { return ede.at(i).length = x; },
             ede_params.start_time);
-        bool off_by_one = ede_params.start_time == rs_params.start_time; // hack
+        bool off_by_one = false; //ede_params.start_time == rs_params.start_time; // hack
         static bool warned = false;
         if (off_by_one and not warned)
         {

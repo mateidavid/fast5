@@ -262,20 +262,21 @@ private:
                 auto & rsi = rsi_ds.first;
                 auto & rs_params = rsi_ds.second;
                 auto rs_pack = src_f.pack_rw(rsi_ds);
+                dst_f.add_raw_samples(rn, rs_pack);
                 if (check)
                 {
-                    auto rsi_ds_unpack = src_f.unpack_rw(rs_pack);
+                    auto rsi_ds_unpack = dst_f.get_raw_int_samples_dataset(rn);
                     auto & rsi_unpack = rsi_ds_unpack.first;
                     auto & rs_params_unpack = rsi_ds_unpack.second;
                     if (not (rs_params_unpack == rs_params))
                     {
                         LOG_THROW
-                            << "rs_params_unpack!=rs_params";
+                            << "check failed: rs_params_unpack!=rs_params";
                     }
                     if (rsi_unpack.size() != rsi.size())
                     {
                         LOG_THROW
-                            << "pack_rw failed: rs_unpack.size=" << rsi_unpack.size()
+                            << "check failed: rs_unpack.size=" << rsi_unpack.size()
                             << " rs_orig.size=" << rsi.size();
 
                     }
@@ -284,13 +285,12 @@ private:
                         if (rsi_unpack[i] != rsi[i])
                         {
                             LOG_THROW
-                                << "pack_rw failed: i=" << i
+                                << "check failed: i=" << i
                                 << " rs_unpack=" << rsi_unpack[i]
                                 << " rs_orig=" << rsi[i];
                         }
                     }
                 }
-                dst_f.add_raw_samples(rn, rs_pack);
                 cnt.rs_count += rsi.size();
                 cnt.rs_bits += rs_pack.signal.size() * sizeof(rs_pack.signal[0]) * 8;
                 LOG(info)
@@ -354,21 +354,30 @@ private:
                     auto & ede = ede_ds.first;
                     auto & ede_params = ede_ds.second;
                     auto ede_pack = src_f.pack_ed(ede_ds);
+                    dst_f.add_eventdetection_events(gr, rn, ede_pack);
                     if (check)
                     {
-                        auto rs_ds = src_f.get_raw_samples_dataset(rn);
-                        auto ede_ds_unpack = src_f.unpack_ed(ede_pack, rs_ds);
+                        decltype(ede_ds) ede_ds_unpack;
+                        try
+                        {
+                            ede_ds_unpack = dst_f.get_eventdetection_events_dataset(gr, rn);
+                        }
+                        catch (std::domain_error & e)
+                        {
+                            LOG_THROW
+                                << "check failed: " << e.what();
+                        }
                         auto & ede_unpack = ede_ds_unpack.first;
                         auto & ede_params_unpack = ede_ds_unpack.second;
                         if (not (ede_params_unpack == ede_params))
                         {
                             LOG_THROW
-                                << "ede_params_unpack!=ede_params";
+                                << "check failed: ede_params_unpack!=ede_params";
                         }
                         if (ede_unpack.size() != ede.size())
                         {
                             LOG_THROW
-                                << "pack_ed failed: gr=" << gr
+                                << "check failed: gr=" << gr
                                 << " ede_unpack.size=" << ede_unpack.size()
                                 << " ede_orig.size=" << ede.size();
                         }
@@ -392,7 +401,7 @@ private:
                                 or abs(ede_unpack[i].stdv - ede[i].stdv) > .1)
                             {
                                 LOG_THROW
-                                    << "pack_ed failed: gr=" << gr
+                                    << "check failed: gr=" << gr
                                     << " i=" << i
                                     << " ede_unpack=(" << ede_unpack[i].start
                                     << "," << ede_unpack[i].length
@@ -406,7 +415,6 @@ private:
                             }
                         }
                     } // if check
-                    dst_f.add_eventdetection_events(gr, rn, ede_pack);
                     cnt.ede_count += ede.size();
                     cnt.ede_skip_bits += ede_pack.skip.size() * sizeof(ede_pack.skip[0]) * 8;
                     cnt.ede_len_bits += ede_pack.len.size() * sizeof(ede_pack.len[0]) * 8;
@@ -484,14 +492,15 @@ private:
                     auto fq = src_f.get_basecall_fastq(st, gr);
                     auto fqa = src_f.split_fq(fq);
                     auto fq_pack = src_f.pack_fq(fq, qv_bits);
+                    dst_f.add_basecall_fastq(st, gr, fq_pack);
                     if (check)
                     {
-                        auto fq_unpack = src_f.unpack_fq(fq_pack);
+                        auto fq_unpack = dst_f.get_basecall_fastq(st, gr);
                         auto fqa_unpack = src_f.split_fq(fq_unpack);
                         if (fqa_unpack[0] != fqa[0])
                         {
                             LOG_THROW
-                                << "pack_fq failed: st=" << st
+                                << "check failed: st=" << st
                                 << " gr=" << gr
                                 << " fq_unpack_name=" << fqa_unpack[0]
                                 << " fq_orig_name=" << fqa[0];
@@ -499,7 +508,7 @@ private:
                         if (fqa_unpack[1] != fqa[1])
                         {
                             LOG_THROW
-                                << "pack_fq failed: st=" << st
+                                << "check failed: st=" << st
                                 << " gr=" << gr
                                 << " fq_unpack_bp=" << fqa_unpack[1]
                                 << " fq_orig_bp=" << fqa[1];
@@ -507,7 +516,7 @@ private:
                         if (fqa_unpack[3].size() != fqa[3].size())
                         {
                             LOG_THROW
-                                << "pack_fq failed: st=" << st
+                                << "check failed: st=" << st
                                 << " gr=" << gr
                                 << " fq_unpack_qv_size=" << fqa_unpack[3].size()
                                 << " fq_orig_qv_size=" << fqa[3].size();
@@ -519,7 +528,7 @@ private:
                                 (std::min<unsigned>(fqa[3][i] - 33, max_qv_mask()) & qv_mask))
                             {
                                 LOG_THROW
-                                    << "pack_fq failed: st=" << st
+                                    << "check failed: st=" << st
                                     << " gr=" << gr
                                     << " i=" << i
                                     << " fq_unpack_qv=" << fqa_unpack[3][i]
@@ -527,7 +536,6 @@ private:
                             }
                         }
                     }
-                    dst_f.add_basecall_fastq(st, gr, fq_pack);
                     cnt.bp_count += fqa[1].size();
                     cnt.bp_bits += fq_pack.bp.size() * sizeof(fq_pack.bp[0]) * 8;
                     cnt.qv_bits += fq_pack.qv.size() * sizeof(fq_pack.qv[0]) * 8;
@@ -611,7 +619,7 @@ private:
                     if (not src_f.have_basecall_fastq(st, gr))
                     {
                         LOG_THROW
-                            << "pack_ev error: missing fastq for basecall events: st=" << st << " gr=" << gr;
+                            << "missing fastq required to pack basecall events: st=" << st << " gr=" << gr;
                     }
                     auto sq = src_f.get_basecall_seq(st, gr);
                     // ed group
@@ -623,14 +631,19 @@ private:
                     }
                     auto ev_pack = src_f.pack_ev(ev_ds, sq, ed, ed_gr,
                                                  cid_params, p_model_state_bits);
+                    dst_f.add_basecall_events(st, gr, ev_pack);
                     if (check)
                     {
-                        if (ed_gr.empty())
+                        decltype(ev_ds) ev_ds_unpack;
+                        try
                         {
-                            auto rs_ds = src_f.get_raw_samples_dataset("");
-                            ed = src_f.unpack_implicit_ed(ev_pack, rs_ds);
+                            ev_ds_unpack = dst_f.get_basecall_events_dataset(st, gr);
                         }
-                        auto ev_ds_unpack = src_f.unpack_ev(ev_pack, sq, ed, cid_params);
+                        catch (std::domain_error & e)
+                        {
+                            LOG_THROW
+                                << "check failed: " << e.what();
+                        }
                         auto & ev_unpack = ev_ds_unpack.first;
                         auto & ev_params_unpack = ev_ds_unpack.second;
                         if (not (ev_params_unpack == ev_params))
@@ -641,7 +654,7 @@ private:
                         if (ev_unpack.size() != ev.size())
                         {
                             LOG_THROW
-                                << "pack_ev failed: st=" << st
+                                << "check failed: st=" << st
                                 << " gr=" << gr
                                 << " ev_unpack.size=" << ev_unpack.size()
                                 << " ev_orig.size=" << ev.size();
@@ -675,7 +688,6 @@ private:
                             }
                         }
                     }
-                    dst_f.add_basecall_events(st, gr, ev_pack);
                     cnt.bce_count += ev.size();
                     cnt.bce_rel_skip_bits += ev_pack.rel_skip.size() * sizeof(ev_pack.rel_skip[0]) * 8;
                     cnt.bce_skip_bits += ev_pack.skip.size() * sizeof(ev_pack.skip[0]) * 8;
@@ -769,17 +781,18 @@ private:
                 if (not src_f.have_basecall_seq(2, gr))
                 {
                     LOG_THROW
-                        << "pack_al error: missing fastq for basecall alignment: gr=" << gr;
+                        << "missing fastq required to pack basecall alignment: gr=" << gr;
                 }
                 auto seq = src_f.get_basecall_seq(2, gr);
                 auto al_pack = src_f.pack_al(al, seq);
+                dst_f.add_basecall_alignment(gr, al_pack);
                 if (check)
                 {
-                    auto al_unpack = src_f.unpack_al(al_pack, seq);
+                    auto al_unpack = dst_f.get_basecall_alignment(gr);
                     if (al_unpack.size() != al.size())
                     {
                         LOG_THROW
-                            << "check_failed gr=" << gr
+                            << "check failed: gr=" << gr
                             << " al_unpack.size=" << al_unpack.size()
                             << " al_orig.size=" << al.size();
                     }
@@ -790,7 +803,7 @@ private:
                             or al_unpack[i].get_kmer() != al[i].get_kmer())
                         {
                             LOG_THROW
-                                << "check_failed gr=" << gr
+                                << "check failed: gr=" << gr
                                 << " i=" << i
                                 << " al_unpack=(" << al_unpack[i].template_index
                                 << "," << al_unpack[i].complement_index
@@ -802,7 +815,6 @@ private:
                         }
                     }
                 }
-                dst_f.add_basecall_alignment(gr, al_pack);
                 cnt.aln_count += al.size();
                 cnt.aln_template_step_bits += al_pack.template_step.size() * sizeof(al_pack.template_step[0]) * 8;
                 cnt.aln_complement_step_bits += al_pack.complement_step.size() * sizeof(al_pack.complement_step[0]) * 8;

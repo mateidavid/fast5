@@ -1742,7 +1742,15 @@ private:
                 s2 += x * x;
             }
             set_mean(i, s / n);
-            set_stdv(i, n > 1? std::sqrt((s2 - s*s/n)/(n)) : 0);
+            if (n > 1)
+            {
+                double x = (s2 - s*s/n)/n;
+                set_stdv(i, x > 1e-3? std::sqrt(x) : 0);
+            }
+            else
+            {
+                set_stdv(i, 0);
+            }
         }
     }
     static EventDetection_Events_Pack

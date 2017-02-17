@@ -664,8 +664,12 @@ private:
                             if (abs(ev_unpack[i].start - ev[i].start) > 1e-3
                                 or abs(ev_unpack[i].length - ev[i].length) > 1e-3
                                 or abs(ev_unpack[i].mean - ev[i].mean) > 1e-1
-                                or abs(ev_unpack[i].stdv - ev[i].stdv) > 1e-1
-                                //or ev_unpack[i].move != ev[i].move // allow workaround for invalid moves
+                                // workaround: allow for unexpected stdv when expected value is small
+                                //or abs(ev_unpack[i].stdv - ev[i].stdv) > 1e-1
+                                or (abs(ev_unpack[i].stdv - ev[i].stdv) > 1e-1
+                                    and ev_unpack[i].stdv > 1e-1)
+                                // workaround: allow for invalid moves:
+                                //or ev_unpack[i].move != ev[i].move
                                 or ev_unpack[i].model_state != ev[i].model_state)
                             {
                                 LOG_THROW
@@ -685,6 +689,27 @@ private:
                                     << "," << ev[i].move
                                     << "," << ev[i].get_model_state()
                                     << ")";
+                            }
+                            if (abs(ev_unpack[i].stdv - ev[i].stdv) > 1e-1
+                                and ev_unpack[i].stdv < 1e-1)
+                            {
+                                LOG(warning)
+                                    << "unexpected stdv: st=" << st
+                                    << " gr=" << gr
+                                    << " i=" << i
+                                    << " ev_unpack=(" << ev_unpack[i].start
+                                    << "," << ev_unpack[i].length
+                                    << "," << ev_unpack[i].mean
+                                    << "," << ev_unpack[i].stdv
+                                    << "," << ev_unpack[i].move
+                                    << "," << ev_unpack[i].get_model_state()
+                                    << ") ev_orig=(" << ev[i].start
+                                    << "," << ev[i].length
+                                    << "," << ev[i].mean
+                                    << "," << ev[i].stdv
+                                    << "," << ev[i].move
+                                    << "," << ev[i].get_model_state()
+                                    << ")\n";
                             }
                         }
                     }

@@ -190,18 +190,24 @@ if __name__ == "__main__":
             errored_files_cnt += 1
 
     cnt = fp.get_counts()
+    cnt_total_bits = dict()
     for cl in [["rs_count", "rs_bits"],
                ["ede_count", "ede_skip_bits", "ede_len_bits"],
                ["bp_count", "bp_bits", "qv_bits"],
                ["bce_count", "bce_rel_skip_bits", "bce_skip_bits", "bce_len_bits", "bce_move_bits", "bce_p_model_state_bits"],
                ["aln_count", "aln_template_step_bits", "aln_complement_step_bits", "aln_move_bits"]]:
+        cnt_total_bits[cl[0]] = 0
         if cnt[cl[0]] == 0:
             continue
         print(cl[0] + "\t" + str(cnt[cl[0]]))
         for c in cl[1:]:
+            cnt_total_bits[cl[0]] += cnt[c]
             if cnt[c] == 0:
                 continue
             print((c + "\t%.2f") % (float(cnt[c]) / cnt[cl[0]]))
+    if cnt["bp_single_count"] > 0:
+        for c in ["rs_count", "ede_count", "bp_count", "bce_count", "aln_count"]:
+            print(c.split("_")[0] + "_bits_per_bp\t%.2f" % (float(cnt_total_bits[c])/cnt["bp_single_count"]))
     if errored_files_cnt > 0:
         print("errored_files\t" + str(errored_files_cnt))
 

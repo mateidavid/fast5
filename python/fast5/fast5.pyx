@@ -192,6 +192,7 @@ cdef extern from "File_Packer.hpp" namespace "fast5":
         size_t ede_skip_bits
         size_t ede_len_bits
         size_t bp_count
+        size_t bp_single_count
         size_t bp_bits
         size_t qv_bits
         size_t bce_count

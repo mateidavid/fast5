@@ -27,6 +27,7 @@ public:
         size_t ede_len_bits;
         //
         size_t bp_count;
+        size_t bp_single_count;
         size_t bp_bits;
         size_t qv_bits;
         //
@@ -52,6 +53,7 @@ public:
             ede_len_bits(0),
             //
             bp_count(0),
+            bp_single_count(0),
             bp_bits(0),
             qv_bits(0),
             //
@@ -78,6 +80,7 @@ public:
             ede_len_bits += other.ede_len_bits;
             //
             bp_count += other.bp_count;
+            bp_single_count += other.bp_single_count;
             bp_bits += other.bp_bits;
             qv_bits += other.qv_bits;
             //
@@ -475,6 +478,7 @@ private:
     void
     pack_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s, Counts & cnt) const
     {
+        bool compute_bp_single_count = false;
         for (unsigned st = 0; st < 3; ++st)
         {
             auto gr_l = src_f.get_basecall_strand_group_list(st);
@@ -488,6 +492,7 @@ private:
                 }
                 else if (src_f.have_basecall_fastq_unpack(st, gr))
                 {
+                    compute_bp_single_count = true;
                     bc_gr_s.insert(gr);
                     auto fq = src_f.get_basecall_fastq(st, gr);
                     auto fqa = src_f.split_fq(fq);
@@ -548,6 +553,19 @@ private:
                         << std::endl;
                 }
             }
+        }
+        if (compute_bp_single_count)
+        {
+            std::string sq;
+            if (src_f.have_basecall_seq(2))
+            {
+                sq = src_f.get_basecall_seq(2);
+            }
+            else if (src_f.have_basecall_seq(0))
+            {
+                sq = src_f.get_basecall_seq(0);
+            }
+            cnt.bp_single_count += sq.size();
         }
     } // pack_fq()
 

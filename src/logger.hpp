@@ -1,5 +1,5 @@
 /// Part of: https://github.com/mateidavid/hpptools
-/// Commit: 0f85cd8
+/// Commit: 5a6f39c
 
 /// @author    Matei David, Ontario Institute for Cancer Research
 /// @version   1.0
@@ -13,10 +13,11 @@
 /// - customizable ostream sink. by default, uses std::clog
 ///
 /// Exports:
-/// - "LOG" macro (takes 1, 2, or 3 arguments, see below)
-/// - "logger" namespace
-/// - "logger::level" enum
-/// - "logger::Logger" class
+/// - macro: LOG (takes 1, 2, or 3 arguments, see below)
+/// - macros: LOG_EXIT_, LOG_ABORT, LOG_EXIT, LOG_THROW_, and LOG_THROW
+/// - namespace logger
+/// - enum logger::level
+/// - class logger::Logger
 ///
 /// To use:
 /// - In source code, use:
@@ -51,6 +52,15 @@
 ///
 /// - By using these functions, one can set log levels using command-line
 ///   parameters and achieve dynamic log level settings without recompiling.
+///
+/// - The macros LOG_EXIT_, LOG_ABORT, LOG_EXIT, LOG_THROW_, and LOG_THROW
+///   provide a way to specify what to do after logging the message.
+///
+///     LOG_EXIT_(exit_code)  << "print this message to std::cerr, call std::exit(exit_code)";
+///     LOG_ABORT             << "print this message to std::cerr, call std::abort()";
+///     LOG_EXIT              << "print this message to std::cerr, call std::exit(EXIT_FAILURE)";
+///     LOG_THROW_(Exception) << "throw Exception with this message";
+///     LOG_THROW             << "throw std::runtime_error with this message";
 
 #ifndef __LOGGER_HPP
 #define __LOGGER_HPP
@@ -61,6 +71,7 @@
 #include <sstream>
 #include <iostream>
 #include <mutex>
+#include <stdexcept>
 
 namespace logger
 {
@@ -80,29 +91,52 @@ class Logger
 {
 public:
     // Constructor: initialize buffer.
-    Logger(const std::string& facility, level msg_level,
-           const std::string& file_name, unsigned line_num, const std::string& func_name,
-           std::ostream& os = std::clog)
-        : _os_p(&os), _policy(0)
+    Logger(std::string const & facility, level msg_level,
+           std::string const & file_name, unsigned line_num, std::string const & func_name,
+           std::ostream & os = std::clog)
+        : _os_p(&os)
     {
         _oss << "= " << facility << "." << int(msg_level)
-             << " " << file_name << ":" << line_num
-             << " " << func_name << " ";
+             << " " << file_name << ":" << line_num << " " << func_name << " ";
+        _on_destruct = [&] () {
+            _os_p->write(_oss.str().c_str(), _oss.str().size());
+        };
     }
-    Logger(int policy, const std::string& file_name, unsigned line_num, const std::string& func_name,
-           std::ostream& os = std::cerr)
-        : _os_p(&os), _policy(policy)
+    // Constructor for exiting
+    Logger(int exit_code,
+           std::string const & file_name, unsigned line_num, std::string const & func_name,
+           std::ostream & os = std::cerr)
+        : _os_p(&os), _exit_code(exit_code)
     {
-        _oss << file_name << ":" << line_num
-             << " " << func_name << " ";
+        _oss << file_name << ":" << line_num << " " << func_name << " ";
+        _on_destruct = [&] () {
+            _os_p->write(_oss.str().c_str(), _oss.str().size());
+            if (_exit_code < 0)
+            {
+                std::abort();
+            }
+            else
+            {
+                std::exit(_exit_code);
+            }
+        };
+    }
+    // Constructor for throwing exceptions
+    // first argument is only used to deduce the template argument type
+    template <typename Exception>
+    Logger(Exception const &,
+           std::string const & file_name, unsigned line_num, std::string const & func_name,
+           typename std::enable_if<std::is_base_of<std::exception, Exception>::value>::type * = 0)
+    {
+        _oss << file_name << ":" << line_num << " " << func_name << " ";
+        _on_destruct = [&] () {
+            throw Exception(_oss.str());
+        };
     }
     // Destructor: dump buffer to output.
     ~Logger() noexcept(false)
     {
-        if (_policy == -2) throw std::runtime_error(_oss.str());
-        _os_p->write(_oss.str().c_str(), _oss.str().size());
-        if (_policy == -1) std::abort();
-        if (_policy > 0) std::exit(_policy);
+        _on_destruct();
     }
     // Produce l-value for output chaining.
     std::ostream & l_value() { return _oss; }
@@ -115,38 +149,38 @@ public:
     static void set_default_level(level l)
     {
         static std::mutex m;
-        std::lock_guard< std::mutex > lg(m);
+        std::lock_guard<std::mutex> lg(m);
         default_level() = l;
     }
     static void set_default_level(int l)
     {
         set_default_level(get_level(l));
     }
-    static void set_default_level(const std::string& s)
+    static void set_default_level(std::string const & s)
     {
         set_default_level(get_level(s));
     }
-    static level get_facility_level(const std::string& facility)
+    static level get_facility_level(std::string const & facility)
     {
         return (facility_level_map().count(facility) > 0?
                 facility_level_map().at(facility) : get_default_level());
     }
-    static void set_facility_level(const std::string& facility, level l)
+    static void set_facility_level(std::string const & facility, level l)
     {
         static std::mutex m;
-        std::lock_guard< std::mutex > lg(m);
+        std::lock_guard<std::mutex> lg(m);
         facility_level_map()[facility] = l;
     }
-    static void set_facility_level(const std::string& facility, int l)
+    static void set_facility_level(std::string const & facility, int l)
     {
         set_facility_level(facility, get_level(l));
     }
-    static void set_facility_level(const std::string& facility, const std::string& s)
+    static void set_facility_level(std::string const & facility, std::string const & s)
     {
         set_facility_level(facility, get_level(s));
     }
     // static methods for setting log levels from command-line options
-    static void set_level_from_option(const std::string& l, std::ostream* os_p = nullptr)
+    static void set_level_from_option(std::string const & l, std::ostream * os_p = nullptr)
     {
         size_t i = l.find(':');
         if (i == std::string::npos)
@@ -155,7 +189,7 @@ public:
             if (os_p)
             {
                 (*os_p) << "set default log level to: "
-                        << static_cast< int >(Logger::get_default_level()) << std::endl;
+                        << static_cast<int>(Logger::get_default_level()) << std::endl;
             }
         }
         else
@@ -164,21 +198,21 @@ public:
             if (os_p)
             {
                 (*os_p) << "set log level of '" << l.substr(0, i) << "' to: "
-                        << static_cast< int >(Logger::get_facility_level(l.substr(0, i))) << std::endl;
+                        << static_cast<int>(Logger::get_facility_level(l.substr(0, i))) << std::endl;
             }
         }
     }
-    static void set_levels_from_options(const std::vector< std::string >& v, std::ostream* os_p = nullptr)
+    static void set_levels_from_options(std::vector<std::string> const & v, std::ostream * os_p = nullptr)
     {
-        for (const auto& l : v)
+        for (auto const & l : v)
         {
             set_level_from_option(l, os_p);
         }
     }
     // public static utility functions (used by LOG macro)
     static level get_level(level l) { return l; }
-    static level get_level(int i) { return static_cast< level >(i); }
-    static level get_level(const std::string& s) { return level_from_string(s); }
+    static level get_level(int i) { return static_cast<level>(i); }
+    static level get_level(std::string const & s) { return level_from_string(s); }
     // public static member (used by LOG macro)
     static level& thread_local_last_level()
     {
@@ -187,23 +221,23 @@ public:
     }
 private:
     std::ostringstream _oss;
-    // sink for this Logger object
-    std::ostream* _os_p;
-    int _policy;
+    std::function<void()> _on_destruct;
+    std::ostream * _os_p;
+    int _exit_code;
 
     // private static data members
-    static level& default_level()
+    static level & default_level()
     {
         static level _default_level = error;
         return _default_level;
     }
-    static std::map< std::string, level >& facility_level_map()
+    static std::map<std::string, level> & facility_level_map()
     {
-        static std::map< std::string, level > _facility_level_map;
+        static std::map<std::string, level> _facility_level_map;
         return _facility_level_map;
     }
     // private static utility functions
-    static level level_from_string(const std::string& s)
+    static level level_from_string(std::string const & s)
     {
         std::istringstream iss(s + "\n");
         int tmp_int = -1;
@@ -290,10 +324,13 @@ private:
 #endif
 
 #define LOG(...) __LOG_aux1(__NARGS(__VA_ARGS__), __VA_ARGS__)
-#define LOG_EXITCODE(c) logger::Logger((c), __FILENAME__, __LINE__, __func__).l_value()
-#define LOG_THROW LOG_EXITCODE(-2)
-#define LOG_ABORT LOG_EXITCODE(-1)
-#define LOG_EXIT  LOG_EXITCODE(EXIT_FAILURE)
+
+#define LOG_EXIT_(exit_code) logger::Logger((exit_code), __FILENAME__, __LINE__, __func__).l_value()
+#define LOG_ABORT LOG_EXIT_(-1)
+#define LOG_EXIT LOG_EXIT_(EXIT_FAILURE)
+
+#define LOG_THROW_(Exception) logger::Logger(Exception(""), __FILENAME__, __LINE__, __func__).l_value()
+#define LOG_THROW LOG_THROW_(std::runtime_error)
 
 #endif
 
@@ -328,7 +365,7 @@ int main(int argc, char* argv[])
         cerr << "processing argument [" << argv[i] << "]" << endl;
         logger::Logger::set_level_from_option(argv[i], &cerr);
     }
-    const vector< string > level_name{ "error", "warning", "info", "debug", "debug1", "debug2" };
+    vector<string> const level_name{ "error", "warning", "info", "debug", "debug1", "debug2" };
     for (int l = 0; l < 5; ++l)
     {
         LOG(level_name[l]) << "message at level " << l << " (" << level_name[l]

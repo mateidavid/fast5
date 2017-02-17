@@ -362,7 +362,7 @@ private:
                         {
                             ede_ds_unpack = dst_f.get_eventdetection_events_dataset(gr, rn);
                         }
-                        catch (std::domain_error & e)
+                        catch (std::logic_error & e)
                         {
                             LOG_THROW
                                 << "check failed: " << e.what();
@@ -639,7 +639,7 @@ private:
                         {
                             ev_ds_unpack = dst_f.get_basecall_events_dataset(st, gr);
                         }
-                        catch (std::domain_error & e)
+                        catch (std::logic_error & e)
                         {
                             LOG_THROW
                                 << "check failed: " << e.what();

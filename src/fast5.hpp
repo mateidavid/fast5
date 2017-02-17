@@ -882,11 +882,9 @@ public:
             auto ede_pack = get_eventdetection_events_pack(_gr, _rn);
             if (not have_raw_samples(_rn))
             {
-                std::ostringstream oss;
-                oss
+                LOG_THROW_(std::logic_error)
                     << "missing raw samples required to unpack eventdetection events: gr=" << _gr
                     << " rn=" << _rn;
-                throw std::domain_error(oss.str());
             }
             auto rs_ds = get_raw_samples_dataset(_rn);
             ede = unpack_ed(ede_pack, rs_ds).first;
@@ -1134,23 +1132,19 @@ public:
             auto ev_pack = get_basecall_events_pack(st, gr_1d);
             if (not have_basecall_fastq(st, gr_1d))
             {
-                std::ostringstream oss;
-                oss
+                LOG_THROW_(std::logic_error)
                     << "missing fastq required to unpack basecall events: st=" << st
                     << " gr=" << gr_1d;
-                throw std::domain_error(oss.str());
             }
             auto fq = get_basecall_fastq(st, gr_1d);
             if (not ev_pack.ed_gr.empty())
             {
                 if (not have_eventdetection_events(ev_pack.ed_gr))
                 {
-                    std::ostringstream oss;
-                    oss
+                    LOG_THROW_(std::logic_error)
                         << "missing eventdetection events required to unpack basecall events: st=" << st
                         << " gr=" << gr_1d
                         << " ed_gr=" << ev_pack.ed_gr;
-                    throw std::domain_error(oss.str());
                 }
                 auto ed = get_eventdetection_events(ev_pack.ed_gr);
                 res = unpack_ev(ev_pack, fq, ed, _channel_id_params).first;
@@ -1159,11 +1153,9 @@ public:
             {
                 if (not have_raw_samples())
                 {
-                    std::ostringstream oss;
-                    oss
+                    LOG_THROW_(std::logic_error)
                         << "missing raw samples required to unpack basecall events: st=" << st
                         << " gr=" << gr_1d;
-                    throw std::domain_error(oss.str());
                 }
                 auto rs_ds = get_raw_samples_dataset();
                 auto ed = unpack_implicit_ed(ev_pack, rs_ds);

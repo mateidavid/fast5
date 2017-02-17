@@ -192,7 +192,8 @@ struct EventDetection_Events_Params
                 and lhs.start_mux == rhs.start_mux
                 and lhs.start_time == rhs.start_time
                 and lhs.duration == rhs.duration
-                and lhs.median_before == rhs.median_before
+                and ((std::isnan(lhs.median_before) and std::isnan(rhs.median_before))
+                     or lhs.median_before == rhs.median_before)
                 and lhs.abasic_found == rhs.abasic_found);
     }
     void read(hdf5_tools::File const & f, std::string const & p)

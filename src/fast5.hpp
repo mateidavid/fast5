@@ -1130,13 +1130,13 @@ public:
         else if (have_basecall_events_pack(st, gr_1d))
         {
             auto ev_pack = get_basecall_events_pack(st, gr_1d);
-            if (not have_basecall_fastq(st, gr_1d))
+            if (not have_basecall_seq(st, gr_1d))
             {
                 LOG_THROW_(std::logic_error)
                     << "missing fastq required to unpack basecall events: st=" << st
                     << " gr=" << gr_1d;
             }
-            auto fq = get_basecall_fastq(st, gr_1d);
+            auto sq = get_basecall_seq(st, gr_1d);
             if (not ev_pack.ed_gr.empty())
             {
                 if (not have_eventdetection_events(ev_pack.ed_gr))
@@ -1147,7 +1147,7 @@ public:
                         << " ed_gr=" << ev_pack.ed_gr;
                 }
                 auto ed = get_eventdetection_events(ev_pack.ed_gr);
-                res = unpack_ev(ev_pack, fq, ed, _channel_id_params).first;
+                res = unpack_ev(ev_pack, sq, ed, _channel_id_params).first;
             }
             else // ed_gr == "": packed relative to raw samples
             {
@@ -1159,7 +1159,7 @@ public:
                 }
                 auto rs_ds = get_raw_samples_dataset();
                 auto ed = unpack_implicit_ed(ev_pack, rs_ds);
-                res = unpack_ev(ev_pack, fq, ed, _channel_id_params).first;
+                res = unpack_ev(ev_pack, sq, ed, _channel_id_params).first;
             }
         }
         return res;

@@ -215,7 +215,7 @@ struct EventDetection_Events_Params
         }
         else
         {
-            median_before = -1;
+            median_before = std::nan("");
         }
         if (a_s.count("abasic_found"))
         {
@@ -234,7 +234,7 @@ struct EventDetection_Events_Params
         f.write_attribute(p + "/start_time", start_time);
         f.write_attribute(p + "/duration", duration);
         if (not read_id.empty()) f.write_attribute(p + "/read_id", read_id);
-        if (median_before > 0.0) f.write_attribute(p + "/median_before", median_before);
+        if (not std::isnan(median_before)) f.write_attribute(p + "/median_before", median_before);
         if (abasic_found < 2) f.write_attribute(p + "/abasic_found", abasic_found);
     }
 }; // struct EventDetection_Events_Params

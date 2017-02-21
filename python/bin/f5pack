@@ -191,6 +191,9 @@ if __name__ == "__main__":
 
     cnt = fp.get_counts()
     cnt_total_bits = dict()
+    print("bp_single_count\t%d" % cnt["bp_single_count"])
+    if cnt["bp_single_count"] == 0:
+        cnt["bp_single_count"] = float('nan')
     for cl in [["rs_count", "rs_bits"],
                ["ede_count", "ede_skip_bits", "ede_len_bits"],
                ["bp_count", "bp_bits", "qv_bits"],
@@ -204,10 +207,8 @@ if __name__ == "__main__":
             cnt_total_bits[cl[0]] += cnt[c]
             if cnt[c] == 0:
                 continue
-            print((c + "\t%.2f") % (float(cnt[c]) / cnt[cl[0]]))
-    if cnt["bp_single_count"] > 0:
-        for c in ["rs_count", "ede_count", "bp_count", "bce_count", "aln_count"]:
-            print(c.split("_")[0] + "_bits_per_bp\t%.2f" % (float(cnt_total_bits[c])/cnt["bp_single_count"]))
+            print((c + "\t%d\t%.2f\t%.2f") % (cnt[c], float(cnt[c]) / cnt[cl[0]], float(cnt[c])/cnt["bp_single_count"]))
+        print(cl[0].split('_')[0] + "_total_bits\t%d\t%.2f\t%.2f" % (cnt_total_bits[cl[0]], float(cnt_total_bits[cl[0]])/cnt[cl[0]], float(cnt_total_bits[cl[0]])/cnt["bp_single_count"]))
     if errored_files_cnt > 0:
         print("errored_files\t" + str(errored_files_cnt))
 

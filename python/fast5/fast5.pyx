@@ -10,7 +10,10 @@ from libcpp.vector cimport vector
 cdef extern from "fast5.hpp" namespace "fast5":
 
     cdef string cpp_version "fast5::version"
-    cdef void cpp_set_levels_from_options "logger::Logger::set_levels_from_options"(vector[string]) except +
+
+    cppclass Cpp_Logger "logger::Logger":
+        @staticmethod
+        void set_levels_from_options(vector[string]) except +
 
     ctypedef cmap[string, string] Attr_Map
 
@@ -222,8 +225,11 @@ cdef extern from "File_Packer.hpp" namespace "fast5":
         Counts get_counts()
 
 __version__ = cpp_version
-def set_levels_from_options(v):
-    cpp_set_levels_from_options(v)
+
+cdef class Logger:
+    @staticmethod
+    def set_levels_from_options(s):
+        Cpp_Logger.set_levels_from_options(s)
 
 cdef class File:
     cdef unique_ptr[Cpp_File] thisptr

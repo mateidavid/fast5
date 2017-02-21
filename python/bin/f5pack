@@ -113,7 +113,7 @@ if __name__ == "__main__":
                         format="%(asctime)s %(name)s.%(levelname)s %(message)s",
                         datefmt="%Y/%m/%d %H:%M:%S")
     logger = logging.getLogger(os.path.basename(__file__))
-    fast5.set_levels_from_options([args.log_level.lower()])
+    fast5.Logger.set_levels_from_options([args.log_level.lower()])
     logger.debug("args: " + str(args))
 
     if args.pack + args.unpack + args.archive + args.fastq > 1:

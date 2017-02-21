@@ -32,7 +32,7 @@ def load_rw(args):
         f = fast5.File(fn)
         if not f.have_raw_samples():
             continue
-        a = f.get_raw_samples_int()
+        a = f.get_raw_int_samples()
         for i in range(1, len(a)):
             val = a[i] - a[i-1]
             if args.rw_range[0] <= val and val <= args.rw_range[1]:

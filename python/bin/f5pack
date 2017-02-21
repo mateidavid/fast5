@@ -174,6 +174,8 @@ if __name__ == "__main__":
     if args.p_model_state_bits: fp.set_p_model_state_bits(args.p_model_state_bits)
     l = add_paths(args.inputs[0], args)
     errored_files_cnt = 0
+    input_bytes = 0
+    output_bytes = 0
     for t in l:
         ifn = t[0]
         ofn = t[1]
@@ -188,9 +190,12 @@ if __name__ == "__main__":
             os.remove(ofn)
             errored_files_cnt += 1
             continue
+        input_bytes += os.stat(ifn).st_size
+        output_bytes += os.stat(ofn).st_size
 
     cnt = fp.get_counts()
     cnt_total_bits = dict()
+    output_ds_bytes = 0
     print("bp_single_count\t%d" % cnt["bp_single_count"])
     if cnt["bp_single_count"] == 0:
         cnt["bp_single_count"] = float('nan')
@@ -208,6 +213,7 @@ if __name__ == "__main__":
             if cnt[c] == 0:
                 continue
             print((c + "\t%d\t%.2f\t%.2f") % (cnt[c], float(cnt[c]) / cnt[cl[0]], float(cnt[c])/cnt["bp_single_count"]))
+        output_ds_bytes += cnt_total_bits[cl[0]] / 8
         print(cl[0].split('_')[0] + "_total_bits\t%d\t%.2f\t%.2f" % (cnt_total_bits[cl[0]], float(cnt_total_bits[cl[0]])/cnt[cl[0]], float(cnt_total_bits[cl[0]])/cnt["bp_single_count"]))
 
     if cnt["rs_total_duration"] > .001 and cnt["rs_called_duration"] > .001:
@@ -215,6 +221,9 @@ if __name__ == "__main__":
         print("rs_called_duration\t%.2f" % cnt["rs_called_duration"])
         print("rs_frac_called\t%.2f" % (cnt["rs_called_duration"] / cnt["rs_total_duration"]))
         print("bp_per_sec\t%.2f" % (float(cnt["bp_single_count"]) / cnt["rs_called_duration"]))
+    print("input_bytes\t%d" % input_bytes)
+    print("output_bytes\t%d" % output_bytes)
+    print("output_overhead_bytes\t%d" % (output_bytes - output_ds_bytes))
 
     if errored_files_cnt > 0:
         print("errored_files\t" + str(errored_files_cnt))

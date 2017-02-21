@@ -208,6 +208,8 @@ cdef extern from "File_Packer.hpp" namespace "fast5":
         size_t aln_template_step_bits
         size_t aln_complement_step_bits
         size_t aln_move_bits
+        double rs_total_duration
+        double rs_called_duration
 
     cppclass Cpp_File_Packer "fast5::File_Packer":
 

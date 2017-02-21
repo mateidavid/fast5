@@ -42,6 +42,9 @@ public:
         size_t aln_template_step_bits;
         size_t aln_complement_step_bits;
         size_t aln_move_bits;
+        //
+        double rs_total_duration;
+        double rs_called_duration;
 
         Counts() :
             //
@@ -67,7 +70,10 @@ public:
             aln_count(0),
             aln_template_step_bits(0),
             aln_complement_step_bits(0),
-            aln_move_bits(0)
+            aln_move_bits(0),
+            //
+            rs_total_duration(0.0),
+            rs_called_duration(0.0)
         {}
         Counts & operator += (Counts const & other)
         {
@@ -96,6 +102,8 @@ public:
             aln_complement_step_bits += other.aln_complement_step_bits;
             aln_move_bits += other.aln_move_bits;
             //
+            rs_total_duration += other.rs_total_duration;
+            rs_called_duration += other.rs_called_duration;
             return *this;
         }
     };
@@ -296,6 +304,11 @@ private:
                 }
                 cnt.rs_count += rsi.size();
                 cnt.rs_bits += rs_pack.signal.size() * sizeof(rs_pack.signal[0]) * 8;
+                if (cnt.rs_total_duration == 0.0)
+                {
+                    auto cid_params = src_f.get_channel_id_params();
+                    cnt.rs_total_duration = src_f.time_to_float(rs_params.duration, cid_params);
+                }
                 LOG(info)
                     << "rn=" << rn
                     << " rs_size=" << rsi.size()
@@ -557,11 +570,18 @@ private:
         if (compute_bp_single_count)
         {
             std::string sq;
-            if (src_f.have_basecall_seq(2))
+            auto gr_l = src_f.get_basecall_group_list();
+            for (auto const & gr : gr_l)
             {
-                sq = src_f.get_basecall_seq(2);
+                if (src_f.have_basecall_seq(0, gr) and src_f.have_basecall_events(0, gr))
+                {
+                    sq = src_f.get_basecall_seq(0, gr);
+                    auto bce = src_f.get_basecall_events(0, gr);
+                    cnt.rs_called_duration = bce.back().start + bce.back().length - bce.front().start;
+                    break;
+                }
             }
-            else if (src_f.have_basecall_seq(0))
+            if (sq.empty() and src_f.have_basecall_seq(0))
             {
                 sq = src_f.get_basecall_seq(0);
             }

@@ -1871,7 +1871,7 @@ private:
         return res;
     }
     static Basecall_Events_Pack
-    pack_ev(Basecall_Events_Dataset & ev_ds,
+    pack_ev(Basecall_Events_Dataset const & ev_ds,
             std::string const & sq,
             std::vector< EventDetection_Event > const & ed,
             std::string const & ed_gr,

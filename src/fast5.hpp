@@ -464,6 +464,8 @@ struct Basecall_Events_Pack
     Bit_Packer::Code_Type p_model_state;
     Attr_Map p_model_state_params;
     //
+    std::string name;
+    std::string version;
     std::string ed_gr;
     long long start_time;
     unsigned state_size;
@@ -490,6 +492,8 @@ struct Basecall_Events_Pack
         move_params = f.get_attr_map(p + "/Move");
         f.read(p + "/P_Model_State", p_model_state);
         p_model_state_params = f.get_attr_map(p + "/P_Model_State");
+        f.read(p + "/name", name);
+        f.read(p + "/version", version);
         f.read(p + "/ed_gr", ed_gr);
         f.read(p + "/start_time", start_time);
         f.read(p + "/state_size", state_size);
@@ -515,6 +519,8 @@ struct Basecall_Events_Pack
         f.add_attr_map(p + "/Move", move_params);
         f.write_dataset(p + "/P_Model_State", p_model_state);
         f.add_attr_map(p + "/P_Model_State", p_model_state_params);
+        f.write_attribute(p + "/name", name);
+        f.write_attribute(p + "/version", version);
         f.write_attribute(p + "/ed_gr", ed_gr);
         f.write_attribute(p + "/start_time", start_time);
         f.write_attribute(p + "/state_size", state_size);
@@ -1426,6 +1432,26 @@ private:
         }
         return "";
     }
+    std::pair< std::string, std::string >
+    get_basecall_group_description(Attr_Map const & am) const
+    {
+        std::pair< std::string, std::string > res;
+        if (am.count("name"))
+        {
+            if (am.at("name") == "ONT Sequencing Workflow")
+            {
+                res.first = "metrichor";
+                res.second = (am.count("chimaera version")? am.at("chimaera version") : "?") + "?" +
+                    (am.count("dragonet version")? am.at("dragonet version") : "?");
+            }
+            if (am.at("name") == "ONT Albacore Sequencing Software")
+            {
+                res.first = "albacore";
+                res.second = (am.count("version")? am.at("version") : "?");
+            }
+        }
+        return res;
+    }
     double
     get_basecall_median_sd_temp(std::string const & gr) const
     {
@@ -1882,6 +1908,7 @@ private:
         Basecall_Events_Pack ev_pack;
         ev_pack.params = ev_ds.second;
         auto & ev = ev_ds.first;
+        std::tie(ev_pack.name, ev_pack.version) = get_basecall_group_description(ev_ds.second);
         ev_pack.ed_gr = ed_gr;
         ev_pack.start_time = time_to_int(ev[0].start, cid_params);
         ev_pack.state_size = ev[0].get_model_state().size();
@@ -2018,6 +2045,15 @@ private:
             [&] (unsigned i, long long x) { return ede.at(i).start = x; },
             [&] (unsigned i, long long x) { return ede.at(i).length = x; },
             ev_pack.start_time);
+        // albacore 0.8.2 has off_by_one bug
+        bool off_by_one = (ev_pack.name == "albacore" and ev_pack.version == "0.8.2");
+        static bool warned = false;
+        if (off_by_one and not warned)
+        {
+            LOG(warning) << "using workaround for off-by-one bug in "
+                         << ev_pack.name << ":" << ev_pack.version << "\n";
+            warned = true;
+        }
         unpack_event_mean_stdv(
             ede.size(),
             [&] (unsigned i) { return ede.at(i).start; },
@@ -2026,7 +2062,7 @@ private:
             [&] (unsigned i, double x) { return ede.at(i).stdv = x; },
             rs,
             rs_params.start_time,
-            false);
+            off_by_one);
         return ede;
     }
     static Basecall_Events_Dataset

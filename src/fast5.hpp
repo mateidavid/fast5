@@ -467,6 +467,7 @@ struct Basecall_Events_Pack
     std::string ed_gr;
     long long start_time;
     unsigned state_size;
+    double median_sd_temp;
     unsigned p_model_state_bits;
     //
     Basecall_Events_Params params;
@@ -492,6 +493,7 @@ struct Basecall_Events_Pack
         f.read(p + "/ed_gr", ed_gr);
         f.read(p + "/start_time", start_time);
         f.read(p + "/state_size", state_size);
+        f.read(p + "/median_sd_temp", median_sd_temp);
         f.read(p + "/p_model_state_bits", p_model_state_bits);
         params.read(f, p + "/params");
     }
@@ -516,6 +518,7 @@ struct Basecall_Events_Pack
         f.write_attribute(p + "/ed_gr", ed_gr);
         f.write_attribute(p + "/start_time", start_time);
         f.write_attribute(p + "/state_size", state_size);
+        f.write_attribute(p + "/median_sd_temp", median_sd_temp);
         f.write_attribute(p + "/p_model_state_bits", p_model_state_bits);
         params.write(f, p + "/params");
     }
@@ -1423,6 +1426,19 @@ private:
         }
         return "";
     }
+    double
+    get_basecall_median_sd_temp(std::string const & gr) const
+    {
+        std::string segmentation_link_path = basecall_group_path(gr) + "/segmentation";
+        if (not Base::attribute_exists(segmentation_link_path)) return 0.0;
+        std::string segmentation_path;
+        Base::read(segmentation_link_path, segmentation_path);
+        std::string median_sd_temp_path = "/" + segmentation_path + "/Summary/split_hairpin/median_sd_temp";
+        if (not Base::attribute_exists(median_sd_temp_path)) return 0.0;
+        double res;
+        Base::read(median_sd_temp_path, res);
+        return res;
+    }
 
     //
     // Functions that fill in empty arguments with default values
@@ -1860,6 +1876,7 @@ private:
             std::vector< EventDetection_Event > const & ed,
             std::string const & ed_gr,
             Channel_Id_Params const & cid_params,
+            double median_sd_temp,
             unsigned p_model_state_bits)
     {
         Basecall_Events_Pack ev_pack;
@@ -1868,6 +1885,7 @@ private:
         ev_pack.ed_gr = ed_gr;
         ev_pack.start_time = time_to_int(ev[0].start, cid_params);
         ev_pack.state_size = ev[0].get_model_state().size();
+        ev_pack.median_sd_temp = median_sd_temp;
         ev_pack.p_model_state_bits = p_model_state_bits;
         std::vector< long long > rel_skip;
         std::vector< long long > skip;
@@ -2048,6 +2066,7 @@ private:
             ev[i].length = time_to_float(ed[j].length, cid_params);
             ev[i].mean = ed[j].mean;
             ev[i].stdv = ed[j].stdv;
+            if (ev[i].stdv == 0.0) ev[i].stdv = ev_pack.median_sd_temp;
             ev[i].move = mv[i];
             if (i > 0) s = s.substr(mv[i]); // apply move
             while (s.size() < ev_pack.state_size) s += sq[sq_pos++];

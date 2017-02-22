@@ -667,8 +667,10 @@ private:
                     {
                         ed = src_f.get_eventdetection_events(ed_gr);
                     }
+                    // try to find mean_sd_temp
+                    auto median_sd_temp = src_f.get_basecall_median_sd_temp(gr);
                     auto ev_pack = src_f.pack_ev(ev_ds, sq, ed, ed_gr,
-                                                 cid_params, p_model_state_bits);
+                                                 cid_params, median_sd_temp, p_model_state_bits);
                     dst_f.add_basecall_events(st, gr, ev_pack);
                     if (check)
                     {
@@ -705,7 +707,7 @@ private:
                                 // workaround: allow for unexpected stdv when expected value is small
                                 //or abs(ev_unpack[i].stdv - ev[i].stdv) > 1e-1
                                 or (abs(ev_unpack[i].stdv - ev[i].stdv) > 1e-1
-                                    and ev_unpack[i].stdv > 1e-1)
+                                    and ev_unpack[i].stdv != ev_pack.median_sd_temp)
                                 // workaround: allow for invalid moves:
                                 //or ev_unpack[i].move != ev[i].move
                                 or ev_unpack[i].model_state != ev[i].model_state)
@@ -729,7 +731,7 @@ private:
                                     << ")";
                             }
                             if (abs(ev_unpack[i].stdv - ev[i].stdv) > 1e-1
-                                and ev_unpack[i].stdv < 1e-1)
+                                and ev_unpack[i].stdv == ev_pack.median_sd_temp)
                             {
                                 LOG(warning)
                                     << "unexpected stdv: st=" << st

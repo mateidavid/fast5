@@ -68,7 +68,7 @@ if __name__ == "__main__":
     Pack an ONT fast5 files.
     """
     parser = argparse.ArgumentParser(description=description, epilog="")
-    parser.add_argument("--log-level", default="warning",
+    parser.add_argument("--log", default="warning",
                         help="log level")
     #
     parser.add_argument("--pack", action="store_true",
@@ -106,14 +106,14 @@ if __name__ == "__main__":
                         help="Input directories, fast5 files, or files of fast5 file names.")
     args = parser.parse_args()
 
-    numeric_log_level = getattr(logging, args.log_level.upper(), None)
+    numeric_log_level = getattr(logging, args.log.upper(), None)
     if not isinstance(numeric_log_level, int):
-        raise ValueError("Invalid log level: '%s'" % args.log_level)
+        raise ValueError("Invalid log level: '%s'" % args.log)
     logging.basicConfig(level=numeric_log_level,
                         format="%(asctime)s %(name)s.%(levelname)s %(message)s",
                         datefmt="%Y/%m/%d %H:%M:%S")
     logger = logging.getLogger(os.path.basename(__file__))
-    fast5.Logger.set_levels_from_options([args.log_level.lower()])
+    fast5.Logger.set_levels_from_options([args.log.lower()])
     logger.debug("args: " + str(args))
 
     if args.pack + args.unpack + args.archive + args.fastq > 1:

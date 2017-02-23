@@ -599,6 +599,8 @@ struct Basecall_Alignment_Pack
     }
 };
 
+typedef std::pair< std::string, std::string > Basecall_Group_Description;
+
 class File
     : private hdf5_tools::File
 {
@@ -1222,12 +1224,12 @@ public:
     static inline long long
     time_to_int(double tf, Channel_Id_Params const & cid_params)
     {
-        return tf * cid_params.sampling_rate + .5;
+        return tf * cid_params.sampling_rate;
     }
     static inline double
     time_to_float(long long ti, Channel_Id_Params const & cid_params)
     {
-        return (long double)ti / cid_params.sampling_rate;
+        return ((long double)ti + .5) / cid_params.sampling_rate;
     }
     static inline float
     raw_sample_to_float(int si, Channel_Id_Params const & cid_params)
@@ -1262,6 +1264,26 @@ public:
             }
             res[k] = fq.substr(i, j - i);
             i = j + 1;
+        }
+        return res;
+    }
+    static Basecall_Group_Description
+    get_basecall_group_description(Attr_Map const & am)
+    {
+        Basecall_Group_Description res;
+        if (am.count("name"))
+        {
+            if (am.at("name") == "ONT Sequencing Workflow")
+            {
+                res.first = "metrichor";
+                res.second = (am.count("chimaera version")? am.at("chimaera version") : "?") + "?" +
+                    (am.count("dragonet version")? am.at("dragonet version") : "?");
+            }
+            if (am.at("name") == "ONT Albacore Sequencing Software")
+            {
+                res.first = "albacore";
+                res.second = (am.count("version")? am.at("version") : "?");
+            }
         }
         return res;
     }
@@ -1431,26 +1453,6 @@ private:
             }
         }
         return "";
-    }
-    std::pair< std::string, std::string >
-    get_basecall_group_description(Attr_Map const & am) const
-    {
-        std::pair< std::string, std::string > res;
-        if (am.count("name"))
-        {
-            if (am.at("name") == "ONT Sequencing Workflow")
-            {
-                res.first = "metrichor";
-                res.second = (am.count("chimaera version")? am.at("chimaera version") : "?") + "?" +
-                    (am.count("dragonet version")? am.at("dragonet version") : "?");
-            }
-            if (am.at("name") == "ONT Albacore Sequencing Software")
-            {
-                res.first = "albacore";
-                res.second = (am.count("version")? am.at("version") : "?");
-            }
-        }
-        return res;
     }
     double
     get_basecall_median_sd_temp(std::string const & gr) const
@@ -1760,24 +1762,29 @@ private:
         std::function< void(unsigned, double) > set_stdv,
         std::vector< Raw_Sample > const & rs,
         long long rs_start_time,
-        bool off_by_one)
+        int offset)
     {
         for (unsigned i = 0; i < num_events; ++i)
         {
-            long long rs_start_idx = get_start(i) - rs_start_time + off_by_one;
-            if (rs_start_idx < 0 or rs_start_idx + get_length(i) > (long long)rs.size() + off_by_one)
+            long long rs_start_idx = get_start(i) - rs_start_time + offset;
+            long long rs_end_idx = rs_start_idx + get_length(i);
+            if (i == 0 and rs_start_idx < 0) rs_start_idx = 0;
+            if (i == num_events - 1 and rs_end_idx > (long long)rs.size()) rs_end_idx = rs.size();
+            if (rs_start_idx < 0
+                or rs_end_idx <= rs_start_idx
+                or rs_end_idx > (long long)rs.size())
             {
                 LOG_THROW
                     << "bad index: rs_start_idx=" << rs_start_idx
+                    << " rs_end_idx=" << rs_end_idx
                     << " i=" << i
                     << " length(i)=" << get_length(i)
                     << " rs_size=" << rs.size()
-                    << " off_by_one=" << off_by_one;
+                    << " offset=" << offset;
             }
             double s = 0.0;
             double s2 = 0.0;
-            unsigned n = get_length(i);
-            if (off_by_one and rs_start_idx + n == (long long)rs.size()) --n;
+            unsigned n = rs_end_idx - rs_start_idx;
             for (unsigned j = 0; j < n; ++j)
             {
                 auto x = rs[rs_start_idx + j];
@@ -1839,9 +1846,9 @@ private:
             [&] (unsigned i, long long x) { return ede.at(i).start = x; },
             [&] (unsigned i, long long x) { return ede.at(i).length = x; },
             ede_params.start_time);
-        bool off_by_one = false; //ede_params.start_time == rs_params.start_time; // hack
+        int offset = 0;
         static bool warned = false;
-        if (off_by_one and not warned)
+        if (offset != 0 and not warned)
         {
             LOG(warning) << "using workaround for old off-by-one ed events bug\n";
             warned = true;
@@ -1854,7 +1861,7 @@ private:
             [&] (unsigned i, double x) { return ede.at(i).stdv = x; },
             rs,
             rs_params.start_time,
-            off_by_one);
+            offset);
         return res;
     }
     static Basecall_Fastq_Pack
@@ -1898,6 +1905,7 @@ private:
     }
     static Basecall_Events_Pack
     pack_ev(Basecall_Events_Dataset const & ev_ds,
+            Basecall_Group_Description const & bc_desc,
             std::string const & sq,
             std::vector< EventDetection_Event > const & ed,
             std::string const & ed_gr,
@@ -1908,7 +1916,8 @@ private:
         Basecall_Events_Pack ev_pack;
         ev_pack.params = ev_ds.second;
         auto & ev = ev_ds.first;
-        std::tie(ev_pack.name, ev_pack.version) = get_basecall_group_description(ev_ds.second);
+        ev_pack.name = bc_desc.first;
+        ev_pack.version = bc_desc.second;
         ev_pack.ed_gr = ed_gr;
         ev_pack.start_time = time_to_int(ev[0].start, cid_params);
         ev_pack.state_size = ev[0].get_model_state().size();
@@ -2045,12 +2054,11 @@ private:
             [&] (unsigned i, long long x) { return ede.at(i).start = x; },
             [&] (unsigned i, long long x) { return ede.at(i).length = x; },
             ev_pack.start_time);
-        // albacore 0.8.2 has off_by_one bug
-        bool off_by_one = (ev_pack.name == "albacore" and ev_pack.version == "0.8.2");
+        int offset = 0;
         static bool warned = false;
-        if (off_by_one and not warned)
+        if (offset != 0 and not warned)
         {
-            LOG(warning) << "using workaround for off-by-one bug in "
+            LOG(warning) << "using workaround for bug in "
                          << ev_pack.name << ":" << ev_pack.version << "\n";
             warned = true;
         }
@@ -2062,7 +2070,7 @@ private:
             [&] (unsigned i, double x) { return ede.at(i).stdv = x; },
             rs,
             rs_params.start_time,
-            off_by_one);
+            offset);
         return ede;
     }
     static Basecall_Events_Dataset

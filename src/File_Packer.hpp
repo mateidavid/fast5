@@ -647,6 +647,17 @@ private:
                 }
                 else if (src_f.have_basecall_events_unpack(st, gr))
                 {
+                    // bc group description
+                    auto bc_params = src_f.get_basecall_params(gr);
+                    auto bc_desc = src_f.get_basecall_group_description(bc_params);
+                    if (bc_desc.first == "albacore")
+                    {
+                        LOG(warning)
+                            << "dropping basecall events group written by "
+                            << bc_desc.first << ":" << bc_desc.second
+                            << ": st=" << st << " gr=" << gr << "\n";
+                        continue;
+                    }
                     bc_gr_s.insert(gr);
                     auto ev_ds = src_f.get_basecall_events_dataset(st, gr);
                     auto & ev = ev_ds.first;
@@ -669,7 +680,7 @@ private:
                     }
                     // try to find mean_sd_temp
                     auto median_sd_temp = src_f.get_basecall_median_sd_temp(gr);
-                    auto ev_pack = src_f.pack_ev(ev_ds, sq, ed, ed_gr,
+                    auto ev_pack = src_f.pack_ev(ev_ds, bc_desc, sq, ed, ed_gr,
                                                  cid_params, median_sd_temp, p_model_state_bits);
                     dst_f.add_basecall_events(st, gr, ev_pack);
                     if (check)
@@ -840,6 +851,17 @@ private:
             }
             else if (src_f.have_basecall_alignment_unpack(gr))
             {
+                // bc group description
+                auto bc_params = src_f.get_basecall_params(gr);
+                auto bc_desc = src_f.get_basecall_group_description(bc_params);
+                if (bc_desc.first == "albacore")
+                {
+                    LOG(warning)
+                        << "dropping basecall alignment written by "
+                        << bc_desc.first << ":" << bc_desc.second
+                        << ": gr=" << gr << "\n";
+                    continue;
+                }
                 bc_gr_s.insert(gr);
                 auto al = src_f.get_basecall_alignment(gr);
                 // basecall seq

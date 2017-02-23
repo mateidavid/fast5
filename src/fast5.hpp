@@ -1279,7 +1279,12 @@ public:
                 res.second = (am.count("chimaera version")? am.at("chimaera version") : "?") + "?" +
                     (am.count("dragonet version")? am.at("dragonet version") : "?");
             }
-            if (am.at("name") == "ONT Albacore Sequencing Software")
+            else if (am.at("name") == "MinKNOW-Live-Basecalling")
+            {
+                res.first = "minknow";
+                res.second = (am.count("version")? am.at("version") : "?");
+            }
+            else if (am.at("name") == "ONT Albacore Sequencing Software")
             {
                 res.first = "albacore";
                 res.second = (am.count("version")? am.at("version") : "?");

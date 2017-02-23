@@ -650,7 +650,7 @@ private:
                     // bc group description
                     auto bc_params = src_f.get_basecall_params(gr);
                     auto bc_desc = src_f.get_basecall_group_description(bc_params);
-                    if (bc_desc.first == "albacore")
+                    if (bc_desc.first == "albacore" or bc_desc.first == "minknow")
                     {
                         LOG(warning)
                             << "dropping basecall events group written by "
@@ -854,7 +854,7 @@ private:
                 // bc group description
                 auto bc_params = src_f.get_basecall_params(gr);
                 auto bc_desc = src_f.get_basecall_group_description(bc_params);
-                if (bc_desc.first == "albacore")
+                if (bc_desc.first == "albacore" or bc_desc.first == "minknow")
                 {
                     LOG(warning)
                         << "dropping basecall alignment written by "

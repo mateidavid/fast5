@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
-"""
-fast5: f5pack
-(c) 2017: Matei David, Ontario Institute for Cancer Research
-MIT License
-"""
+#
+# Part of: https://github.com/mateidavid/fast5
+#
+# (c) 2017: Matei David, Ontario Institute for Cancer Research
+# MIT License
+#
 
 import argparse
 import logging

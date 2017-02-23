@@ -1,3 +1,10 @@
+#
+# Part of: https://github.com/mateidavid/fast5
+#
+# (c) 2017: Matei David, Ontario Institute for Cancer Research
+# MIT License
+#
+
 from cython.operator cimport dereference as deref
 
 from libc.stdint cimport int16_t

@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
-"""
-fast5 setup.py
-(c) 2017: Matei David, Ontario Institute for Cancer Research
-MIT License
-"""
+#
+# Part of: https://github.com/mateidavid/fast5
+#
+# (c) 2017: Matei David, Ontario Institute for Cancer Research
+# MIT License
+#
 
 import os
 import sys

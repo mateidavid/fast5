@@ -1,3 +1,10 @@
+//
+// Part of: https://github.com/mateidavid/fast5
+//
+// Copyright (c) 2015-2017 Matei David, Ontario Institute for Cancer Research
+// MIT License
+//
+
 #ifndef __HUFFMAN_PACKER_HPP
 #define __HUFFMAN_PACKER_HPP
 

@@ -44,17 +44,24 @@ def add_dir(dn, args):
 def add_fofn(fn, args):
     l = list()
     logger.info("processing fofn fn=" + fn)
-    with open(fn) as f:
-        for p in f:
-            p = p.strip()
-            if fast5.File.is_valid_file(p):
-                l += add_fast5(p, "", args)
-            else:
-                logger.warning("fofn line not a fast5 file: " + p)
+    if fn != "-":
+        f = open(fn)
+    else:
+        f = sys.stdin
+    for p in f:
+        p = p.strip()
+        if fast5.File.is_valid_file(p):
+            l += add_fast5(p, "", args)
+        else:
+            logger.warning("fofn line not a fast5 file: " + p)
+    if fn != "-":
+        f.close()
     return l
 
 def add_paths(pl, args):
     l = list()
+    if len(pl) == 0:
+        pl.append("-")
     for p in pl:
         if os.path.isdir(p):
             l += add_dir(p, args)
@@ -66,14 +73,14 @@ def add_paths(pl, args):
 
 if __name__ == "__main__":
     description = """
-    Pack an ONT fast5 files.
+    Pack and unpack ONT fast5 files.
     """
     parser = argparse.ArgumentParser(description=description, epilog="")
     parser.add_argument("--log", default="warning",
                         help="log level")
     #
     parser.add_argument("--pack", action="store_true",
-                        help="Pack data (default: all).")
+                        help="Pack data (default).")
     parser.add_argument("--unpack", action="store_true",
                         help="Unpack data.")
     parser.add_argument("--archive", action="store_true",
@@ -104,7 +111,7 @@ if __name__ == "__main__":
                         help="Output directory.")
     #
     parser.add_argument("inputs", nargs="*", default=[], action="append",
-                        help="Input directories, fast5 files, or files of fast5 file names.")
+                        help="Input directories, fast5 files, or files of fast5 file names. For input directories, the subdirectory hierarchy (if traversed with --recurse) is recreated in the output directory.")
     args = parser.parse_args()
 
     numeric_log_level = getattr(logging, args.log.upper(), None)
@@ -173,11 +180,11 @@ if __name__ == "__main__":
     if args.force: fp.set_force(True)
     if args.qv_bits: fp.set_qv_bits(args.qv_bits)
     if args.p_model_state_bits: fp.set_p_model_state_bits(args.p_model_state_bits)
-    l = add_paths(args.inputs[0], args)
+    fl = add_paths(args.inputs[0], args)
     errored_files_cnt = 0
     input_bytes = 0
     output_bytes = 0
-    for t in l:
+    for t in fl:
         ifn = t[0]
         ofn = t[1]
         odn = os.path.dirname(t[1])
@@ -208,7 +215,7 @@ if __name__ == "__main__":
         cnt_total_bits[cl[0]] = 0
         if cnt[cl[0]] == 0:
             continue
-        print(cl[0] + "\t" + str(cnt[cl[0]]))
+        print(cl[0] + "\t%d" % cnt[cl[0]])
         for c in cl[1:]:
             cnt_total_bits[cl[0]] += cnt[c]
             if cnt[c] == 0:
@@ -226,7 +233,8 @@ if __name__ == "__main__":
     print("output_bytes\t%d" % output_bytes)
     print("output_overhead_bytes\t%d" % (output_bytes - output_ds_bytes))
 
+    print("processed_files\t%d" % len(fl))
     if errored_files_cnt > 0:
-        print("errored_files\t" + str(errored_files_cnt))
+        print("errored_files\t%d" % errored_files_cnt)
 
     sys.exit(errored_files_cnt > 0)

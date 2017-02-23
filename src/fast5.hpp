@@ -1787,17 +1787,22 @@ private:
                     << " rs_size=" << rs.size()
                     << " offset=" << offset;
             }
+            bool all_equal = true;
             double s = 0.0;
             double s2 = 0.0;
             unsigned n = rs_end_idx - rs_start_idx;
             for (unsigned j = 0; j < n; ++j)
             {
-                auto x = rs[rs_start_idx + j];
+                double x = rs[rs_start_idx + j];
+                if (j > 0 and all_equal)
+                {
+                    all_equal = rs[rs_start_idx + j] == rs[rs_start_idx];
+                }
                 s += x;
                 s2 += x * x;
             }
             set_mean(i, s / n);
-            if (n > 1)
+            if (n > 1 and not all_equal)
             {
                 double x = (s2 - s*s/n)/n;
                 set_stdv(i, x > 1e-3? std::sqrt(x) : 0);

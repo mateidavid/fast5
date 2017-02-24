@@ -1,0 +1,191 @@
+#!/usr/bin/env python
+
+#
+# Part of: https://github.com/mateidavid/fast5
+#
+# (c) 2017: Matei David, Ontario Institute for Cancer Research
+# MIT License
+#
+
+import argparse
+import logging
+import os
+import sys
+
+import fast5
+
+import signal
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+def add_fast5(fn, rel_dn, args):
+    logger.info("adding fast5 fn=" + fn + " rel_dn=" + rel_dn)
+    return [fn]
+
+def add_dir(dn, args):
+    l = list()
+    logger.info("processing dir dn=" + dn)
+    for t in os.walk(dn):
+        rel_dn = os.path.relpath(t[0], dn)
+        for rel_fn in t[2]:
+            fn = os.path.join(t[0], rel_fn)
+            if fast5.File.is_valid_file(fn):
+                l += add_fast5(fn, rel_dn, args)
+        if not args.recurse:
+            break
+    return l
+
+def add_fofn(fn, args):
+    l = list()
+    logger.info("processing fofn fn=" + fn)
+    if fn != "-":
+        f = open(fn)
+    else:
+        f = sys.stdin
+    for p in f:
+        p = p.strip()
+        if fast5.File.is_valid_file(p):
+            l += add_fast5(p, "", args)
+        else:
+            logger.warning("fofn line not a fast5 file: " + p)
+    if fn != "-":
+        f.close()
+    return l
+
+def add_paths(pl, args):
+    l = list()
+    if len(pl) == 0:
+        pl.append("-")
+    for p in pl:
+        if os.path.isdir(p):
+            l += add_dir(p, args)
+        elif fast5.File.is_valid_file(p):
+            l += add_fast5(p, "", args)
+        else:
+            l += add_fofn(p, args)
+    return l
+
+def stat_file(ifn, args):
+    d = dict()
+    try:
+        f = fast5.File(ifn)
+        # cid params
+        d["cid_params"] = f.get_channel_id_params()
+        # raw samples
+        d["rs_rn_l"] = f.get_raw_samples_read_name_list()
+        d["rs_params"] = dict()
+        for rn in d["rs_rn_l"]:
+            d["rs_params"][rn] = f.get_raw_samples_params(rn)
+        # basecall groups
+        d["bc_gr_l"] = f.get_basecall_group_list()
+        d["bc_desc"] = dict()
+        d["bc_summary"] = dict()
+        for gr in d["bc_gr_l"]:
+            d["bc_desc"][gr] = f.get_basecall_group_description(gr)
+            d["bc_summary"][gr] = f.get_basecall_summary(gr)
+            d["bc_desc"][gr]["start"] = dict()
+            d["bc_desc"][gr]["length"] = dict()
+            d["bc_desc"][gr]["count"] = dict()
+            for st in [0, 1]:
+                if d["bc_desc"][gr]["have_events"][st]:
+                    e = f.get_basecall_events(st, gr)
+                    d["bc_desc"][gr]["start"][st] = e[0]["start"]
+                    d["bc_desc"][gr]["length"][st] = e[-1]["start"] + e[-1]["length"] - e[0]["start"]
+                    d["bc_desc"][gr]["count"][st] = len(e)
+    except RuntimeError as e:
+        d = dict()
+    return d
+
+def as_time(v, r):
+    x = float(v)/r
+    m, s = divmod(x, 60)
+    h, m = divmod(m, 60)
+    return "%d:%02d:%02d.%03d" % (h, m, s, (x * 1000) % 1000)
+
+def print_path(p, v, args):
+    if type(v) == list:
+        print(args.delim[1].join(str(e) for e in p) + args.delim[0] + args.delim[1].join(str(e) for e in v))
+    else:
+        print(args.delim[1].join(str(e) for e in p) + args.delim[0] + str(v))
+
+def list_file(ifn, args):
+    d = stat_file(ifn, args)
+    if "cid_params" not in d:
+        return
+    # cid
+    for k in ["channel_number", "sampling_rate"]:
+        if k not in d["cid_params"]:
+            continue
+        print_path(["cid", k], d["cid_params"][k], args)
+    sampling_rate = d["cid_params"]["sampling_rate"]
+    # rs
+    for rn in d["rs_rn_l"]:
+        print_path(["rs", rn, "read_id"], d["rs_params"][rn]["read_id"], args)
+        print_path(["rs", rn, "start"], as_time(d["rs_params"][rn]["start_time"], sampling_rate), args)
+        print_path(["rs", rn, "length"], as_time(d["rs_params"][rn]["duration"], sampling_rate), args)
+    # bc
+    for gr in d["bc_gr_l"]:
+        print_path(["bc", gr, "id"], d["bc_desc"][gr]["name"] + ":" + d["bc_desc"][gr]["version"], args)
+        for st in [0, 1, 2]:
+            if not d["bc_desc"][gr]["have_subgroup"][st]:
+                continue
+            # fastq
+            fq_len = 0
+            print_path(["bc", gr, st, "fastq"], int(d["bc_desc"][gr]["have_fastq"][st]), args)
+            if d["bc_desc"][gr]["have_fastq"][st]:
+                for k in ["sequence_length", "mean_qscore"]:
+                    fk = ["basecall_1d_template", "basecall_1d_complement", "basecall_2d"][st] + "/" + k
+                    print_path(["bc", gr, st, "fastq", k], d["bc_summary"][gr][fk], args)
+                    if k == "sequence_length":
+                        fq_len = d["bc_summary"][gr][fk]
+            if st < 2:
+                # events
+                print_path(["bc", gr, st, "events"], int(d["bc_desc"][gr]["have_events"][st]), args)
+                if d["bc_desc"][gr]["have_events"][st]:
+                    for k in ["start", "length"]:
+                        print_path(["bc", gr, st, "events", k], as_time(float(d["bc_desc"][gr][k][st]), 1.0), args)
+                    print_path(["bc", gr, st, "events", "count"], d["bc_desc"][gr]["count"][st], args)
+                    print_path(["bc", gr, st, "bps"], "%.2f" % (float(fq_len) / d["bc_desc"][gr]["length"][st]), args)
+                # model
+                print_path(["bc", gr, st, "model"], int(d["bc_desc"][gr]["have_model"][st]), args)
+            else:
+                print_path(["bc", gr, st, "alignment"], int(d["bc_desc"][gr]["have_alignment"]), args)
+        if d["bc_desc"][gr]["have_subgroup"][2]:
+            print_path(["bc", gr, "bc_1d_gr"], d["bc_desc"][gr]["bc_1d_gr"], args)
+        if d["bc_desc"][gr]["have_subgroup"][0] or d["bc_desc"][gr]["have_subgroup"][1]:
+            print_path(["bc", gr, "ed_gr"], d["bc_desc"][gr]["ed_gr"], args)
+
+
+if __name__ == "__main__":
+    description = """
+    Summarize contents of ONT fast5 files.
+    """
+    parser = argparse.ArgumentParser(description=description, epilog="")
+    parser.add_argument("--log-level", default="warning",
+                        help="log level")
+    #
+    parser.add_argument("--delim", default="\t/",
+                        help="Delimiters list; first char used between path and value, second char used between path elements.")
+    parser.add_argument("-R", "--recurse", action="store_true",
+                        help="Recurse in input directories.")
+    #
+    parser.add_argument("inputs", nargs="*", default=[], action="append",
+                        help="Input directories, fast5 files, or files of fast5 file names.")
+    args = parser.parse_args()
+
+    numeric_log_level = getattr(logging, args.log_level.upper(), None)
+    if not isinstance(numeric_log_level, int):
+        raise ValueError("Invalid log level: '%s'" % args.log_level)
+    logging.basicConfig(level=numeric_log_level,
+                        format="%(asctime)s %(name)s.%(levelname)s %(message)s",
+                        datefmt="%Y/%m/%d %H:%M:%S")
+    logger = logging.getLogger(os.path.basename(__file__))
+    fast5.Logger.set_levels_from_options([args.log_level.lower()])
+    # fix delim
+    args.delim = list(args.delim)
+    while len(args.delim) < 2:
+        args.delim.append("")
+    logger.debug("args: " + str(args))
+
+    fl = add_paths(args.inputs[0], args)
+    for ifn in fl:
+        list_file(ifn, args)

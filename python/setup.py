@@ -73,5 +73,8 @@ setup(
     license='MIT',
     url='https://github.com/mateidavid/fast5',
     ext_modules=extensions,
-    scripts=[os.path.join('bin', 'f5pack')],
+    scripts=[
+        os.path.join('bin', 'f5ls'),
+        os.path.join('bin', 'f5pack'),
+    ],
 )

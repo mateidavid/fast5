@@ -21,6 +21,7 @@
 #include <deque>
 #include <set>
 #include <map>
+#include <queue>
 #include <limits>
 #include <type_traits>
 
@@ -1623,15 +1624,31 @@ public:
         return res;
     } // get_attr_list
     Attr_Map
-    get_attr_map(std::string const & path) const
+    get_attr_map(std::string const & path, bool recurse = false) const
     {
         Attr_Map res;
-        auto a_l = get_attr_list(path);
-        for (auto const & a : a_l)
+        std::queue< std::string > q;
+        q.push("");
+        while (not q.empty())
         {
-            std::string tmp;
-            read(path + "/" + a, tmp);
-            res[a] = tmp;
+            auto pt = q.front();
+            q.pop();
+            auto full_path = pt.empty()? path : path + "/" + pt;
+            auto a_list = get_attr_list(full_path);
+            for (auto const & a : a_list)
+            {
+                std::string tmp;
+                read(full_path + "/" + a, tmp);
+                res[pt.empty()? a : pt + "/" + a] = tmp;
+            }
+            if (recurse and group_exists(full_path))
+            {
+                auto sg_l = list_group(full_path);
+                for (auto const & sg : sg_l)
+                {
+                    q.push(pt.empty()? sg : pt + "/" + sg);
+                }
+            }
         }
         return res;
     } // get_attr_map()

@@ -983,12 +983,18 @@ public:
     std::string const &
     get_basecall_1d_group(std::string const & gr) const
     {
-        return _basecall_group_descriptions.at(gr).bc_1d_gr;
+        static std::string const empty;
+        return (_basecall_group_descriptions.count(gr)
+                ? _basecall_group_descriptions.at(gr).bc_1d_gr
+                : empty);
     }
     std::string const &
     get_basecall_eventdetection_group(std::string const & gr) const
     {
-        return _basecall_group_descriptions.at(gr).ed_gr;
+        static std::string const empty;
+        return (_basecall_group_descriptions.count(gr)
+                ? _basecall_group_descriptions.at(gr).ed_gr
+                : empty);
     }
 
     //

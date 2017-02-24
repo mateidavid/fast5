@@ -169,8 +169,8 @@ cdef extern from "fast5.hpp" namespace "fast5":
         bool have_basecall_strand_group(unsigned)
         bool have_basecall_strand_group(unsigned, string)
         Basecall_Group_Description get_basecall_group_description(string) except +
-        string get_basecall_1d_group(string) except +
-        string get_basecall_eventdetection_group(string) except +
+        string get_basecall_1d_group(string)
+        string get_basecall_eventdetection_group(string)
         Attr_Map get_basecall_params(string) except +
         bool have_basecall_log(string)
         string get_basecall_log(string) except +

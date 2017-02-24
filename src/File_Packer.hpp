@@ -656,12 +656,12 @@ private:
                 {
                     // bc group description
                     auto bc_params = src_f.get_basecall_params(gr);
-                    auto bc_desc = src_f.get_basecall_group_description(bc_params);
-                    if (bc_desc.first == "albacore" or bc_desc.first == "minknow")
+                    auto bc_desc = src_f.get_basecall_group_description(gr);
+                    if (bc_desc.name != "metrichor")
                     {
                         LOG(warning)
                             << "dropping basecall events group written by "
-                            << bc_desc.first << ":" << bc_desc.second
+                            << bc_desc.name << ":" << bc_desc.version
                             << ": st=" << st << " gr=" << gr << "\n";
                         continue;
                     }
@@ -860,12 +860,12 @@ private:
             {
                 // bc group description
                 auto bc_params = src_f.get_basecall_params(gr);
-                auto bc_desc = src_f.get_basecall_group_description(bc_params);
-                if (bc_desc.first == "albacore" or bc_desc.first == "minknow")
+                auto bc_desc = src_f.get_basecall_group_description(gr);
+                if (bc_desc.name != "metrichor")
                 {
                     LOG(warning)
                         << "dropping basecall alignment written by "
-                        << bc_desc.first << ":" << bc_desc.second
+                        << bc_desc.name << ":" << bc_desc.version
                         << ": gr=" << gr << "\n";
                     continue;
                 }

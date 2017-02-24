@@ -8,7 +8,7 @@
 from cython.operator cimport dereference as deref
 
 from libc.stdint cimport int16_t
-from libcpp cimport bool as cbool
+from libcpp cimport bool
 from libcpp.map cimport map as cmap
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -95,38 +95,49 @@ cdef extern from "fast5.hpp" namespace "fast5":
         long long complement_index
         #char kmer[8]
 
+    struct Basecall_Group_Description:
+        string name
+        string version
+        string ed_gr
+        string bc_1d_gr
+        bool have_subgroup[3]
+        bool have_fastq[3]
+        bool have_events[3]
+        bool have_model[2]
+        bool have_alignment
+
     cppclass Cpp_File "fast5::File":
         Cpp_File() except +
         Cpp_File(string) except +
-        Cpp_File(string, cbool) except +
+        Cpp_File(string, bool) except +
 
-        cbool is_open()
-        cbool is_rw()
+        bool is_open()
+        bool is_rw()
         string file_name()
         void open(string) except +
-        void open(string, cbool) except +
+        void open(string, bool) except +
         void create(string) except +
-        void create(string, cbool) except +
+        void create(string, bool) except +
         void close() except +
         @staticmethod
-        cbool is_valid_file(string)
+        bool is_valid_file(string)
 
         string file_version() except +
 
-        cbool have_channel_id_params()
+        bool have_channel_id_params()
         Channel_Id_Params get_channel_id_params()
-        cbool have_sampling_rate()
+        bool have_sampling_rate()
         double get_sampling_rate()
 
-        cbool have_tracking_id_params()
+        bool have_tracking_id_params()
         Tracking_Id_Params get_tracking_id_params() except +
 
-        cbool have_sequences_params()
+        bool have_sequences_params()
         Sequences_Params get_sequences_params() except +
 
         vector[string] get_raw_samples_read_name_list()
-        cbool have_raw_samples()
-        cbool have_raw_samples(string)
+        bool have_raw_samples()
+        bool have_raw_samples(string)
         Raw_Samples_Params get_raw_samples_params() except +
         Raw_Samples_Params get_raw_samples_params(string) except +
         vector[Raw_Int_Sample] get_raw_int_samples() except +
@@ -135,13 +146,13 @@ cdef extern from "fast5.hpp" namespace "fast5":
         vector[Raw_Sample] get_raw_samples(string) except +
 
         vector[string] get_eventdetection_group_list()
-        cbool have_eventdetection_group()
-        cbool have_eventdetection_group(string)
+        bool have_eventdetection_group()
+        bool have_eventdetection_group(string)
         vector[string] get_eventdetection_read_name_list()
         vector[string] get_eventdetection_read_name_list(string)
-        cbool have_eventdetection_events()
-        cbool have_eventdetection_events(string)
-        cbool have_eventdetection_events(string, string)
+        bool have_eventdetection_events()
+        bool have_eventdetection_events(string)
+        bool have_eventdetection_events(string, string)
         Attr_Map get_eventdetection_params() except +
         Attr_Map get_eventdetection_params(string) except +
         EventDetection_Events_Params get_eventdetection_events_params() except +
@@ -152,28 +163,31 @@ cdef extern from "fast5.hpp" namespace "fast5":
         vector[EventDetection_Event] get_eventdetection_events(string, string) except +
 
         vector[string] get_basecall_group_list()
-        cbool have_basecall_group()
-        cbool have_basecall_group(string)
+        bool have_basecall_group()
+        bool have_basecall_group(string)
         vector[string] get_basecall_strand_group_list(unsigned)
-        cbool have_basecall_strand_group(unsigned)
-        cbool have_basecall_strand_group(unsigned, string)
-        string get_basecall_1d_group(string)
-        string get_basecall_eventdetection_group(string)
+        bool have_basecall_strand_group(unsigned)
+        bool have_basecall_strand_group(unsigned, string)
+        Basecall_Group_Description get_basecall_group_description(string) except +
+        string get_basecall_1d_group(string) except +
+        string get_basecall_eventdetection_group(string) except +
         Attr_Map get_basecall_params(string) except +
-        cbool have_basecall_log(string)
+        bool have_basecall_log(string)
         string get_basecall_log(string) except +
+        Attr_Map get_basecall_config(string) except +
+        Attr_Map get_basecall_summary(string) except +
 
-        cbool have_basecall_fastq(unsigned)
-        cbool have_basecall_fastq(unsigned, string)
+        bool have_basecall_fastq(unsigned)
+        bool have_basecall_fastq(unsigned, string)
         string get_basecall_fastq(unsigned) except +
         string get_basecall_fastq(unsigned, string) except +
-        cbool have_basecall_seq(unsigned)
-        cbool have_basecall_seq(unsigned, string)
+        bool have_basecall_seq(unsigned)
+        bool have_basecall_seq(unsigned, string)
         string get_basecall_seq(unsigned) except +
         string get_basecall_seq(unsigned, string) except +
 
-        cbool have_basecall_model(unsigned)
-        cbool have_basecall_model(unsigned, string)
+        bool have_basecall_model(unsigned)
+        bool have_basecall_model(unsigned, string)
         string get_basecall_model_file(unsigned) except +
         string get_basecall_model_file(unsigned, string) except +
         Basecall_Model_Params get_basecall_model_params(unsigned) except +
@@ -181,15 +195,15 @@ cdef extern from "fast5.hpp" namespace "fast5":
         vector[Basecall_Model_State] get_basecall_model(unsigned) except +
         vector[Basecall_Model_State] get_basecall_model(unsigned, string) except +
 
-        cbool have_basecall_events(unsigned)
-        cbool have_basecall_events(unsigned, string)
+        bool have_basecall_events(unsigned)
+        bool have_basecall_events(unsigned, string)
         Basecall_Events_Params get_basecall_events_params(unsigned) except +
         Basecall_Events_Params get_basecall_events_params(unsigned, string) except +
         vector[Basecall_Event] get_basecall_events(unsigned) except +
         vector[Basecall_Event] get_basecall_events(unsigned, string) except +
 
-        cbool have_basecall_alignment()
-        cbool have_basecall_alignment(string)
+        bool have_basecall_alignment()
+        bool have_basecall_alignment(string)
         vector[Basecall_Alignment_Entry] get_basecall_alignment() except +
         vector[Basecall_Alignment_Entry] get_basecall_alignment(string) except +
 
@@ -224,8 +238,8 @@ cdef extern from "File_Packer.hpp" namespace "fast5":
         Cpp_File_Packer(int)
         Cpp_File_Packer(int, int, int, int, int)
 
-        void set_check(cbool)
-        void set_force(cbool)
+        void set_check(bool)
+        void set_force(bool)
         void set_qv_bits(unsigned)
         void set_p_model_state_bits(unsigned)
 
@@ -367,6 +381,8 @@ cdef class File:
             return deref(self.thisptr).have_basecall_strand_group(st)
         else:
             return deref(self.thisptr).have_basecall_strand_group(st, gr)
+    def get_basecall_group_description(self, gr):
+        return deref(self.thisptr).get_basecall_group_description(gr)
     def get_basecall_1d_group(self, gr):
         return deref(self.thisptr).get_basecall_1d_group(gr)
     def get_basecall_eventdetection_group(self, gr):
@@ -375,6 +391,10 @@ cdef class File:
         return deref(self.thisptr).get_basecall_params(gr)
     def get_basecall_log(self, gr):
         return deref(self.thisptr).get_basecall_log(gr)
+    def get_basecall_config(self, gr):
+        return deref(self.thisptr).get_basecall_config(gr)
+    def get_basecall_summary(self, gr):
+        return deref(self.thisptr).get_basecall_summary(gr)
 
     def have_basecall_fastq(self, st, gr=None):
         if gr is None:

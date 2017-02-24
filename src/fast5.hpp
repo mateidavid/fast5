@@ -606,7 +606,25 @@ struct Basecall_Alignment_Pack
     }
 };
 
-typedef std::pair< std::string, std::string > Basecall_Group_Description;
+struct Basecall_Group_Description
+{
+    std::string name;
+    std::string version;
+    std::string ed_gr;
+    std::string bc_1d_gr;
+    bool have_subgroup[3];
+    bool have_fastq[3];
+    bool have_events[3];
+    bool have_model[2];
+    bool have_alignment;
+    Basecall_Group_Description() :
+        have_subgroup{false, false, false},
+        have_fastq{false, false, false},
+        have_events{false, false, false},
+        have_model{false, false},
+        have_alignment{false}
+    {}
+}; // struct Basecall_Group_Description
 
 class File
     : private hdf5_tools::File
@@ -944,24 +962,33 @@ public:
     have_basecall_strand_group(unsigned st, std::string const & gr = std::string()) const
     {
         auto && gr_l = get_basecall_strand_group_list(st);
-        return (gr.empty()
-                ? not gr_l.empty()
-                : std::find(gr_l.begin(), gr_l.end(), gr) != gr_l.end());
+        if (gr.empty())
+        {
+            return not gr_l.empty();
+        }
+        if (not _basecall_group_descriptions.count(gr))
+        {
+            return false;
+        }
+        else
+        {
+            return _basecall_group_descriptions.at(gr).have_subgroup[st];
+        }
+    }
+    Basecall_Group_Description const &
+    get_basecall_group_description(std::string const & gr) const
+    {
+        return _basecall_group_descriptions.at(gr);
     }
     std::string const &
     get_basecall_1d_group(std::string const & gr) const
     {
-        return (_basecall_1d_group.count(gr)
-                ? _basecall_1d_group.at(gr)
-                : gr);
+        return _basecall_group_descriptions.at(gr).bc_1d_gr;
     }
     std::string const &
     get_basecall_eventdetection_group(std::string const & gr) const
     {
-        static std::string const empty;
-        return (_basecall_eventdetection_group.count(gr)
-                ? _basecall_eventdetection_group.at(gr)
-                : empty);
+        return _basecall_group_descriptions.at(gr).ed_gr;
     }
 
     //
@@ -992,6 +1019,26 @@ public:
         Base::read(basecall_log_path(gr), res);
         return res;
     }
+    Attr_Map
+    get_basecall_config(std::string const & gr) const
+    {
+        Attr_Map res;
+        if (Base::group_exists(basecall_config_path(gr)))
+        {
+            res = get_attr_map(basecall_config_path(gr), true);
+        }
+        return res;
+    }
+    Attr_Map
+    get_basecall_summary(std::string const & gr) const
+    {
+        Attr_Map res;
+        if (Base::group_exists(basecall_summary_path(gr)))
+        {
+            res = get_attr_map(basecall_summary_path(gr), true);
+        }
+        return res;
+    }
 
     //
     // Access Basecall fastq
@@ -1000,7 +1047,8 @@ public:
     have_basecall_fastq(unsigned st, std::string const & gr = std::string()) const
     {
         auto && _gr = fill_basecall_group(st, gr);
-        return have_basecall_fastq_unpack(st, _gr) or have_basecall_fastq_pack(st, _gr);
+        return (_basecall_group_descriptions.count(_gr)
+                and _basecall_group_descriptions.at(_gr).have_fastq[st]);
     }
     std::string
     get_basecall_fastq(unsigned st, std::string const & gr = std::string()) const
@@ -1011,7 +1059,7 @@ public:
         {
             Base::read(basecall_fastq_path(_gr, st), res);
         }
-        else
+        else if (have_basecall_fastq_pack(st, _gr))
         {
             auto fq_pack = get_basecall_fastq_pack(st, _gr);
             res = unpack_fq(fq_pack);
@@ -1054,7 +1102,8 @@ public:
     have_basecall_model(unsigned st, std::string const & gr = std::string()) const
     {
         auto && gr_1d = fill_basecall_1d_group(st, gr);
-        return Base::dataset_exists(basecall_model_path(gr_1d, st));
+        return (_basecall_group_descriptions.count(gr_1d)
+                and _basecall_group_descriptions.at(gr_1d).have_model[st]);
     }
     std::string
     get_basecall_model_file(unsigned st, std::string const & gr = std::string()) const
@@ -1107,8 +1156,8 @@ public:
     have_basecall_events(unsigned st, std::string const & gr = std::string()) const
     {
         auto && gr_1d = fill_basecall_1d_group(st, gr);
-        return (have_basecall_events_unpack(st, gr_1d)
-                or have_basecall_events_pack(st, gr_1d));
+        return (_basecall_group_descriptions.count(gr_1d)
+                and _basecall_group_descriptions.at(gr_1d).have_events[st]);
     }
     Basecall_Events_Params
     get_basecall_events_params(unsigned st, std::string const & gr = std::string()) const
@@ -1198,7 +1247,8 @@ public:
     have_basecall_alignment(std::string const & gr = std::string()) const
     {
         auto && _gr = fill_basecall_group(2, gr);
-        return have_basecall_alignment_unpack(_gr) or have_basecall_alignment_pack(_gr);
+        return (_basecall_group_descriptions.count(_gr)
+                and _basecall_group_descriptions.at(_gr).have_alignment);
     }
     std::vector< Basecall_Alignment_Entry >
     get_basecall_alignment(std::string const & gr = std::string()) const
@@ -1274,31 +1324,6 @@ public:
         }
         return res;
     }
-    static Basecall_Group_Description
-    get_basecall_group_description(Attr_Map const & am)
-    {
-        Basecall_Group_Description res;
-        if (am.count("name"))
-        {
-            if (am.at("name") == "ONT Sequencing Workflow")
-            {
-                res.first = "metrichor";
-                res.second = (am.count("chimaera version")? am.at("chimaera version") : "?") + "?" +
-                    (am.count("dragonet version")? am.at("dragonet version") : "?");
-            }
-            else if (am.at("name") == "MinKNOW-Live-Basecalling")
-            {
-                res.first = "minknow";
-                res.second = (am.count("version")? am.at("version") : "?");
-            }
-            else if (am.at("name") == "ONT Albacore Sequencing Software")
-            {
-                res.first = "albacore";
-                res.second = (am.count("version")? am.at("version") : "?");
-            }
-        }
-        return res;
-    }
 
 private:
     friend struct File_Packer;
@@ -1311,9 +1336,8 @@ private:
     std::vector< std::string > _eventdetection_groups;
     std::map< std::string, std::vector< std::string > > _eventdetection_read_names;
     std::vector< std::string > _basecall_groups;
+    std::map< std::string, Basecall_Group_Description > _basecall_group_descriptions;
     std::array< std::vector< std::string >, 3 > _basecall_strand_groups;
-    std::map< std::string, std::string > _basecall_1d_group;
-    std::map< std::string, std::string > _basecall_eventdetection_group;
 
     //
     // Cache updaters
@@ -1384,38 +1408,99 @@ private:
     load_basecall_groups()
     {
         _basecall_groups.clear();
+        _basecall_group_descriptions.clear();
         std::for_each(
             _basecall_strand_groups.begin(), _basecall_strand_groups.end(),
             [] (decltype(_basecall_strand_groups)::value_type & v) {
                 v.clear();
             });
-        _basecall_1d_group.clear();
-        _basecall_eventdetection_group.clear();
         if (not Base::group_exists(basecall_root_path())) return;
         auto bc_gr_prefix = basecall_group_prefix();
         auto gr_l = Base::list_group(basecall_root_path());
         for (auto const & g : gr_l)
         {
             if (g.substr(0, bc_gr_prefix.size()) != bc_gr_prefix) continue;
+            // found basecall group
             std::string gr = g.substr(bc_gr_prefix.size());
             _basecall_groups.push_back(gr);
-            bool have_1d_subgroups = false;
+            // name and version
+            _basecall_group_descriptions[gr] = detect_basecall_group_id(gr);
+            auto & bc_desc = _basecall_group_descriptions.at(gr);
+            // subgroups
             for (unsigned st = 0; st < 3; ++st)
             {
-                if (Base::group_exists(basecall_strand_group_path(gr, st)))
+                bc_desc.have_subgroup[st] =
+                    Base::group_exists(basecall_strand_group_path(gr, st));
+                if (bc_desc.have_subgroup[st])
                 {
                     _basecall_strand_groups[st].push_back(gr);
-                    if (st < 2)
+                    // fastq
+                    bc_desc.have_fastq[st] =
+                        have_basecall_fastq_unpack(st, gr) or
+                        have_basecall_fastq_pack(st, gr);
+                    // events
+                    bc_desc.have_events[st] =
+                        have_basecall_events_unpack(st, gr) or
+                        have_basecall_events_pack(st, gr);
+                    if (st == 0)
                     {
-                        have_1d_subgroups = true;
-                        _basecall_eventdetection_group[gr] = detect_basecall_eventdetection_group(gr);
+                        // ed_gr
+                        bc_desc.ed_gr = detect_basecall_eventdetection_group(gr);
+                    }
+                    if (st == 2)
+                    {
+                        // alignment
+                        bc_desc.have_alignment =
+                            have_basecall_alignment_unpack(gr)
+                            or have_basecall_alignment_pack(gr);
                     }
                 }
             }
-            _basecall_1d_group[gr] = (have_1d_subgroups
-                                      ? gr
-                                      : detect_basecall_1d_group(gr));
+            // bc_1d_gr
+            if (bc_desc.have_subgroup[0] or bc_desc.have_subgroup[1])
+            {
+                bc_desc.bc_1d_gr = gr;
+            }
+            else if (bc_desc.have_subgroup[2])
+            {
+                bc_desc.bc_1d_gr = detect_basecall_1d_group(gr);
+            }
+            // model
+            for (unsigned st = 0; st < 2; ++st)
+            {
+                bc_desc.have_model[st] =
+                    not bc_desc.bc_1d_gr.empty()
+                    and Base::dataset_exists(basecall_model_path(bc_desc.bc_1d_gr, st));
+            }
         }
+    }
+    Basecall_Group_Description
+    detect_basecall_group_id(std::string const & gr) const
+    {
+        Basecall_Group_Description res;
+        res.name = "?";
+        res.version = "?";
+        auto am = get_basecall_params(gr);
+        if (am.count("name"))
+        {
+            if (am.at("name") == "ONT Sequencing Workflow")
+            {
+                res.name = "metrichor";
+                res.version = (am.count("chimaera version")? am.at("chimaera version") : "?") + "+" +
+                    (am.count("dragonet version")? am.at("dragonet version") : "?");
+            }
+            else if (am.at("name") == "MinKNOW-Live-Basecalling")
+            {
+                res.name = "minknow";
+                res.version = (am.count("version")? am.at("version") : "?");
+            }
+            else if (am.at("name") == "ONT Albacore Sequencing Software")
+            {
+                res.name = "albacore";
+                res.version = (am.count("version")? am.at("version") : "?");
+            }
+        }
+        return res;
     }
     std::string
     detect_basecall_1d_group(std::string const & gr) const
@@ -1933,8 +2018,8 @@ private:
         Basecall_Events_Pack ev_pack;
         ev_pack.params = ev_ds.second;
         auto & ev = ev_ds.first;
-        ev_pack.name = bc_desc.first;
-        ev_pack.version = bc_desc.second;
+        ev_pack.name = bc_desc.name;
+        ev_pack.version = bc_desc.version;
         ev_pack.ed_gr = ed_gr;
         ev_pack.start_time = time_to_int(ev[0].start, cid_params);
         ev_pack.state_size = ev[0].get_model_state().size();
@@ -2374,7 +2459,14 @@ private:
     {
         return basecall_alignment_path(gr) + "_Pack";
     }
-
+    static std::string basecall_config_path(std::string const & gr)
+    {
+        return basecall_group_path(gr) + "/Configuration";
+    }
+    static std::string basecall_summary_path(std::string const & gr)
+    {
+        return basecall_group_path(gr) + "/Summary";
+    }
     //
     // Packers
     //

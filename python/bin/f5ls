@@ -107,8 +107,10 @@ def print_path(p, v, args):
     else:
         print(args.delim[1].join(str(e) for e in p) + args.delim[0] + str(v))
 
-def list_file(ifn, args):
+def list_file(ifn, include_fn, args):
     d = stat_file(ifn, args)
+    if include_fn:
+        print_path(["file"], ifn, args)
     if "cid_params" not in d:
         return
     # cid
@@ -188,4 +190,4 @@ if __name__ == "__main__":
 
     fl = add_paths(args.inputs[0], args)
     for ifn in fl:
-        list_file(ifn, args)
+        list_file(ifn, len(fl) > 1, args)

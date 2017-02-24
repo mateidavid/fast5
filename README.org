@@ -4,90 +4,37 @@
 
 [[http://travis-ci.org/mateidavid/fast5][http://travis-ci.org/mateidavid/fast5.svg?branch=master]] [[https://tldrlegal.com/license/mit-license][http://img.shields.io/:license-mit-blue.svg]]
 
-A lightweight C++11 library to read raw signal data from Oxford Nanopore's Fast5 files.
+A lightweight C++ library for accessing Oxford Nanopore Technologies sequencing data.
 
-*** C++
+*** Installation
 
-**** Installation
+**** Core C++ Library
 
-This is a header-only library. You only need to copy [[file:src/fast5.hpp][src/fast5.hpp]] and [[file:src/hdf5_tools.hpp][src/hdf5_tools.hpp]] into your C++ project.
+The core library is written in header-only C++11, and it enables read-write access to fast5 files from C++ code.
 
-**** Usage
+The core library requires no installation, other than setting the compiler's include path to find [[file:src/fast5.hpp][fast5.hpp]]. See [[file:src/f5ls-full.cpp][f5ls-full.cpp]] for an example.
 
-See [[file:src/f5ls.cpp][src/f5ls.cpp]] for an example.
+The core library is built on top the HDF5 C API, so the compiler must also be able to find the HDF5 headers and libraries. See the Travis CI [[file:.travis.Dockerfile.in][Dockerfile]] for an example of installing prerequisites on Debian Jessie.
 
-*** Python Wrapper
+**** Python Wrapper
 
-An optional python wrapper for this library is available through Boost.Python. The wrapper currently implements only read-only access.
+The Python wrapper for the core library enables read-only access to fast5 files from Python code. The wrapper also adds several Python scripts:
 
-**** Installation
+- [[file:python/bin/f5ls][f5ls]] :: Summarize contents of fast5 files.
+- [[file:python/bin/f5pack][f5pack]] :: Pack and unpack fast5 files.
 
-#+BEGIN_EXAMPLE
-cd python
-HDF5_DIR=/usr/local BOOST_DIR=/usr/local make develop-user
-#+END_EXAMPLE
-
-Notes:
-
-- HDF5 and Boost.Python must be available, and their locations can be passed on to the Python setup process using the environment variables =HDF5_DIR= and =BOOST_DIR=. Alternatively, the respective include directories, library directories, and library names may be specified explicitly with: =HDF5_INCLUDE_DIR=, =HDF5_LIB_DIR=, =HDF5_LIB=, =BOOST_INCLUDE_DIR=, =BOOST_LIB_DIR=, =BOOST_PYTHON_LIB=. For details, see [[file:python/setup.py][python/setup.py]] and [[file:.travis.yml][.travis.yml]].
-
-- To install =fast5= as a package in a virtualenv, use the target =develop=. To install as a user package, use the target =develop-user=. For details, see [[file:python/Makefile][python/Makefile]].
-
-**** Usage
+The Python wrapper also depends on Cython. To build the Python wrapper:
 
 #+BEGIN_EXAMPLE
-import fast5
-f = fast5.File("file.000.fast5")
-print(f.file_version())
-print(f.have_eventdetection_events())
+# set paths to HDF5
+export HDF5_INCLUDE_DIR=/path/to/hdf5.h
+export HDF5_LIB_DIR=/path/to/libhdf5.so
+
+# either
+make -C python develop         # to install in a virtualenv
+# or
+make -C python develop-user    # to install in user mode
 #+END_EXAMPLE
-
-*** f5dump
-
-The program =f5dump= can be used to list and extract some of the contents of =fast5= files, including: raw signals, event-detection events, basecall events, and basecall fastq.
-
-**** Installation
-
-In addition to this =fast5= repository, you will need HDF5 (headers and libraries), as well the the header-only libraries [[https://github.com/mateidavid/tclap.git][TCLAP]] and [[https://github.com/mateidavid/hpptools.git][HPPTOOLS]]. To build =f5dump=, run =make f5dump [VAR1=VALUE1] ...=, where =VAR=-s are used to instruct the [[file:src/Makefile][Makefile]] where to find various dependencies.
-
-**** Usage
-
-In each run, =f5dump= requires exactly one command among: =--ls/--id/--rw/--ed/--ev/--fq=. If no command is given, =--ls= is assumed. It also requires exactly one =fast5= file to inspect.
-
-- In =--ls= mode, =f5dump= lists some of the contents of the file. Sample output:
-
-  #+BEGIN_EXAMPLE
-rw      Read_1019
-ed      000     Read_1019
-ed      001     Read_1019
-bc2d    2D_000  2       1       1       1D_000
-bc1d    1D_000  0       1       1       001
-bc1d    1D_000  1       1       1       001
-#+END_EXAMPLE
-
-  Explanations:
-
-  - =rw=: the file contains raw samples from one read, =Read_1019=.
-
-  - =ed=: the file contains 2 event-detection groups, =000= and =001=, both run on raw samples from =Read_1019=.
-
-  - =bc2d=: the file contains 1 basecall group =2D_000= with 2D data (=2=); this group has both fastq data and events (=1 1=); its corresponding 1D basecall group is =1D_000=.
-
-  - =bc1d=: the file contains 1 basecall group =1D_000= with 1D data for each strand (=0= and =1=); each contains fastq data and events (=1 1=); its corresponding event-detection group is =001=.
-
-  Notes:
-
-  - The group names are suffixes understood by the =fast5= library. E.g., the basecall group =RNN_1D_000= would correspond to the HDF5 group =/Analyses/Basecall_RNN_1D_000=.
-
-  - Not all the links between groups are always available. Notably, some =fast5= files are missing the link between a 1D basecall group and its original event-detection group.
-
-- In =--id= mode, =f5dump= dumps =channel_id= and =tracking_id= metadata.
-
-- In =--rw/--ed/--ev/--fq= mode, =f5dump= dumps: raw signal data/event-detection events/basecall events/basecall fastq data.
-
-- Optional selector flags =--gr/--st/--rn= can be used to specify a group name, strand (=0/1/2=), or read name. Not all combinations make sense: e.g, =--st= is ignored for event-detection data.
-
-- Optional output flags =--time-int/--curr-int/--rw-time= can modify the output: convert times into integers, dump raw signal currents in internal integer encoding, and add time stamps to raw signals.
 
 *** License
 

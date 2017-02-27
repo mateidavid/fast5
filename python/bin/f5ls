@@ -99,6 +99,16 @@ def stat_file(ifn, args):
                         d["bc_desc"][gr]["count"][st] = len(e)
                 else:
                     d["bc_desc"][gr]["packed_alignment"] = not f.have_basecall_alignment_unpack(gr)
+        # eventdetection groups
+        d["ed_gr_l"] = f.get_eventdetection_group_list()
+        d["ed"] = dict()
+        for gr in d["ed_gr_l"]:
+            d["ed"][gr] = dict()
+            d["ed"][gr]["rn_l"] = f.get_eventdetection_read_name_list(gr)
+            d["ed"][gr]["rn"] = dict()
+            for rn in d["ed"][gr]["rn_l"]:
+                d["ed"][gr]["rn"][rn] = dict()
+                d["ed"][gr]["rn"][rn]["packed"] = not f.have_eventdetection_events_unpack(gr, rn)
     except RuntimeError as e:
         d = dict()
     return d
@@ -166,6 +176,10 @@ def list_file(ifn, include_fn, args):
             print_path(["bc", gr, "bc_1d_gr"], d["bc_desc"][gr]["bc_1d_gr"], args)
         if d["bc_desc"][gr]["have_subgroup"][0] or d["bc_desc"][gr]["have_subgroup"][1]:
             print_path(["bc", gr, "ed_gr"], d["bc_desc"][gr]["ed_gr"], args)
+    # ed
+    for gr in d["ed_gr_l"]:
+        for rn in d["ed"][gr]["rn_l"]:
+            print_path(["ed", gr, rn, "packed"], int(d["ed"][gr]["rn"][rn]["packed"]), args)
 
 
 if __name__ == "__main__":

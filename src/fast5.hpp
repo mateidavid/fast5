@@ -748,6 +748,16 @@ public:
                 ? not rn_l.empty()
                 : std::find(rn_l.begin(), rn_l.end(), rn) != rn_l.end());
     }
+    bool
+    have_raw_samples_unpack(std::string const & rn) const
+    {
+        return Base::dataset_exists(raw_samples_path(rn));
+    }
+    bool
+    have_raw_samples_pack(std::string const & rn) const
+    {
+        return Base::group_exists(raw_samples_pack_path(rn));
+    }
     Raw_Samples_Params
     get_raw_samples_params(std::string const & rn = std::string()) const
     {
@@ -857,6 +867,16 @@ public:
                     _eventdetection_read_names.at(_gr).end(),
                     _rn)
                 != _eventdetection_read_names.at(_gr).end());
+    }
+    bool
+    have_eventdetection_events_unpack(std::string const & gr, std::string const & rn) const
+    {
+        return Base::dataset_exists(eventdetection_events_path(gr, rn));
+    }
+    bool
+    have_eventdetection_events_pack(std::string const & gr, std::string const & rn) const
+    {
+        return Base::group_exists(eventdetection_events_pack_path(gr, rn));
     }
     EventDetection_Events_Params
     get_eventdetection_events_params(
@@ -1056,6 +1076,16 @@ public:
         return (_basecall_group_descriptions.count(_gr)
                 and _basecall_group_descriptions.at(_gr).have_fastq[st]);
     }
+    bool
+    have_basecall_fastq_unpack(unsigned st, std::string const & gr) const
+    {
+        return Base::dataset_exists(basecall_fastq_path(gr, st));
+    }
+    bool
+    have_basecall_fastq_pack(unsigned st, std::string const & gr) const
+    {
+        return Base::group_exists(basecall_fastq_pack_path(gr, st));
+    }
     std::string
     get_basecall_fastq(unsigned st, std::string const & gr = std::string()) const
     {
@@ -1165,6 +1195,16 @@ public:
         return (_basecall_group_descriptions.count(gr_1d)
                 and _basecall_group_descriptions.at(gr_1d).have_events[st]);
     }
+    bool
+    have_basecall_events_unpack(unsigned st, std::string const & gr) const
+    {
+        return Base::dataset_exists(basecall_events_path(gr, st));
+    }
+    bool
+    have_basecall_events_pack(unsigned st, std::string const & gr) const
+    {
+        return Base::group_exists(basecall_events_pack_path(gr, st));
+    }
     Basecall_Events_Params
     get_basecall_events_params(unsigned st, std::string const & gr = std::string()) const
     {
@@ -1255,6 +1295,16 @@ public:
         auto && _gr = fill_basecall_group(2, gr);
         return (_basecall_group_descriptions.count(_gr)
                 and _basecall_group_descriptions.at(_gr).have_alignment);
+    }
+    bool
+    have_basecall_alignment_unpack(std::string const & gr) const
+    {
+        return Base::dataset_exists(basecall_alignment_path(gr));
+    }
+    bool
+    have_basecall_alignment_pack(std::string const & gr) const
+    {
+        return Base::group_exists(basecall_alignment_pack_path(gr));
     }
     std::vector< Basecall_Alignment_Entry >
     get_basecall_alignment(std::string const & gr = std::string()) const
@@ -1615,16 +1665,6 @@ private:
     //
     // Packing interface
     //
-    bool
-    have_raw_samples_unpack(std::string const & rn) const
-    {
-        return Base::dataset_exists(raw_samples_path(rn));
-    }
-    bool
-    have_raw_samples_pack(std::string const & rn) const
-    {
-        return Base::group_exists(raw_samples_pack_path(rn));
-    }
     Raw_Samples_Pack
     get_raw_samples_pack(std::string const & rn) const
     {
@@ -1664,16 +1704,6 @@ private:
         add_raw_samples(rn, rsi_ds.first);
         add_raw_samples_params(rn, rsi_ds.second);
     }
-    bool
-    have_eventdetection_events_unpack(std::string const & gr, std::string const & rn) const
-    {
-        return Base::dataset_exists(eventdetection_events_path(gr, rn));
-    }
-    bool
-    have_eventdetection_events_pack(std::string const & gr, std::string const & rn) const
-    {
-        return Base::group_exists(eventdetection_events_pack_path(gr, rn));
-    }
     EventDetection_Events_Pack
     get_eventdetection_events_pack(
         std::string const & gr, std::string const & rn) const
@@ -1708,16 +1738,6 @@ private:
         add_eventdetection_events_params(gr, rn, ede_ds.second);
     }
     //
-    bool
-    have_basecall_fastq_unpack(unsigned st, std::string const & gr) const
-    {
-        return Base::dataset_exists(basecall_fastq_path(gr, st));
-    }
-    bool
-    have_basecall_fastq_pack(unsigned st, std::string const & gr) const
-    {
-        return Base::group_exists(basecall_fastq_pack_path(gr, st));
-    }
     Basecall_Fastq_Pack
     get_basecall_fastq_pack(unsigned st, std::string const & gr) const
     {
@@ -1734,16 +1754,6 @@ private:
         reload();
     }
     //
-    bool
-    have_basecall_events_unpack(unsigned st, std::string const & gr) const
-    {
-        return Base::dataset_exists(basecall_events_path(gr, st));
-    }
-    bool
-    have_basecall_events_pack(unsigned st, std::string const & gr) const
-    {
-        return Base::group_exists(basecall_events_pack_path(gr, st));
-    }
     Basecall_Events_Pack
     get_basecall_events_pack(unsigned st, std::string const & gr) const
     {
@@ -1774,16 +1784,6 @@ private:
         add_basecall_events_params(st, gr, bce_ds.second);
     }
     //
-    bool
-    have_basecall_alignment_unpack(std::string const & gr) const
-    {
-        return Base::dataset_exists(basecall_alignment_path(gr));
-    }
-    bool
-    have_basecall_alignment_pack(std::string const & gr) const
-    {
-        return Base::group_exists(basecall_alignment_pack_path(gr));
-    }
     Basecall_Alignment_Pack
     get_basecall_alignment_pack(std::string const & gr) const
     {

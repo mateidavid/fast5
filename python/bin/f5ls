@@ -75,6 +75,7 @@ def stat_file(ifn, args):
         d["rs_params"] = dict()
         for rn in d["rs_rn_l"]:
             d["rs_params"][rn] = f.get_raw_samples_params(rn)
+            d["rs_params"][rn]["packed"] = not f.have_raw_samples_unpack(rn)
         # basecall groups
         d["bc_gr_l"] = f.get_basecall_group_list()
         d["bc_desc"] = dict()
@@ -85,12 +86,19 @@ def stat_file(ifn, args):
             d["bc_desc"][gr]["start"] = dict()
             d["bc_desc"][gr]["length"] = dict()
             d["bc_desc"][gr]["count"] = dict()
-            for st in [0, 1]:
-                if d["bc_desc"][gr]["have_events"][st]:
-                    e = f.get_basecall_events(st, gr)
-                    d["bc_desc"][gr]["start"][st] = e[0]["start"]
-                    d["bc_desc"][gr]["length"][st] = e[-1]["start"] + e[-1]["length"] - e[0]["start"]
-                    d["bc_desc"][gr]["count"][st] = len(e)
+            d["bc_desc"][gr]["packed_fastq"] = dict()
+            d["bc_desc"][gr]["packed_events"] = dict()
+            for st in [0, 1, 2]:
+                d["bc_desc"][gr]["packed_fastq"][st] = not f.have_basecall_fastq_unpack(st, gr)
+                if st < 2:
+                    d["bc_desc"][gr]["packed_events"][st] = not f.have_basecall_events_unpack(st, gr)
+                    if d["bc_desc"][gr]["have_events"][st]:
+                        e = f.get_basecall_events(st, gr)
+                        d["bc_desc"][gr]["start"][st] = e[0]["start"]
+                        d["bc_desc"][gr]["length"][st] = e[-1]["start"] + e[-1]["length"] - e[0]["start"]
+                        d["bc_desc"][gr]["count"][st] = len(e)
+                else:
+                    d["bc_desc"][gr]["packed_alignment"] = not f.have_basecall_alignment_unpack(gr)
     except RuntimeError as e:
         d = dict()
     return d
@@ -121,6 +129,7 @@ def list_file(ifn, include_fn, args):
     sampling_rate = d["cid_params"]["sampling_rate"]
     # rs
     for rn in d["rs_rn_l"]:
+        print_path(["rs", rn, "packed"], int(d["rs_params"][rn]["packed"]), args)
         print_path(["rs", rn, "read_id"], d["rs_params"][rn]["read_id"], args)
         print_path(["rs", rn, "start"], as_time(d["rs_params"][rn]["start_time"], sampling_rate), args)
         print_path(["rs", rn, "length"], as_time(d["rs_params"][rn]["duration"], sampling_rate), args)
@@ -132,16 +141,18 @@ def list_file(ifn, include_fn, args):
                 continue
             # fastq
             fq_len = 0
-            print_path(["bc", gr, st, "fastq"], int(d["bc_desc"][gr]["have_fastq"][st]), args)
+            print_path(["bc", gr, st, "fastq", "packed"], int(d["bc_desc"][gr]["packed_fastq"][st]), args)
             if d["bc_desc"][gr]["have_fastq"][st]:
                 for k in ["sequence_length", "mean_qscore"]:
                     fk = ["basecall_1d_template", "basecall_1d_complement", "basecall_2d"][st] + "/" + k
+                    if fk not in d["bc_summary"][gr]:
+                        continue
                     print_path(["bc", gr, st, "fastq", k], d["bc_summary"][gr][fk], args)
                     if k == "sequence_length":
                         fq_len = d["bc_summary"][gr][fk]
             if st < 2:
                 # events
-                print_path(["bc", gr, st, "events"], int(d["bc_desc"][gr]["have_events"][st]), args)
+                print_path(["bc", gr, st, "events", "packed"], int(d["bc_desc"][gr]["packed_events"][st]), args)
                 if d["bc_desc"][gr]["have_events"][st]:
                     for k in ["start", "length"]:
                         print_path(["bc", gr, st, "events", k], as_time(float(d["bc_desc"][gr][k][st]), 1.0), args)
@@ -150,7 +161,7 @@ def list_file(ifn, include_fn, args):
                 # model
                 print_path(["bc", gr, st, "model"], int(d["bc_desc"][gr]["have_model"][st]), args)
             else:
-                print_path(["bc", gr, st, "alignment"], int(d["bc_desc"][gr]["have_alignment"]), args)
+                print_path(["bc", gr, st, "alignment", "packed"], int(d["bc_desc"][gr]["packed_alignment"]), args)
         if d["bc_desc"][gr]["have_subgroup"][2]:
             print_path(["bc", gr, "bc_1d_gr"], d["bc_desc"][gr]["bc_1d_gr"], args)
         if d["bc_desc"][gr]["have_subgroup"][0] or d["bc_desc"][gr]["have_subgroup"][1]:

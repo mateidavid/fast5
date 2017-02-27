@@ -138,6 +138,8 @@ cdef extern from "fast5.hpp" namespace "fast5":
         vector[string] get_raw_samples_read_name_list()
         bool have_raw_samples()
         bool have_raw_samples(string)
+        bool have_raw_samples_unpack(string) except +
+        bool have_raw_samples_pack(string) except +
         Raw_Samples_Params get_raw_samples_params() except +
         Raw_Samples_Params get_raw_samples_params(string) except +
         vector[Raw_Int_Sample] get_raw_int_samples() except +
@@ -153,6 +155,8 @@ cdef extern from "fast5.hpp" namespace "fast5":
         bool have_eventdetection_events()
         bool have_eventdetection_events(string)
         bool have_eventdetection_events(string, string)
+        bool have_eventdetection_events_unpack(string, string) except +
+        bool have_eventdetection_events_pack(string, string) except +
         Attr_Map get_eventdetection_params() except +
         Attr_Map get_eventdetection_params(string) except +
         EventDetection_Events_Params get_eventdetection_events_params() except +
@@ -179,6 +183,8 @@ cdef extern from "fast5.hpp" namespace "fast5":
 
         bool have_basecall_fastq(unsigned)
         bool have_basecall_fastq(unsigned, string)
+        bool have_basecall_fastq_unpack(unsigned, string) except +
+        bool have_basecall_fastq_pack(unsigned, string) except +
         string get_basecall_fastq(unsigned) except +
         string get_basecall_fastq(unsigned, string) except +
         bool have_basecall_seq(unsigned)
@@ -197,6 +203,8 @@ cdef extern from "fast5.hpp" namespace "fast5":
 
         bool have_basecall_events(unsigned)
         bool have_basecall_events(unsigned, string)
+        bool have_basecall_events_unpack(unsigned, string) except +
+        bool have_basecall_events_pack(unsigned, string) except +
         Basecall_Events_Params get_basecall_events_params(unsigned) except +
         Basecall_Events_Params get_basecall_events_params(unsigned, string) except +
         vector[Basecall_Event] get_basecall_events(unsigned) except +
@@ -204,6 +212,8 @@ cdef extern from "fast5.hpp" namespace "fast5":
 
         bool have_basecall_alignment()
         bool have_basecall_alignment(string)
+        bool have_basecall_alignment_unpack(string) except +
+        bool have_basecall_alignment_pack(string) except +
         vector[Basecall_Alignment_Entry] get_basecall_alignment() except +
         vector[Basecall_Alignment_Entry] get_basecall_alignment(string) except +
 
@@ -312,6 +322,10 @@ cdef class File:
             return deref(self.thisptr).have_raw_samples()
         else:
             return deref(self.thisptr).have_raw_samples(rn)
+    def have_raw_samples_unpack(self, rn):
+        return deref(self.thisptr).have_raw_samples_unpack(rn)
+    def have_raw_samples_pack(self, rn):
+        return deref(self.thisptr).have_raw_samples_pack(rn)
     def get_raw_samples_params(self, rn=None):
         if rn is None:
             return deref(self.thisptr).get_raw_samples_params()
@@ -352,6 +366,10 @@ cdef class File:
             return deref(self.thisptr).have_eventdetection_events(gr)
         else:
             return deref(self.thisptr).have_eventdetection_events(gr, rn)
+    def have_eventdetection_events_unpack(self, gr, rn):
+        return deref(self.thisptr).have_eventdetection_events_unpack(gr, rn)
+    def have_eventdetection_events_pack(self, gr, rn):
+        return deref(self.thisptr).have_eventdetection_events_pack(gr, rn)
     def get_eventdetection_events_params(self, gr=None, rn=None):
         if gr is None:
             return deref(self.thisptr).get_eventdetection_events_params()
@@ -401,6 +419,10 @@ cdef class File:
             return deref(self.thisptr).have_basecall_fastq(st)
         else:
             return deref(self.thisptr).have_basecall_fastq(st, gr)
+    def have_basecall_fastq_unpack(self, st, gr):
+        return deref(self.thisptr).have_basecall_fastq_unpack(st, gr)
+    def have_basecall_fastq_pack(self, st, gr):
+        return deref(self.thisptr).have_basecall_fastq_pack(st, gr)
     def get_basecall_fastq(self, st, gr=None):
         if gr is None:
             return deref(self.thisptr).get_basecall_fastq(st)
@@ -443,6 +465,10 @@ cdef class File:
             return deref(self.thisptr).have_basecall_events(st)
         else:
             return deref(self.thisptr).have_basecall_events(st, gr)
+    def have_basecall_events_unpack(self, st, gr):
+        return deref(self.thisptr).have_basecall_events_unpack(st, gr)
+    def have_basecall_events_pack(self, st, gr):
+        return deref(self.thisptr).have_basecall_events_pack(st, gr)
     def get_basecall_events_params(self, st, gr=None):
         if gr is None:
             return deref(self.thisptr).get_basecall_events_params(st)
@@ -459,6 +485,10 @@ cdef class File:
             return deref(self.thisptr).have_basecall_alignment()
         else:
             return deref(self.thisptr).have_basecall_alignment(gr)
+    def have_basecall_alignment_unpack(self, gr):
+        return deref(self.thisptr).have_basecall_alignment_unpack(gr)
+    def have_basecall_alignment_pack(self, gr):
+        return deref(self.thisptr).have_basecall_alignment_pack(gr)
     def get_basecall_alignment(self, gr=None):
         if gr is None:
             return deref(self.thisptr).get_basecall_alignment()

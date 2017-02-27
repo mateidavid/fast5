@@ -88,7 +88,7 @@ if __name__ == "__main__":
     parser.add_argument("--fastq", action="store_true",
                         help="Pack fastq data, drop rest.")
     #
-    parser.add_argument("--rw", choices=["drop", "pack", "unpack", "copy"],
+    parser.add_argument("--rs", choices=["drop", "pack", "unpack", "copy"],
                         help="Policy for raw samples.")
     parser.add_argument("--ed", choices=["drop", "pack", "unpack", "copy"],
                         help="Policy for eventdetection events.")
@@ -130,48 +130,48 @@ if __name__ == "__main__":
         not args.unpack and
         not args.archive and
         not args.fastq and
-        args.rw is None and
+        args.rs is None and
         args.ed is None and
         args.fq is None and
         args.ev is None and
         args.al is None):
         args.pack = True
     if args.pack:
-        if args.rw is None: args.rw = "pack"
+        if args.rs is None: args.rs = "pack"
         if args.ed is None: args.ed = "pack"
         if args.fq is None: args.fq = "pack"
         if args.ev is None: args.ev = "pack"
         if args.al is None: args.al = "pack"
     if args.unpack:
-        if args.rw is None: args.rw = "unpack"
+        if args.rs is None: args.rs = "unpack"
         if args.ed is None: args.ed = "unpack"
         if args.fq is None: args.fq = "unpack"
         if args.ev is None: args.ev = "unpack"
         if args.al is None: args.al = "unpack"
     if args.archive:
-        if args.rw is None: args.rw = "pack"
+        if args.rs is None: args.rs = "pack"
         if args.ed is None: args.ed = "drop"
         if args.fq is None: args.fq = "drop"
         if args.ev is None: args.ev = "drop"
         if args.al is None: args.al = "drop"
     if args.fastq:
-        if args.rw is None: args.rw = "drop"
+        if args.rs is None: args.rs = "drop"
         if args.ed is None: args.ed = "drop"
         if args.fq is None: args.fq = "pack"
         if args.ev is None: args.ev = "drop"
         if args.al is None: args.al = "drop"
-    if args.rw is None: args.rw = "drop"
+    if args.rs is None: args.rs = "drop"
     if args.ed is None: args.ed = "drop"
     if args.fq is None: args.fq = "drop"
     if args.ev is None: args.ev = "drop"
     if args.al is None: args.al = "drop"
-    logger.info("rw: " + args.rw)
+    logger.info("rs: " + args.rs)
     logger.info("ed: " + args.ed)
     logger.info("fq: " + args.fq)
     logger.info("ev: " + args.ev)
     logger.info("al: " + args.al)
     fp = fast5.File_Packer(
-        policy_d[args.rw],
+        policy_d[args.rs],
         policy_d[args.ed],
         policy_d[args.fq],
         policy_d[args.ev],

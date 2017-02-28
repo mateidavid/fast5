@@ -29,26 +29,26 @@ public:
         size_t rs_count;
         size_t rs_bits;
         //
-        size_t ede_count;
-        size_t ede_skip_bits;
-        size_t ede_len_bits;
+        size_t ed_count;
+        size_t ed_skip_bits;
+        size_t ed_len_bits;
         //
-        size_t bp_count;
-        size_t bp_single_count;
-        size_t bp_bits;
-        size_t qv_bits;
+        size_t fq_count;
+        size_t bp_seq_count;
+        size_t fq_bp_bits;
+        size_t fq_qv_bits;
         //
-        size_t bce_count;
-        size_t bce_rel_skip_bits;
-        size_t bce_skip_bits;
-        size_t bce_len_bits;
-        size_t bce_move_bits;
-        size_t bce_p_model_state_bits;
+        size_t ev_count;
+        size_t ev_rel_skip_bits;
+        size_t ev_skip_bits;
+        size_t ev_len_bits;
+        size_t ev_move_bits;
+        size_t ev_p_model_state_bits;
         //
-        size_t aln_count;
-        size_t aln_template_step_bits;
-        size_t aln_complement_step_bits;
-        size_t aln_move_bits;
+        size_t al_count;
+        size_t al_template_step_bits;
+        size_t al_complement_step_bits;
+        size_t al_move_bits;
         //
         double rs_total_duration;
         double rs_called_duration;
@@ -58,26 +58,26 @@ public:
             rs_count(0),
             rs_bits(0),
             //
-            ede_count(0),
-            ede_skip_bits(0),
-            ede_len_bits(0),
+            ed_count(0),
+            ed_skip_bits(0),
+            ed_len_bits(0),
             //
-            bp_count(0),
-            bp_single_count(0),
-            bp_bits(0),
-            qv_bits(0),
+            fq_count(0),
+            bp_seq_count(0),
+            fq_bp_bits(0),
+            fq_qv_bits(0),
             //
-            bce_count(0),
-            bce_rel_skip_bits(0),
-            bce_skip_bits(0),
-            bce_len_bits(0),
-            bce_move_bits(0),
-            bce_p_model_state_bits(0),
+            ev_count(0),
+            ev_rel_skip_bits(0),
+            ev_skip_bits(0),
+            ev_len_bits(0),
+            ev_move_bits(0),
+            ev_p_model_state_bits(0),
             //
-            aln_count(0),
-            aln_template_step_bits(0),
-            aln_complement_step_bits(0),
-            aln_move_bits(0),
+            al_count(0),
+            al_template_step_bits(0),
+            al_complement_step_bits(0),
+            al_move_bits(0),
             //
             rs_total_duration(0.0),
             rs_called_duration(0.0)
@@ -88,26 +88,26 @@ public:
             rs_count += other.rs_count;
             rs_bits += other.rs_bits;
             //
-            ede_count += other.ede_count;
-            ede_skip_bits += other.ede_skip_bits;
-            ede_len_bits += other.ede_len_bits;
+            ed_count += other.ed_count;
+            ed_skip_bits += other.ed_skip_bits;
+            ed_len_bits += other.ed_len_bits;
             //
-            bp_count += other.bp_count;
-            bp_single_count += other.bp_single_count;
-            bp_bits += other.bp_bits;
-            qv_bits += other.qv_bits;
+            fq_count += other.fq_count;
+            bp_seq_count += other.bp_seq_count;
+            fq_bp_bits += other.fq_bp_bits;
+            fq_qv_bits += other.fq_qv_bits;
             //
-            bce_count += other.bce_count;
-            bce_rel_skip_bits += other.bce_rel_skip_bits;
-            bce_skip_bits += other.bce_skip_bits;
-            bce_len_bits += other.bce_len_bits;
-            bce_move_bits += other.bce_move_bits;
-            bce_p_model_state_bits += other.bce_p_model_state_bits;
+            ev_count += other.ev_count;
+            ev_rel_skip_bits += other.ev_rel_skip_bits;
+            ev_skip_bits += other.ev_skip_bits;
+            ev_len_bits += other.ev_len_bits;
+            ev_move_bits += other.ev_move_bits;
+            ev_p_model_state_bits += other.ev_p_model_state_bits;
             //
-            aln_count += other.aln_count;
-            aln_template_step_bits += other.aln_template_step_bits;
-            aln_complement_step_bits += other.aln_complement_step_bits;
-            aln_move_bits += other.aln_move_bits;
+            al_count += other.al_count;
+            al_template_step_bits += other.al_template_step_bits;
+            al_complement_step_bits += other.al_complement_step_bits;
+            al_move_bits += other.al_move_bits;
             //
             rs_total_duration += other.rs_total_duration;
             rs_called_duration += other.rs_called_duration;
@@ -438,9 +438,9 @@ private:
                             }
                         }
                     } // if check
-                    cnt.ede_count += ede.size();
-                    cnt.ede_skip_bits += ede_pack.skip.size() * sizeof(ede_pack.skip[0]) * 8;
-                    cnt.ede_len_bits += ede_pack.len.size() * sizeof(ede_pack.len[0]) * 8;
+                    cnt.ed_count += ede.size();
+                    cnt.ed_skip_bits += ede_pack.skip.size() * sizeof(ede_pack.skip[0]) * 8;
+                    cnt.ed_len_bits += ede_pack.len.size() * sizeof(ede_pack.len[0]) * 8;
                     LOG(info)
                         << "gr=" << gr
                         << " rn=" << rn
@@ -498,7 +498,7 @@ private:
     void
     pack_fq(File const & src_f, File & dst_f, std::set< std::string > & bc_gr_s, Counts & cnt) const
     {
-        bool compute_bp_single_count = false;
+        bool compute_bp_seq_count = false;
         for (unsigned st = 0; st < 3; ++st)
         {
             auto gr_l = src_f.get_basecall_strand_group_list(st);
@@ -512,7 +512,7 @@ private:
                 }
                 else if (src_f.have_basecall_fastq_unpack(st, gr))
                 {
-                    compute_bp_single_count = true;
+                    compute_bp_seq_count = true;
                     bc_gr_s.insert(gr);
                     auto fq = src_f.get_basecall_fastq(st, gr);
                     auto fqa = src_f.split_fq(fq);
@@ -561,20 +561,20 @@ private:
                             }
                         }
                     }
-                    cnt.bp_count += fqa[1].size();
-                    cnt.bp_bits += fq_pack.bp.size() * sizeof(fq_pack.bp[0]) * 8;
-                    cnt.qv_bits += fq_pack.qv.size() * sizeof(fq_pack.qv[0]) * 8;
+                    cnt.fq_count += fqa[1].size();
+                    cnt.fq_bp_bits += fq_pack.bp.size() * sizeof(fq_pack.bp[0]) * 8;
+                    cnt.fq_qv_bits += fq_pack.qv.size() * sizeof(fq_pack.qv[0]) * 8;
                     LOG(info)
                         << "gr=" << gr
                         << " st=" << st
                         << " bp_size=" << fqa[1].size()
-                        << " bp_bits=" << fq_pack.bp_params.at("avg_bits")
-                        << " qv_bits=" << fq_pack.qv_params.at("avg_bits")
+                        << " fq_bp_bits=" << fq_pack.bp_params.at("avg_bits")
+                        << " fq_qv_bits=" << fq_pack.qv_params.at("avg_bits")
                         << std::endl;
                 }
             }
         }
-        if (compute_bp_single_count)
+        if (compute_bp_seq_count)
         {
             std::string sq;
             auto gr_l = src_f.get_basecall_group_list();
@@ -592,7 +592,7 @@ private:
             {
                 sq = src_f.get_basecall_seq(0);
             }
-            cnt.bp_single_count += sq.size();
+            cnt.bp_seq_count += sq.size();
         }
     } // pack_fq()
 
@@ -771,12 +771,12 @@ private:
                             }
                         }
                     }
-                    cnt.bce_count += ev.size();
-                    cnt.bce_rel_skip_bits += ev_pack.rel_skip.size() * sizeof(ev_pack.rel_skip[0]) * 8;
-                    cnt.bce_skip_bits += ev_pack.skip.size() * sizeof(ev_pack.skip[0]) * 8;
-                    cnt.bce_len_bits += ev_pack.len.size() * sizeof(ev_pack.len[0]) * 8;
-                    cnt.bce_move_bits += ev_pack.move.size() * sizeof(ev_pack.move[0]) * 8;
-                    cnt.bce_p_model_state_bits += ev_pack.p_model_state.size() * sizeof(ev_pack.p_model_state[0]) * 8;
+                    cnt.ev_count += ev.size();
+                    cnt.ev_rel_skip_bits += ev_pack.rel_skip.size() * sizeof(ev_pack.rel_skip[0]) * 8;
+                    cnt.ev_skip_bits += ev_pack.skip.size() * sizeof(ev_pack.skip[0]) * 8;
+                    cnt.ev_len_bits += ev_pack.len.size() * sizeof(ev_pack.len[0]) * 8;
+                    cnt.ev_move_bits += ev_pack.move.size() * sizeof(ev_pack.move[0]) * 8;
+                    cnt.ev_p_model_state_bits += ev_pack.p_model_state.size() * sizeof(ev_pack.p_model_state[0]) * 8;
                     std::ostringstream oss;
                     if (not ev_pack.rel_skip.empty())
                     {
@@ -909,10 +909,10 @@ private:
                         }
                     }
                 }
-                cnt.aln_count += al.size();
-                cnt.aln_template_step_bits += al_pack.template_step.size() * sizeof(al_pack.template_step[0]) * 8;
-                cnt.aln_complement_step_bits += al_pack.complement_step.size() * sizeof(al_pack.complement_step[0]) * 8;
-                cnt.aln_move_bits += al_pack.move.size() * sizeof(al_pack.move[0]) * 8;
+                cnt.al_count += al.size();
+                cnt.al_template_step_bits += al_pack.template_step.size() * sizeof(al_pack.template_step[0]) * 8;
+                cnt.al_complement_step_bits += al_pack.complement_step.size() * sizeof(al_pack.complement_step[0]) * 8;
+                cnt.al_move_bits += al_pack.move.size() * sizeof(al_pack.move[0]) * 8;
                 LOG(info)
                     << "gr=" << gr
                     << " al_size=" << al.size()

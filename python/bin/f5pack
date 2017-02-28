@@ -204,14 +204,14 @@ if __name__ == "__main__":
     cnt = fp.get_counts()
     cnt_total_bits = dict()
     output_ds_bytes = 0
-    print("bp_single_count\t%d" % cnt["bp_single_count"])
-    if cnt["bp_single_count"] == 0:
-        cnt["bp_single_count"] = float('nan')
+    print("bp_seq_count\t%d" % cnt["bp_seq_count"])
+    if cnt["bp_seq_count"] == 0:
+        cnt["bp_seq_count"] = float('nan')
     for cl in [["rs_count", "rs_bits"],
-               ["ede_count", "ede_skip_bits", "ede_len_bits"],
-               ["bp_count", "bp_bits", "qv_bits"],
-               ["bce_count", "bce_rel_skip_bits", "bce_skip_bits", "bce_len_bits", "bce_move_bits", "bce_p_model_state_bits"],
-               ["aln_count", "aln_template_step_bits", "aln_complement_step_bits", "aln_move_bits"]]:
+               ["ed_count", "ed_skip_bits", "ed_len_bits"],
+               ["fq_count", "fq_bp_bits", "fq_qv_bits"],
+               ["ev_count", "ev_rel_skip_bits", "ev_skip_bits", "ev_len_bits", "ev_move_bits", "ev_p_model_state_bits"],
+               ["al_count", "al_template_step_bits", "al_complement_step_bits", "al_move_bits"]]:
         cnt_total_bits[cl[0]] = 0
         if cnt[cl[0]] == 0:
             continue
@@ -220,15 +220,15 @@ if __name__ == "__main__":
             cnt_total_bits[cl[0]] += cnt[c]
             if cnt[c] == 0:
                 continue
-            print((c + "\t%d\t%.2f\t%.2f") % (cnt[c], float(cnt[c]) / cnt[cl[0]], float(cnt[c])/cnt["bp_single_count"]))
+            print((c + "\t%d\t%.2f\t%.2f") % (cnt[c], float(cnt[c]) / cnt[cl[0]], float(cnt[c])/cnt["bp_seq_count"]))
         output_ds_bytes += cnt_total_bits[cl[0]] / 8
-        print(cl[0].split('_')[0] + "_total_bits\t%d\t%.2f\t%.2f" % (cnt_total_bits[cl[0]], float(cnt_total_bits[cl[0]])/cnt[cl[0]], float(cnt_total_bits[cl[0]])/cnt["bp_single_count"]))
+        print(cl[0].split('_')[0] + "_total_bits\t%d\t%.2f\t%.2f" % (cnt_total_bits[cl[0]], float(cnt_total_bits[cl[0]])/cnt[cl[0]], float(cnt_total_bits[cl[0]])/cnt["bp_seq_count"]))
 
     if cnt["rs_total_duration"] > .001 and cnt["rs_called_duration"] > .001:
         print("rs_total_duration\t%.2f" % cnt["rs_total_duration"])
         print("rs_called_duration\t%.2f" % cnt["rs_called_duration"])
         print("rs_frac_called\t%.2f" % (cnt["rs_called_duration"] / cnt["rs_total_duration"]))
-        print("bp_per_sec\t%.2f" % (float(cnt["bp_single_count"]) / cnt["rs_called_duration"]))
+        print("bp_per_sec\t%.2f" % (float(cnt["bp_seq_count"]) / cnt["rs_called_duration"]))
     print("input_bytes\t%d" % input_bytes)
     print("output_bytes\t%d" % output_bytes)
     print("output_overhead_bytes\t%d" % (output_bytes - output_ds_bytes))

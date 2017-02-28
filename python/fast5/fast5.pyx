@@ -222,23 +222,23 @@ cdef extern from "File_Packer.hpp" namespace "fast5":
     struct Counts "fast5::File_Packer::Counts":
         size_t rs_count
         size_t rs_bits
-        size_t ede_count
-        size_t ede_skip_bits
-        size_t ede_len_bits
-        size_t bp_count
-        size_t bp_single_count
-        size_t bp_bits
-        size_t qv_bits
-        size_t bce_count
-        size_t bce_rel_skip_bits
-        size_t bce_skip_bits
-        size_t bce_len_bits
-        size_t bce_move_bits
-        size_t bce_p_model_state_bits
-        size_t aln_count
-        size_t aln_template_step_bits
-        size_t aln_complement_step_bits
-        size_t aln_move_bits
+        size_t ed_count
+        size_t ed_skip_bits
+        size_t ed_len_bits
+        size_t fq_count
+        size_t bp_seq_count
+        size_t fq_bp_bits
+        size_t fq_qv_bits
+        size_t ev_count
+        size_t ev_rel_skip_bits
+        size_t ev_skip_bits
+        size_t ev_len_bits
+        size_t ev_move_bits
+        size_t ev_p_model_state_bits
+        size_t al_count
+        size_t al_template_step_bits
+        size_t al_complement_step_bits
+        size_t al_move_bits
         double rs_total_duration
         double rs_called_duration
 

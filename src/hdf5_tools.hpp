@@ -1506,7 +1506,12 @@ public:
         int status;
         // check all path elements exist, except for what is to the right of the last '/'
         // sets active path
-        if (not path_exists(loc_path)) return false;
+        if (loc_path.empty()) return false;
+        if (not group_exists(loc_path.substr(0, loc_path.size() - 1)) and
+            not dataset_exists(loc_path.substr(0, loc_path.size() - 1)))
+        {
+            return false;
+        }
         // check if target is an attribute
         status = H5Aexists_by_name(_file_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT);
         if (status < 0) throw Exception("error in H5Aexists_by_name");

@@ -8,6 +8,7 @@
 #
 
 import argparse
+import datetime
 import logging
 import os
 import sys
@@ -70,6 +71,7 @@ def stat_file(ifn, args):
         f = fast5.File(ifn)
         # cid params
         d["cid_params"] = f.get_channel_id_params()
+        d["tid_params"] = f.get_tracking_id_params()
         # raw samples
         d["rs_rn_l"] = f.get_raw_samples_read_name_list()
         d["rs_params"] = dict()
@@ -131,6 +133,15 @@ def list_file(ifn, include_fn, args):
         print_path(["file"], ifn, args)
     if "cid_params" not in d:
         return
+    # tid
+    for k in ["device_id", "asic_id", "flow_cell_id"]:
+        if k not in d["tid_params"]:
+            continue
+        print_path(["tid", k], d["tid_params"][k], args)
+    if "exp_start_time" in d["tid_params"]:
+        exp_start_time = datetime.datetime.fromtimestamp(int(d["tid_params"]["exp_start_time"]))
+        print_path(["tid", "exp_start_date"], exp_start_time.date().isoformat(), args)
+        print_path(["tid", "exp_start_time"], exp_start_time.time().isoformat(), args)
     # cid
     for k in ["channel_number", "sampling_rate"]:
         if k not in d["cid_params"]:

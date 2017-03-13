@@ -1313,7 +1313,7 @@ public:
         auto && _gr = fill_basecall_group(2, gr);
         if (have_basecall_alignment_unpack(_gr))
         {
-            Base::read(basecall_alignment_path(gr), al, Basecall_Alignment_Entry::compound_map());
+            Base::read(basecall_alignment_path(_gr), al, Basecall_Alignment_Entry::compound_map());
         }
         else if (have_basecall_alignment_pack(_gr)
                  and have_basecall_seq(2, _gr))

@@ -9,6 +9,7 @@
 
 import argparse
 import datetime
+import dateutil.parser
 import logging
 import math
 import os
@@ -153,7 +154,10 @@ def list_file(ifn, include_fn, args):
             continue
         print_path(["tid", k], d["tid"][k], args)
     if "exp_start_time" in d["tid"]:
-        exp_start_time = datetime.datetime.fromtimestamp(int(d["tid"]["exp_start_time"]))
+        if 'T' in d["tid"]["exp_start_time"]:
+            exp_start_time = dateutil.parser.parse(d["tid"]["exp_start_time"])
+        else:
+            exp_start_time = datetime.datetime.fromtimestamp(int(d["tid"]["exp_start_time"]))
         print_path(["tid", "exp_start_date"], exp_start_time.date().isoformat(), args)
         print_path(["tid", "exp_start_time"], exp_start_time.time().isoformat(), args)
     # cid

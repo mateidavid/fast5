@@ -233,6 +233,10 @@ int main(int argc, char* argv[])
                 clog << a << endl;
             }
 
+            // reopen for reading
+            f.close();
+            f.open(file_name);
+
             //
             // test reading compound
             //
@@ -302,6 +306,7 @@ int main(int argc, char* argv[])
                 }
 
             }
+            f.close();
         }
         catch (hdf5_tools::Exception& e)
         {

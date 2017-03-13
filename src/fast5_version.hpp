@@ -7,7 +7,7 @@ namespace fast5
 namespace
 {
 
-static char const * const version = "0.6.1";
+static char const * const version = "0.6.2";
 
 }
 

@@ -415,6 +415,11 @@ struct Util
                     [] (void * vp) { return *reinterpret_cast< H5T_class_t * >(vp) != H5T_NO_CLASS; }
                   }
                 },
+                { (void(*)())&H5Tget_cset,
+                  { "H5Tget_cset",
+                    [] (void * vp) { return *reinterpret_cast< H5T_cset_t * >(vp) != H5T_CSET_ERROR; }
+                  }
+                },
                 { (void(*)())&H5Tget_member_index,
                   { "H5Tget_member_index",
                     [] (void * vp) { return *reinterpret_cast< int * >(vp) >= 0; }
@@ -453,6 +458,11 @@ struct Util
                 { (void(*)())&H5Tis_variable_str,
                   { "H5Tis_variable_str",
                     [] (void * vp) { return *reinterpret_cast< htri_t * >(vp) >= 0; }
+                  }
+                },
+                { (void(*)())&H5Tset_cset,
+                  { "H5Tset_cset",
+                    [] (void * vp) { return *reinterpret_cast< herr_t * >(vp) >= 0; }
                   }
                 },
                 { (void(*)())&H5Tset_size,
@@ -828,11 +838,14 @@ struct Reader_Base
         if (file_dtype_class == H5T_STRING)
         {
             file_dtype_is_vlen_str = Util::wrap(H5Tis_variable_str, file_dtype_id_holder.id);
+            file_dtype_cset = Util::wrap(H5Tget_cset, file_dtype_id_holder.id);
         }
         else
         {
             file_dtype_is_vlen_str = false;
+            file_dtype_cset = H5T_CSET_ERROR;
         }
+        // datatype size
         file_dtype_size = Util::wrap(H5Tget_size, file_dtype_id_holder.id);
     }
     HDF_Object_Holder obj_id_holder;
@@ -843,6 +856,7 @@ struct Reader_Base
     size_t dspace_size;
     H5T_class_t file_dtype_class;
     htri_t file_dtype_is_vlen_str;
+    H5T_cset_t file_dtype_cset;
     size_t file_dtype_size;
     bool is_ds;
 }; // struct Reader_Base
@@ -883,6 +897,7 @@ struct String_reader
             {
                 // compute mem_type
                 mem_dtype_id_holder = mem_type_wrapper(Util::make_str_type(-1));
+                Util::wrap(H5Tset_cset, mem_dtype_id_holder.id, reader_base.file_dtype_cset);
                 // prepare buffer to receive data
                 std::vector< char * > charptr_buff(res.size(), nullptr);
                 // perform the read
@@ -902,6 +917,7 @@ struct String_reader
                 // compute mem_type
                 size_t file_stype_size = Util::wrap(H5Tget_size, file_stype_id);
                 mem_dtype_id_holder = mem_type_wrapper(Util::make_str_type(file_stype_size + 1));
+                Util::wrap(H5Tset_cset, mem_dtype_id_holder.id, reader_base.file_dtype_cset);
                 // prepare buffer to receieve data
                 std::vector< char > char_buff(res.size() * (file_stype_size + 1), '\0');
                 // perform the read
@@ -1001,6 +1017,7 @@ struct Reader_helper< 2, Data_Type >
             and not reader_base.file_dtype_is_vlen_str)
         {
             HDF_Object_Holder mem_dtype_id_holder(Util::make_str_type(sizeof(Data_Type)));
+            Util::wrap(H5Tset_cset, mem_dtype_id_holder.id, reader_base.file_dtype_cset);
             reader_base.reader(mem_dtype_id_holder.id, out);
         }
         else // conversion needed

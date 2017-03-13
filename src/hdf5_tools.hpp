@@ -838,12 +838,10 @@ struct Reader_Base
         if (file_dtype_class == H5T_STRING)
         {
             file_dtype_is_vlen_str = Util::wrap(H5Tis_variable_str, file_dtype_id_holder.id);
-            file_dtype_cset = Util::wrap(H5Tget_cset, file_dtype_id_holder.id);
         }
         else
         {
             file_dtype_is_vlen_str = false;
-            file_dtype_cset = H5T_CSET_ERROR;
         }
         // datatype size
         file_dtype_size = Util::wrap(H5Tget_size, file_dtype_id_holder.id);
@@ -856,7 +854,6 @@ struct Reader_Base
     size_t dspace_size;
     H5T_class_t file_dtype_class;
     htri_t file_dtype_is_vlen_str;
-    H5T_cset_t file_dtype_cset;
     size_t file_dtype_size;
     bool is_ds;
 }; // struct Reader_Base
@@ -893,11 +890,13 @@ struct String_reader
         HDF_Object_Holder mem_dtype_id_holder;
         if (file_stype_class == H5T_STRING) // stored as a string
         {
+            auto file_stype_cset = Util::wrap(H5Tget_cset, file_stype_id);
             if (Util::wrap(H5Tis_variable_str, file_stype_id)) // stored as a varlen string
             {
                 // compute mem_type
-                mem_dtype_id_holder = mem_type_wrapper(Util::make_str_type(-1));
-                Util::wrap(H5Tset_cset, mem_dtype_id_holder.id, reader_base.file_dtype_cset);
+                auto mem_stype_id_holder = Util::make_str_type(-1);
+                Util::wrap(H5Tset_cset, mem_stype_id_holder.id, file_stype_cset);
+                mem_dtype_id_holder = mem_type_wrapper(std::move(mem_stype_id_holder));
                 // prepare buffer to receive data
                 std::vector< char * > charptr_buff(res.size(), nullptr);
                 // perform the read
@@ -916,8 +915,9 @@ struct String_reader
             {
                 // compute mem_type
                 size_t file_stype_size = Util::wrap(H5Tget_size, file_stype_id);
-                mem_dtype_id_holder = mem_type_wrapper(Util::make_str_type(file_stype_size + 1));
-                Util::wrap(H5Tset_cset, mem_dtype_id_holder.id, reader_base.file_dtype_cset);
+                auto mem_stype_id_holder = Util::make_str_type(file_stype_size + 1);
+                Util::wrap(H5Tset_cset, mem_stype_id_holder.id, file_stype_cset);
+                mem_dtype_id_holder = mem_type_wrapper(std::move(mem_stype_id_holder));
                 // prepare buffer to receieve data
                 std::vector< char > char_buff(res.size() * (file_stype_size + 1), '\0');
                 // perform the read
@@ -1017,7 +1017,8 @@ struct Reader_helper< 2, Data_Type >
             and not reader_base.file_dtype_is_vlen_str)
         {
             HDF_Object_Holder mem_dtype_id_holder(Util::make_str_type(sizeof(Data_Type)));
-            Util::wrap(H5Tset_cset, mem_dtype_id_holder.id, reader_base.file_dtype_cset);
+            auto file_dtype_cset = Util::wrap(H5Tget_cset, reader_base.file_dtype_id_holder.id);
+            Util::wrap(H5Tset_cset, mem_dtype_id_holder.id, file_dtype_cset);
             reader_base.reader(mem_dtype_id_holder.id, out);
         }
         else // conversion needed
@@ -1487,54 +1488,55 @@ public:
     }
 
     /// Check if a group exists
-    bool group_exists(const std::string& loc_full_name) const
+    bool group_exists(std::string const & loc_full_name) const
     {
         assert(is_open());
-        assert(not loc_full_name.empty() and loc_full_name[0] == '/');
-        std::string loc_path;
-        std::string loc_name;
-        std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+        assert(not loc_full_name.empty() and loc_full_name.front() == '/');
+        if (loc_full_name == "/") return true;
+        auto && loc = split_full_name(loc_full_name);
         // check all path elements exist, except for what is to the right of the last '/'
         // sets active path
-        if (not path_exists(loc_path)) return false;
-        return check_object_type(loc_full_name, H5O_TYPE_GROUP);
+        return path_exists(loc.first) and check_object_type(loc_full_name, H5O_TYPE_GROUP);
     }
     /// Check if a dataset exists
-    bool dataset_exists(const std::string& loc_full_name) const
+    bool dataset_exists(std::string const & loc_full_name) const
     {
         assert(is_open());
-        assert(not loc_full_name.empty() and loc_full_name[0] == '/');
-        std::string loc_path;
-        std::string loc_name;
-        std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+        assert(not loc_full_name.empty() and loc_full_name.front() == '/');
+        if (loc_full_name == "/") return false;
+        auto && loc = split_full_name(loc_full_name);
         // check all path elements exist, except for what is to the right of the last '/'
         // sets active path
-        if (not path_exists(loc_path)) return false;
-        return check_object_type(loc_full_name, H5O_TYPE_DATASET);
+        return path_exists(loc.first) and check_object_type(loc_full_name, H5O_TYPE_DATASET);
+    }
+    bool group_or_dataset_exists(std::string const & loc_full_name) const
+    {
+        assert(is_open());
+        assert(not loc_full_name.empty() and loc_full_name.front() == '/');
+        if (loc_full_name == "/") return true;
+        auto && loc = split_full_name(loc_full_name);
+        // check all path elements exist, except for what is to the right of the last '/'
+        // sets active path
+        return (path_exists(loc.first) and
+                (check_object_type(loc_full_name, H5O_TYPE_DATASET) or
+                 check_object_type(loc_full_name, H5O_TYPE_GROUP)));
     }
     /// Check if attribute exists
-    bool attribute_exists(const std::string& loc_full_name) const
+    bool attribute_exists(std::string const & loc_full_name) const
     {
         assert(is_open());
-        assert(not loc_full_name.empty() and loc_full_name[0] == '/');
-        std::string loc_path;
-        std::string loc_name;
-        std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
-        int status;
+        assert(not loc_full_name.empty() and loc_full_name.front() == '/');
+        if (loc_full_name == "/") return false;
+        auto && loc = split_full_name(loc_full_name);
         // check all path elements exist, except for what is to the right of the last '/'
         // sets active path
-        if (loc_path.empty()) return false;
-        if (not group_exists(loc_path.substr(0, loc_path.size() - 1)) and
-            not dataset_exists(loc_path.substr(0, loc_path.size() - 1)))
-        {
-            return false;
-        }
+        if (not group_or_dataset_exists(loc.first)) return false;
         // check if target is an attribute
-        status = H5Aexists_by_name(_file_id, loc_path.c_str(), loc_name.c_str(), H5P_DEFAULT);
+        int status = H5Aexists_by_name(_file_id, loc.first.c_str(), loc.second.c_str(), H5P_DEFAULT);
         if (status < 0) throw Exception("error in H5Aexists_by_name");
         return status > 0;
     }
-    bool exists(const std::string& loc_full_name) const
+    bool exists(std::string const & loc_full_name) const
     {
         return attribute_exists(loc_full_name) or dataset_exists(loc_full_name);
     }
@@ -1545,14 +1547,12 @@ public:
     {
         assert(is_open());
         assert(not loc_full_name.empty() and loc_full_name[0] == '/');
-        std::string loc_path;
-        std::string loc_name;
-        std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+        auto && loc = split_full_name(loc_full_name);
         Exception::active_path() = loc_full_name;
         detail::HDF_Object_Holder grp_id_holder(
-            detail::Util::wrap(H5Oopen, _file_id, loc_path.c_str(), H5P_DEFAULT),
+            detail::Util::wrap(H5Oopen, _file_id, loc.first.c_str(), H5P_DEFAULT),
             detail::Util::wrapped_closer(H5Oclose));
-        detail::Reader< Data_Storage >()(grp_id_holder.id, loc_name,
+        detail::Reader< Data_Storage >()(grp_id_holder.id, loc.second,
                                          out, std::forward< Args >(args)...);
     }
     /// Write attribute or dataset
@@ -1563,16 +1563,13 @@ public:
         assert(is_rw());
         assert(not loc_full_name.empty() and loc_full_name[0] == '/');
         assert(not exists(loc_full_name));
-        std::string loc_path;
-        std::string loc_name;
-        std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+        auto && loc = split_full_name(loc_full_name);
         Exception::active_path() = loc_full_name;
         detail::HDF_Object_Holder grp_id_holder;
-        std::string grp_path = loc_path != "/"? loc_path.substr(0, loc_path.size() - 1) : "/";
-        if (group_exists(grp_path) or dataset_exists(grp_path))
+        if (group_or_dataset_exists(loc.first))
         {
             grp_id_holder.load(
-                detail::Util::wrap(H5Oopen, _file_id, grp_path.c_str(), H5P_DEFAULT),
+                detail::Util::wrap(H5Oopen, _file_id, loc.first.c_str(), H5P_DEFAULT),
                 detail::Util::wrapped_closer(H5Oclose));
         }
         else
@@ -1582,10 +1579,10 @@ public:
                 detail::Util::wrapped_closer(H5Pclose));
             detail::Util::wrap(H5Pset_create_intermediate_group, lcpl_id_holder.id, 1);
             grp_id_holder.load(
-                detail::Util::wrap(H5Gcreate2, _file_id, grp_path.c_str(), lcpl_id_holder.id, H5P_DEFAULT, H5P_DEFAULT),
+                detail::Util::wrap(H5Gcreate2, _file_id, loc.first.c_str(), lcpl_id_holder.id, H5P_DEFAULT, H5P_DEFAULT),
                 detail::Util::wrapped_closer(H5Gclose));
         }
-        detail::Writer< In_Data_Storage >()(grp_id_holder.id, loc_name, as_ds, in, std::forward< Args >(args)...);
+        detail::Writer< In_Data_Storage >()(grp_id_holder.id, loc.second, as_ds, in, std::forward< Args >(args)...);
     }
     template < typename In_Data_Storage, typename ...Args >
     void write_dataset(const std::string& loc_full_name, const In_Data_Storage& in, Args&& ...args) const
@@ -1627,7 +1624,7 @@ public:
     {
         std::vector< std::string > res;
         Exception::active_path() = loc_full_name;
-        assert(group_exists(loc_full_name) or dataset_exists(loc_full_name));
+        assert(group_or_dataset_exists(loc_full_name));
         detail::HDF_Object_Holder id_holder(
             detail::Util::wrap(H5Oopen, _file_id, loc_full_name.c_str(), H5P_DEFAULT),
             detail::Util::wrapped_closer(H5Oclose));
@@ -1693,11 +1690,9 @@ public:
         detail::HDF_Object_Holder type_id_holder;
         if (attribute_exists(loc_full_name))
         {
-            std::string loc_path;
-            std::string loc_name;
-            std::tie(loc_path, loc_name) = split_full_name(loc_full_name);
+            auto && loc = split_full_name(loc_full_name);
             attr_id_holder.load(
-                detail::Util::wrap(H5Aopen_by_name, _file_id, loc_path.c_str(), loc_name.c_str(),
+                detail::Util::wrap(H5Aopen_by_name, _file_id, loc.first.c_str(), loc.second.c_str(),
                                    H5P_DEFAULT, H5P_DEFAULT),
                 detail::Util::wrapped_closer(H5Aclose));
             type_id_holder.load(
@@ -1760,12 +1755,11 @@ public:
         if (not dst_f.is_rw()) throw Exception("destination file not writeable");
         std::string const & dst_full_path = (_dst_full_path.empty()? src_full_path : _dst_full_path);
         if (not src_f.attribute_exists(src_full_path)) throw Exception("source attribute missing");
-        if (dst_f.group_exists(dst_full_path)
-            or dst_f.dataset_exists(dst_full_path)
-            or dst_f.attribute_exists(dst_full_path)) throw Exception("destination path exists");
+        if (dst_f.group_or_dataset_exists(dst_full_path) or
+            dst_f.attribute_exists(dst_full_path)) throw Exception("destination path exists");
         // compute paths
-        auto src_path = split_full_name(src_full_path);
-        auto dst_path = split_full_name(dst_full_path);
+        auto && src_path = split_full_name(src_full_path);
+        auto && dst_path = split_full_name(dst_full_path);
         // open source attribute
         detail::HDF_Object_Holder src_attr_id_holder(
             detail::Util::wrap(H5Aopen_by_name, src_f._file_id, src_path.first.c_str(), src_path.second.c_str(),
@@ -1869,29 +1863,32 @@ private:
     bool _rw;
 
     /// Split a full name into path and name
+    /// full_name must begin with '/', and not end with '/' unless it equals "/"
     static std::pair< std::string, std::string > split_full_name(const std::string& full_name)
     {
-        auto last_slash_pos = full_name.find_last_of('/');
-        std::string path = last_slash_pos != std::string::npos? full_name.substr(0, last_slash_pos + 1) : std::string();
-        std::string name = last_slash_pos != std::string::npos? full_name.substr(last_slash_pos + 1) : full_name;
-        return std::make_pair(path, name);
+        assert(not full_name.empty() and
+               full_name.front() == '/' and
+               (full_name.size() == 1 or full_name.back() != '/'));
+        if (full_name == "/") return std::make_pair(std::string("/"), std::string());
+        auto pos = full_name.find_last_of('/');
+        return (pos != std::string::npos
+                ? std::make_pair(full_name.substr(0, pos > 0? pos : 1), full_name.substr(pos + 1))
+                : std::make_pair(std::string(), std::string()));
     } // split_full_name
 
     /// Determine if a path to an element exists
-    bool path_exists(const std::string& full_path_name) const
+    bool path_exists(std::string const & full_path_name) const
     {
         assert(is_open());
-        assert(not full_path_name.empty()
-               and full_path_name[0] == '/'
-               and full_path_name[full_path_name.size() - 1] == '/');
+        assert(not full_path_name.empty() and full_path_name.front() == '/');
+        if (full_path_name == "/") return true;
         Exception::active_path() = full_path_name;
         // check all path elements exist, except for what is to the right of the last '/'
         size_t pos = 0;
-        while (true)
+        while (pos != std::string::npos)
         {
             ++pos;
             pos = full_path_name.find('/', pos);
-            if (pos == std::string::npos) break;
             std::string tmp = full_path_name.substr(0, pos);
             // check link exists
             if (not detail::Util::wrap(H5Lexists, _file_id, tmp.c_str(), H5P_DEFAULT)) return false;
@@ -1910,7 +1907,7 @@ private:
     } // path_exists()
 
     /// Check if a group exists
-    bool check_object_type(const std::string& loc_full_name, H5O_type_t type_id) const
+    bool check_object_type(std::string const & loc_full_name, H5O_type_t type_id) const
     {
         // check link exists
         if (loc_full_name != "/"

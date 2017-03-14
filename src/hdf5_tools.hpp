@@ -1820,7 +1820,7 @@ public:
                 else if (dspace_type == H5S_SIMPLE)
                 {
                     if (sz != 1) throw Exception("unsupported attribute type for copying: extent of string of size > 1");
-                    std::vector< char[1] > tmp_v(tmp.size());
+                    std::vector< std::array< char, 1 > > tmp_v(tmp.size());
                     for (unsigned i = 0; i < tmp.size(); ++i)
                     {
                         tmp_v[i][0] = tmp[i];

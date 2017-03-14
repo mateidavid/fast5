@@ -98,8 +98,8 @@ def stat_file(ifn, args):
             for st in [0, 1, 2]:
                 d["bc"][gr]["packed_fastq"][st] = not f.have_basecall_fastq_unpack(st, gr)
                 if st < 2:
-                    d["bc"][gr]["packed_events"][st] = not f.have_basecall_events_unpack(st, gr)
                     if d["bc"][gr]["desc"]["have_events"][st]:
+                        d["bc"][gr]["packed_events"][st] = not f.have_basecall_events_unpack(st, gr)
                         ev_params = f.get_basecall_events_params(st, gr)
                         d["bc"][gr]["start"][st] = ev_params["start_time"]
                         d["bc"][gr]["length"][st] = ev_params["duration"]
@@ -192,8 +192,8 @@ def list_file(ifn, include_fn, args):
                         fq_len = d["bc"][gr]["summary"][fk]
             if st < 2:
                 # events
-                print_path(["bc", gr, st, "events", "packed"], int(d["bc"][gr]["packed_events"][st]), args)
                 if d["bc"][gr]["desc"]["have_events"][st]:
+                    print_path(["bc", gr, st, "events", "packed"], int(d["bc"][gr]["packed_events"][st]), args)
                     for k in ["start", "length"]:
                         print_path(["bc", gr, st, "events", k], as_time(float(d["bc"][gr][k][st]), 1.0), args)
                     if st in d["bc"][gr]["count"]:

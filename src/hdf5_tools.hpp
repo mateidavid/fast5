@@ -25,11 +25,15 @@
 #include <limits>
 #include <type_traits>
 
+/// Original HDF5 C API.
 namespace hdf5
 {
+#ifndef DOXY
 #include <hdf5.h>
+#endif
 }
 
+/// New C++ wrapper for the HDF5 C API.
 namespace hdf5_tools
 {
 using namespace hdf5;
@@ -39,9 +43,15 @@ class Exception
     : public std::exception
 {
 public:
+    /// Ctor: from message @p msg.
     Exception(std::string const & msg) : _msg(active_path() + ": " + msg) {}
+    /// Get exception message.
     char const * what() const noexcept { return _msg.c_str(); }
-    static std::string& active_path()
+    /**
+     * Active HDF5 operation path.
+     * If set during a high-level HDF5 operation, it will be printed as part of any exception message.
+     */
+    static std::string & active_path()
     {
         static thread_local std::string _active_path;
         return _active_path;
@@ -53,56 +63,70 @@ private:
 // Forward declaration
 class Compound_Map;
 
+/// Internal constructs.
 namespace detail
 {
 
-/// Compute offset of a struct member from a member pointer (runtime version).
+/**
+ * Compute offset of a struct member from a member pointer (runtime version).
+ * @tparam T Struct type.
+ * @tparam U Member type.
+ */
 template <typename T, typename U>
 std::size_t offset_of(U T::* mem_ptr)
 {
     return reinterpret_cast<std::size_t>(&(((T*)0)->*mem_ptr));
 }
 
-/// TempMetaFunc: Given destination type, deduce memory type to be used in hdf5 read operation.
-/// Only useful for numeric types.
-/// HDF5 idiosyncracy:
-///   Types such as H5T_NATIVE_INT are not constants(!?), so id() is not a constexpr.
+/**
+ * TMF: Get HDF5 memory type for native numeric destination type.
+ * Note HDF5 idiosyncracy:
+ *   Types such as H5T_NATIVE_INT are not constants(!?), so id() is not a constexpr.
+ */
 template <typename T> struct get_mem_type           { static hid_t id() { return -1;                 } };
-// signed integral:
+#ifndef DOXY
+// signed integral
 template <> struct get_mem_type<char>               { static hid_t id() { return H5T_NATIVE_CHAR;    } };
 template <> struct get_mem_type<short>              { static hid_t id() { return H5T_NATIVE_SHORT;   } };
 template <> struct get_mem_type<int>                { static hid_t id() { return H5T_NATIVE_INT;     } };
 template <> struct get_mem_type<long>               { static hid_t id() { return H5T_NATIVE_LONG;    } };
 template <> struct get_mem_type<long long>          { static hid_t id() { return H5T_NATIVE_LLONG;   } };
-// unsigned integral:
+// unsigned integral
 template <> struct get_mem_type<unsigned char>      { static hid_t id() { return H5T_NATIVE_UCHAR;   } };
 template <> struct get_mem_type<unsigned short>     { static hid_t id() { return H5T_NATIVE_USHORT;  } };
 template <> struct get_mem_type<unsigned>           { static hid_t id() { return H5T_NATIVE_UINT;    } };
 template <> struct get_mem_type<unsigned long>      { static hid_t id() { return H5T_NATIVE_ULONG;   } };
 template <> struct get_mem_type<unsigned long long> { static hid_t id() { return H5T_NATIVE_ULLONG;  } };
-// float:
+// float
 template <> struct get_mem_type<float>              { static hid_t id() { return H5T_NATIVE_FLOAT;   } };
 template <> struct get_mem_type<double>             { static hid_t id() { return H5T_NATIVE_DOUBLE;  } };
 template <> struct get_mem_type<long double>        { static hid_t id() { return H5T_NATIVE_LDOUBLE; } };
+#endif
 
 /**
- * Class of memory type:
- *   0 - unknown
- *   1 - numeric (signed/unsigned integer or float)
- *   2 - fixed length string (char array)
- *   3 - variable length string (std::string)
- *   4 - class
+ * TMF: Get class of memory type.
+ * Results:
+ * - 0: unknown
+ * - 1: numeric (signed/unsigned integer or float)
+ * - 2: fixed length string (char array)
+ * - 3: variable length string (std::string)
+ * - 4: struct/class
  */
 template <typename T>
 struct mem_type_class
 {
+#ifndef DOXY
     static int const value =
         std::conditional<std::is_integral<T>::value or std::is_floating_point<T>::value,
                          std::integral_constant<int, 1>,
                          typename std::conditional<std::is_class<T>::value,
                                                    std::integral_constant<int, 4>,
                                                    std::integral_constant<int, 0>>::type>::type::value;
+#else
+    static int const value = 0;
+#endif
 };
+#ifndef DOXY
 template <size_t Size>
 struct mem_type_class<char[Size]>
 {
@@ -128,24 +152,34 @@ struct mem_type_class<std::string>
 {
     static int const value = 3;
 };
+#endif
 
-// Struct whose purpuse is to destroy the HDF object during destruction
+/**
+ * HDF5 object holder.
+ * Upon destruction, deallocate the held HDF5 object, check the HDF5 API return value, and throw exception on error.
+ */
 struct HDF_Object_Holder
 {
+    /// HDF5 object
     hid_t id;
+    /// HDF5 object deallocator
     std::function<herr_t(hid_t)> dtor;
+
+    /// Ctor: default
     HDF_Object_Holder()
         : id(0) {}
+    /// Ctor: copy
     HDF_Object_Holder(HDF_Object_Holder const &) = delete;
+    /// Ctor: move
     HDF_Object_Holder(HDF_Object_Holder && other)
         : id(0)
     {
-        load(std::move(other));
+        *this = std::move(other);
     }
+    /// Ctor: from HDF5 object and destructor
     HDF_Object_Holder(hid_t _id, std::function<herr_t(hid_t)> _dtor)
-    {
-        load(_id, _dtor);
-    }
+        : id(_id), dtor(_dtor) {}
+    /// Dtor: throw on HDF5 errors
     ~HDF_Object_Holder() noexcept(false)
     {
         if (id > 0)
@@ -157,8 +191,10 @@ struct HDF_Object_Holder
             id = 0;
         }
     }
-    HDF_Object_Holder& operator = (HDF_Object_Holder const &) = delete;
-    HDF_Object_Holder& operator = (HDF_Object_Holder && other)
+    /// Asop: copy
+    HDF_Object_Holder & operator = (HDF_Object_Holder const &) = delete;
+    /// Asop: move
+    HDF_Object_Holder & operator = (HDF_Object_Holder && other)
     {
         if (&other != this)
         {
@@ -167,24 +203,18 @@ struct HDF_Object_Holder
         }
         return *this;
     }
-    void load(hid_t _id, std::function<herr_t(hid_t)> _dtor)
-    {
-        id = _id;
-        dtor = _dtor;
-    }
-    void load(HDF_Object_Holder&& other)
-    {
-        *this = std::move(other);
-    }
 }; // struct HDF_Object_Holder
 
+/// Holder of static methods
 struct Util
 {
     /**
-     * Make hdf5 string type.
-     * @param sz If negative, make varlen string; else make fixlen string of size sz.
+     * Create HDF5 string type.
+     * @param sz If nonnegative, create fixed length string type of size @p sz;
+     * else create variable length string type.
      */
-    static HDF_Object_Holder make_str_type(long sz)
+    static HDF_Object_Holder
+    make_str_type(long sz)
     {
         assert(sz != 0);
         HDF_Object_Holder res(
@@ -193,10 +223,43 @@ struct Util
         size_t tmp = sz < 0? H5T_VARIABLE : sz;
         wrap(H5Tset_size, res.id, tmp);
         return res;
-    } // make_str_type
+    } // make_str_type()
 
     /**
-     * Get name and return value checker for hdf5 function.
+     * Wrapper of HDF5 calls.
+     * Apply HDF5 call and check return value for validity.
+     * @tparam Function HDF5 function type.
+     * @tparam Args Variable arguments type.
+     * @param f HDF5 function.
+     * @param args Variable arguments.
+     */
+    template <typename Function, typename... Args>
+    static typename std::result_of<Function(Args...)>::type
+    wrap(Function && f, Args && ...args)
+    {
+        auto res = f(args...);
+        auto const & f_info = get_fcn_info((void(*)())&f);
+        if (not f_info.second((void*)&res)) throw Exception(std::string("error in ") + f_info.first);
+        return res;
+    }
+
+    /**
+     * Wrapped closer function.
+     * Create and return a wrapped closer function.
+     * @tparam Function HDF5 closer function type.
+     * @param f HDF5 closer function.
+     */
+    template <typename Function>
+    static std::function<herr_t(hid_t)>
+    wrapped_closer(Function && f)
+    {
+        return [&] (hid_t id) { return wrap(f, id); };
+    }
+
+private:
+    /**
+     * Get name and return value checker for HDF5 function.
+     * Maintain a static map of HDF5 functions and corresponding checks for return value validity.
      */
     static std::pair<char const *, std::function<bool(void *)>> const &
     get_fcn_info(void (*fcn_ptr)())
@@ -474,48 +537,53 @@ struct Util
         return fcn_info_m.at(fcn_ptr);
     }
 
-    /**
-     * General-purpose wrapper of hdf5 calls that checks return value for validity.
-     */
-    template <typename Function, typename... Args>
-    static typename std::result_of<Function(Args...)>::type
-    wrap(Function&& f, Args&& ...args)
-    {
-        auto res = f(args...);
-        auto const & f_info = get_fcn_info((void(*)())&f);
-        if (not f_info.second((void*)&res)) throw Exception(std::string("error in ") + f_info.first);
-        return res;
-    }
-
-    /**
-     * Wrap closer function.
-     */
-    template <typename Function>
-    static std::function<herr_t(hid_t)> wrapped_closer(Function&& f)
-    {
-        return [&] (hid_t id) { return wrap(f, id); };
-    }
 }; // struct Util
 
-/// Description of a member inside a compound
-/// Only works with numeric, string, and struct types.
+/**
+ * Description of a compound member.
+ * Only for numeric, string, and struct member types.
+ */
 struct Compound_Member_Description
 {
 public:
+    /**
+     * Ctor: numeric compound member
+     * @param _name Compound member name
+     * @param _offset Compound member offset
+     * @param _numeric_type_id HDF5 numeric type
+     */
     Compound_Member_Description(std::string const & _name, size_t _offset, hid_t _numeric_type_id)
         : type(numeric),
           name(_name),
           offset(_offset),
           numeric_type_id(_numeric_type_id) {}
+    /**
+     * Ctor: fixed-length string compound member
+     * @param _name Compound member name
+     * @param _offset Compound member offset
+     * @param _char_array_size Fixed length string size
+     */
     Compound_Member_Description(std::string const & _name, size_t _offset, size_t _char_array_size)
         : type(char_array),
           name(_name),
           offset(_offset),
           char_array_size(_char_array_size) {}
+    /**
+     * Ctor: variable-length string compound member
+     * @param _name Compound member name
+     * @param _offset Compound member offset
+     */
     Compound_Member_Description(std::string const & _name, size_t _offset)
         : type(string),
           name(_name),
           offset(_offset) {}
+    /**
+     * Ctor: struct compound member
+     * @param _name Compound member name
+     * @param _offset Compound member offset
+     * @param _compound_map_ptr Inner compound map
+     * @param _compound_size Inner compound size
+     */
     Compound_Member_Description(std::string const & _name, size_t _offset,
                                 Compound_Map const * _compound_map_ptr, size_t _compound_size)
         : type(compound),
@@ -529,26 +597,27 @@ public:
     bool is_string()     const { return type == string;     }
     bool is_compound()   const { return type == compound;   }
 
+    /// Create and return a holder for the HDF5 type of this compound member.
     HDF_Object_Holder get_type() const
     {
         assert(not is_compound());
         HDF_Object_Holder res;
         if (is_numeric())
         {
-            res.load(numeric_type_id, nullptr);
+            res = HDF_Object_Holder(numeric_type_id, nullptr);
         }
         else if (is_char_array())
         {
-            res.load(Util::make_str_type(char_array_size));
+            res = Util::make_str_type(char_array_size);
         }
         else if (is_string())
         {
-            res.load(Util::make_str_type(-1));
+            res = Util::make_str_type(-1);
         }
         return res;
-    }
+    } // get_type()
 
-    friend std::ostream& operator << (std::ostream & os, Compound_Member_Description const & e)
+    friend std::ostream & operator << (std::ostream & os, Compound_Member_Description const & e)
     {
         os << "(&=" << (void*)&e
            << ",name=\"" << e.name
@@ -562,6 +631,7 @@ public:
         return os;
     }
 
+    /// Compound member type enum
     enum member_type
     {
         numeric,
@@ -569,17 +639,25 @@ public:
         string,
         compound
     };
+
+    /// Compound member type
     member_type type;
+    /// Compound member name
     std::string name;
+    /// Compound member offset
     size_t offset;
     union
     {
+        /// For numeric types: HDF5 type
         hid_t numeric_type_id;
+        /// For string types: size of string type, 0 if variable-length.
         size_t char_array_size;
+        /// For compound types: inner compound map
         Compound_Map const * compound_map_ptr;
     };
+    /// For compound types: inner compound size
     size_t compound_size;
-}; // Compound_Member_Description
+}; // struct Compound_Member_Description
 
 } // namespace detail
 
@@ -587,13 +665,24 @@ public:
 class Compound_Map
 {
 public:
+    /// Ctor: default
     Compound_Map() = default;
+    /// Ctor: copy
     Compound_Map(Compound_Map const &) = delete;
+    /// Ctor: move
     Compound_Map(Compound_Map &&) = default;
-    Compound_Map& operator = (Compound_Map const &) = delete;
-    Compound_Map& operator = (Compound_Map &&) = default;
-    ~Compound_Map() = default;
+    /// Asop: copy
+    Compound_Map & operator = (Compound_Map const &) = delete;
+    /// Asop: move
+    Compound_Map & operator = (Compound_Map &&) = default;
 
+    /**
+     * Add numeric/string compound member.
+     * @tparam T struct type
+     * @tparam U member type
+     * @param name HDF5 compound member name
+     * @param mem_ptr struct member pointer
+     */
     template <typename T, typename U>
     void add_member(std::string const & name, U T::* mem_ptr)
     {
@@ -615,6 +704,14 @@ public:
         }
     }
 
+    /**
+     * Add compound compound member.
+     * @tparam T struct type
+     * @tparam U member type
+     * @param name HDF5 compound member name
+     * @param mem_ptr struct member pointer
+     * @param compound_map_ptr inner compound map
+     */
     template <typename T, typename U>
     void add_member(std::string const & name, U T::* mem_ptr, Compound_Map const * compound_map_ptr)
     {
@@ -623,14 +720,17 @@ public:
         _members.emplace_back(name, detail::offset_of(mem_ptr), compound_map_ptr, sizeof(U));
     }
 
+    /// Get list of compound members.
     std::vector<detail::Compound_Member_Description> const & members() const { return _members; }
 
-    /**
-     * Get list of non-compound member types.
-     * @return A list of pairs; first: list of member ptrs followed; second: absolute offset.
-     */
+    /// Type returned by @p get_member_ptr_list().
     typedef std::deque<std::pair<std::deque<detail::Compound_Member_Description const *>,
                                  size_t>> member_ptr_list_type;
+    /**
+     * Get list of inner non-compound member types.
+     * If members of the top-level compound are also compounds, they are traversed recursively.
+     * @return A list of pairs; first: list of member ptrs followed; second: absolute offset
+     */
     member_ptr_list_type get_member_ptr_list() const
     {
         member_ptr_list_type res;
@@ -647,7 +747,7 @@ public:
             else
             {
                 auto tmp = e.compound_map_ptr->get_member_ptr_list();
-                for (auto& tmp_p : tmp)
+                for (auto & tmp_p : tmp)
                 {
                     member_ptr_list_type::value_type p;
                     p.first = std::move(tmp_p.first);
@@ -661,11 +761,11 @@ public:
     }
 
     /**
-     * Produce hdf5 compound datatype for this map.
+     * Create an HDF5 compound type for this map.
      * @param compound_size Extrenally-tracked compound size
-     * @param selector If empty, use all elements; if not empty, use only elements that pass selection.
-     * @fill If true, type offsets follow compound map offsets, allowing for gaps;
-     * if false: type offsets are minimal values required to fit members.
+     * @param selector If empty, use all elements; if not empty, use only elements that pass selection
+     * @param fill If true, type offsets follow compound map offsets, allowing for gaps;
+     * if false: type offsets are minimal values required to fit members
      */
     detail::HDF_Object_Holder build_type(
         size_t compound_size,
@@ -714,6 +814,11 @@ public:
         return res;
     }
 
+    /**
+     * Create a flat HDF5 compound type for members in the given list
+     * @param l List of compound member descriptions
+     * @param id If non-zero, HDF5 id of compound type to extend
+     */
     static detail::HDF_Object_Holder build_flat_type(
         member_ptr_list_type::value_type::first_type const & l, hid_t id = 0)
     {
@@ -729,11 +834,11 @@ public:
             {
                 if (id == 0)
                 {
-                    res.load(e.get_type());
+                    res = e.get_type();
                 }
                 else
                 {
-                    res.load(
+                    res = detail::HDF_Object_Holder(
                         detail::Util::wrap(H5Tcopy, id),
                         detail::Util::wrapped_closer(H5Tclose));
                 }
@@ -749,7 +854,11 @@ public:
     }
 
     /**
-     * Get compound member from an existing compound type.
+     * Extract inner compound member type.
+     * Given an existing compound type and a list of member compound pointers to follow,
+     * extract inner compound type.
+     * @param id HDF5 compound type
+     * @param l List of inner compound members to follow (all but the last must be compounds)
      */
     static detail::HDF_Object_Holder get_compound_member(
         hid_t id, member_ptr_list_type::value_type::first_type const & l)
@@ -779,27 +888,30 @@ namespace detail
 {
 
 /**
- * struct Reader_Base
- *
- * Hierarchy: called by Reader; level 2 below File::read.
- *
- * Purpose: Open and read various properties of file object.
+ * Manage HDF5 file object access during a read operation.
+ * Opens a file object, and retrieves various attributes.
+ * Note: called by @p Reader; level 2 below @p File::read().
  */
 struct Reader_Base
 {
+    /**
+     * Ctor: from HDF5 group and name.
+     * @param grp_id HDF5 group id
+     * @param name HDF5 object name (dataset or attribute)
+     */
     Reader_Base(hid_t grp_id, std::string const & name)
     {
         int status = Util::wrap(H5Aexists_by_name, grp_id, ".", name.c_str(), H5P_DEFAULT);
         is_ds = status == 0;
         if (is_ds)
         {
-            obj_id_holder.load(
+            obj_id_holder = HDF_Object_Holder(
                 Util::wrap(H5Dopen, grp_id, name.c_str(), H5P_DEFAULT),
                 Util::wrapped_closer(H5Dclose));
-            dspace_id_holder.load(
+            dspace_id_holder = HDF_Object_Holder(
                 Util::wrap(H5Dget_space, obj_id_holder.id),
                 Util::wrapped_closer(H5Sclose));
-            file_dtype_id_holder.load(
+            file_dtype_id_holder = HDF_Object_Holder(
                 Util::wrap(H5Dget_type, obj_id_holder.id),
                 Util::wrapped_closer(H5Tclose));
             reader = [&] (hid_t mem_dtype_id, void * dest) {
@@ -808,13 +920,13 @@ struct Reader_Base
         }
         else
         {
-            obj_id_holder.load(
+            obj_id_holder = HDF_Object_Holder(
                 Util::wrap(H5Aopen, grp_id, name.c_str(), H5P_DEFAULT),
                 Util::wrapped_closer(H5Aclose));
-            dspace_id_holder.load(
+            dspace_id_holder = HDF_Object_Holder(
                 Util::wrap(H5Aget_space, obj_id_holder.id),
                 Util::wrapped_closer(H5Sclose));
-            file_dtype_id_holder.load(
+            file_dtype_id_holder = HDF_Object_Holder(
                 Util::wrap(H5Aget_type, obj_id_holder.id),
                 Util::wrapped_closer(H5Tclose));
             reader = [&] (hid_t mem_dtype_id, void * dest) {
@@ -852,20 +964,43 @@ struct Reader_Base
         // datatype size
         file_dtype_size = Util::wrap(H5Tget_size, file_dtype_id_holder.id);
     }
+    /// Object holder
     HDF_Object_Holder obj_id_holder;
+    /// Dataspace holder
     HDF_Object_Holder dspace_id_holder;
+    /// Datatype holder
     HDF_Object_Holder file_dtype_id_holder;
+    /// Reader function
     std::function<void(hid_t, void *)> reader;
+    /// Dataspace class
     H5S_class_t dspace_class;
+    /// Dataspace size
     size_t dspace_size;
+    /// Datatype class
     H5T_class_t file_dtype_class;
+    /// Variable-length string flag
     htri_t file_dtype_is_vlen_str;
+    /// Datatype size
     size_t file_dtype_size;
+    /// Is-dataset flag
     bool is_ds;
 }; // struct Reader_Base
 
-struct String_reader
+/**
+ * Read a vector of strings.
+ */
+struct String_Reader
 {
+    /**
+     * Perform read.
+     * Given a file object and an optional inner member pointer selector,
+     * read extent into vector of strings.
+     * The function converts numeric and fixed/variable-length string HDF5 types to string.
+     * @param reader_base File object read manager.
+     * @param mptr_l_ptr Optional inner compound member selector. If file object is a compound,
+     * the list should specify which inner compound members to follow to get to a base
+     * non-compound member to read.
+     */
     std::vector<std::string> operator () (
         Reader_Base const & reader_base,
         Compound_Map::member_ptr_list_type::value_type::first_type const * mptr_l_ptr = nullptr) const
@@ -885,7 +1020,7 @@ struct String_reader
         {
             file_stype_id = reader_base.file_dtype_id_holder.id;
         }
-        auto mem_type_wrapper = [&] (HDF_Object_Holder&& id_holder) {
+        auto mem_type_wrapper = [&] (HDF_Object_Holder && id_holder) {
             HDF_Object_Holder tmp(std::move(id_holder));
             return (mptr_l_ptr != nullptr
                     ? Compound_Map::build_flat_type(*mptr_l_ptr, tmp.id)
@@ -996,28 +1131,30 @@ struct String_reader
         }
         return res;
     }
-}; // struct String_reader
+}; // struct String_Reader
 
 /**
- * struct Reader_Helper
- *
- * Hierarchy: called by Reader; level 2 below File::read.
- *
- * Purpose: Construct memory data type and invoke appropriate reader.
- *
- * Specializations:
- * - 1 : read numeric type
- * - 2 : read char array
- * - 3 : read std::string
- * - 4 : read struct
+ * Construct memory data type and invoke @p Reader_Base reader.
+ * Note: called by @p Reader; level 2 below @p File::read().
  */
-template <int, typename>
+template <int Mem_Type_Class, typename Data_Type>
 struct Reader_Helper;
 
-// numeric
+/// @details @em Specialization_Numeric: @p Mem_Type_Class = 1.
+#ifndef DOXY
 template <typename Data_Type>
 struct Reader_Helper<1, Data_Type>
+#else
+template <int Mem_Type_Class, typename Data_Type>
+struct Reader_Helper
+#endif
 {
+    /**
+     * Functor operator. @em Specialization_Numeric.
+     * Obtain memory type from @p get_mem_type.
+     * @param reader_base File object read manager
+     * @param out Destination
+     */
     void operator () (Reader_Base const & reader_base, Data_Type * out) const
     {
         assert(std::is_integral<Data_Type>::value or std::is_floating_point<Data_Type>::value);
@@ -1026,10 +1163,22 @@ struct Reader_Helper<1, Data_Type>
     }
 };
 
-// char array
+/// @details @em Specialization_Fix_Len_String: @p Mem_Type_Class = 2.
+#ifndef DOXY
 template <typename Data_Type>
 struct Reader_Helper<2, Data_Type>
+#else
+template <int Mem_Type_Class, typename Data_Type>
+struct Reader_Helper
+#endif
 {
+    /**
+     * Functor operator. @em Specialization_Fix_Len_String.
+     * If the file datatype is also fixed-length, use @p Reader_Base reader directly.
+     * Else, use @p String_Reader.
+     * @param reader_base File object read manager
+     * @param out Destination
+     */
     void operator () (Reader_Base const & reader_base, Data_Type * out) const
     {
         if (reader_base.file_dtype_class == H5T_STRING
@@ -1042,7 +1191,7 @@ struct Reader_Helper<2, Data_Type>
         }
         else // conversion needed
         {
-            auto tmp = String_reader()(reader_base);
+            auto tmp = String_Reader()(reader_base);
             for (size_t i = 0; i < tmp.size(); ++i)
             {
                 std::memset(&out[i][0], '\0', sizeof(Data_Type));
@@ -1052,14 +1201,25 @@ struct Reader_Helper<2, Data_Type>
     }
 };
 
-// string
+/// @details @em Specialization_Var_Len_String: @p Mem_Type_Class = 3.
+#ifndef DOXY
 template <typename Data_Type>
 struct Reader_Helper<3, Data_Type>
+#else
+template <int Mem_Type_Class, typename Data_Type>
+struct Reader_Helper
+#endif
 {
+    /**
+     * Functor operator. @em Specialization_Var_Len_String.
+     * Use @p String_Reader.
+     * @param reader_base File object read manager
+     * @param out Destination
+     */
     void operator () (Reader_Base const & reader_base, Data_Type * out) const
     {
         static_assert(std::is_same<Data_Type, std::string>::value, "Data_Type not std::string");
-        auto tmp = String_reader()(reader_base);
+        auto tmp = String_Reader()(reader_base);
         for (size_t i = 0; i < tmp.size(); ++i)
         {
             std::swap(out[i], tmp[i]);
@@ -1067,10 +1227,24 @@ struct Reader_Helper<3, Data_Type>
     }
 };
 
-// compound
+/// @details @em Specialization_Compound: @p Mem_Type_Class = 4.
+#ifndef DOXY
 template <typename Data_Type>
 struct Reader_Helper<4, Data_Type>
+#else
+template <int Mem_Type_Class, typename Data_Type>
+struct Reader_Helper
+#endif
 {
+    /**
+     * Functor operator. @em Specialization_Compound.
+     * Go through the list of compound members;
+     * read all of the ones that don't need conversion in one go;
+     * read the remaining ones one at a time.
+     * @param reader_base File object read manager
+     * @param out Destination
+     * @param cm Compound map
+     */
     void operator () (Reader_Base const & reader_base, Data_Type * out, Compound_Map const & cm) const
     {
         // get member list
@@ -1104,7 +1278,7 @@ struct Reader_Helper<4, Data_Type>
             auto const & e = *p.first.back();
             if (implicit_conversion(e)) continue;
             // read member into vector of strings
-            auto tmp = String_reader()(reader_base, &p.first);
+            auto tmp = String_Reader()(reader_base, &p.first);
             assert(tmp.size() == reader_base.dspace_size);
             // write it to destination
             assert(e.is_char_array() or e.is_string());
@@ -1132,34 +1306,41 @@ struct Reader_Helper<4, Data_Type>
 };
 
 /**
- * struct Reader
- *
- * Hierarchy: called by File::read.
- *
- * Purpose: Branch statically of the data type used to store the result of the read.
- * If reading in a std::string, allow for file object to be stored as extent of size-1
- * characters. If reading in a vector, resize destination storage to match extent size.
- *
- * Specializations:
- * - default : storage is not a std::vector; read a scalar.
- * - vector  : storage is std::vector; read an extent.
- *
- * Common:
- * - use Reader_Base to open file object.
+ * Prepare destination for a read operation.
+ * Branch statically on the destination data type @Dest_Type.
+ * Use @p Reader_Base to open file object, then pass control to @p Reader_Helper.
+ * Note: called by @p File::read.
  */
+template <typename Dest_Type>
+struct Reader;
+
+/**
+ * @struct Reader
+ * @details @em Specialization_Default: @p Dest_Type = @p Data_Type.
+ */
+#ifndef DOXY
 template <typename Data_Type>
 struct Reader
+#else
+template <typename Dest_Type>
+struct Reader
+#endif
 {
     /**
-     * Default specialization.
-     *
-     * Check file object is scalar (dspace_size == 1); pass control to Reader_Helper.
-     *
-     * Quirk: Allow for strings stored as extents (dspace_size >= 1) of single-character strings.
+     * Functor operator.
+     * @em Specialization_Default.
+     * Check file object is scalar (dspace_size == 1).
+     * Quirk: If reading a @p std::string, allow for file object to be an extent
+     * of size 1 characters.
+     * @param grp_id HDF5 group object
+     * @param name HDF5 object name to read
+     * @param out Destination (single address)
+     * @param args Optional reading arguments passed to @p Reader_Helper
      */
     template <typename ...Args>
     void operator () (hid_t grp_id, std::string const & name,
-                      Data_Type & out, Args && ...args) const
+                      Data_Type & out,
+                      Args && ...args) const
     {
         Reader_Base reader_base(grp_id, name);
         if (reader_base.dspace_size == 1)
@@ -1183,17 +1364,31 @@ struct Reader
         }
     }
 };
+/**
+ * @struct Reader
+ * @details @em Specialization_Vector: @p Dest_Type = @p std::vector<Data_Type>.
+ */
+#ifndef DOXY
 template <typename Data_Type>
 struct Reader<std::vector<Data_Type>>
+#else
+template <typename Dest_Type>
+struct Reader
+#endif
 {
     /**
-     * Vector specialization.
-     *
-     * Clear and resize output vector; pass control to Reader_Helper.
+     * Functor operator.
+     * @em Specialization_Vector.
+     * Clear and resize destination vector.
+     * @param grp_id HDF5 group object
+     * @param name HDF5 object name to read
+     * @param out Destination (vector)
+     * @param args Optional reading arguments passed to @p Reader_Helper
      */
     template <typename ...Args>
     void operator () (hid_t grp_id, std::string const & name,
-                      std::vector<Data_Type> & out, Args && ...args) const
+                      std::vector<Data_Type> & out,
+                      Args && ...args) const
     {
         Reader_Base reader_base(grp_id, name);
         out.clear();
@@ -1213,14 +1408,14 @@ struct Writer_Base
         HDF_Object_Holder obj_id_holder;
         if (as_ds)
         {
-            obj_id_holder.load(
+            obj_id_holder = HDF_Object_Holder(
                 Util::wrap(H5Dcreate2, grp_id, loc_name.c_str(), file_dtype_id, dspace_id,
                            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
                 Util::wrapped_closer(H5Dclose));
         }
         else
         {
-            obj_id_holder.load(
+            obj_id_holder = HDF_Object_Holder(
                 Util::wrap(H5Acreate2, grp_id, loc_name.c_str(), file_dtype_id, dspace_id,
                            H5P_DEFAULT, H5P_DEFAULT),
                 Util::wrapped_closer(H5Aclose));
@@ -1486,7 +1681,7 @@ public:
     File() : _file_id(0) {}
     File(std::string const & file_name, bool rw = false) : _file_id(0) { open(file_name, rw); }
     File(File const &) = delete;
-    File& operator = (File const &) = delete;
+    File & operator = (File const &) = delete;
     ~File() { if (is_open()) close(); }
 
     bool is_open() const { return _file_id > 0; }
@@ -1595,7 +1790,7 @@ public:
 
     /// Read attribute or dataset at address
     template <typename Data_Storage, typename ...Args>
-    void read(std::string const & loc_full_name, Data_Storage& out, Args&& ...args) const
+    void read(std::string const & loc_full_name, Data_Storage & out, Args && ...args) const
     {
         assert(is_open());
         assert(not loc_full_name.empty() and loc_full_name[0] == '/');
@@ -1609,7 +1804,7 @@ public:
     }
     /// Write attribute or dataset
     template <typename In_Data_Storage, typename ...Args>
-    void write(std::string const & loc_full_name, bool as_ds, In_Data_Storage const & in, Args&& ...args) const
+    void write(std::string const & loc_full_name, bool as_ds, In_Data_Storage const & in, Args && ...args) const
     {
         assert(is_open());
         assert(is_rw());
@@ -1620,7 +1815,7 @@ public:
         detail::HDF_Object_Holder grp_id_holder;
         if (group_or_dataset_exists(loc.first))
         {
-            grp_id_holder.load(
+            grp_id_holder = detail::HDF_Object_Holder(
                 detail::Util::wrap(H5Oopen, _file_id, loc.first.c_str(), H5P_DEFAULT),
                 detail::Util::wrapped_closer(H5Oclose));
         }
@@ -1630,19 +1825,19 @@ public:
                 detail::Util::wrap(H5Pcreate, H5P_LINK_CREATE),
                 detail::Util::wrapped_closer(H5Pclose));
             detail::Util::wrap(H5Pset_create_intermediate_group, lcpl_id_holder.id, 1);
-            grp_id_holder.load(
+            grp_id_holder = detail::HDF_Object_Holder(
                 detail::Util::wrap(H5Gcreate2, _file_id, loc.first.c_str(), lcpl_id_holder.id, H5P_DEFAULT, H5P_DEFAULT),
                 detail::Util::wrapped_closer(H5Gclose));
         }
         detail::Writer<In_Data_Storage>()(grp_id_holder.id, loc.second, as_ds, in, std::forward<Args>(args)...);
     }
     template <typename In_Data_Storage, typename ...Args>
-    void write_dataset(std::string const & loc_full_name, In_Data_Storage const & in, Args&& ...args) const
+    void write_dataset(std::string const & loc_full_name, In_Data_Storage const & in, Args && ...args) const
     {
         write(loc_full_name, true, in, std::forward<Args>(args)...);
     }
     template <typename In_Data_Storage, typename ...Args>
-    void write_attribute(std::string const & loc_full_name, In_Data_Storage const & in, Args&& ...args) const
+    void write_attribute(std::string const & loc_full_name, In_Data_Storage const & in, Args && ...args) const
     {
         write(loc_full_name, false, in, std::forward<Args>(args)...);
     }
@@ -1743,20 +1938,20 @@ public:
         if (attribute_exists(loc_full_name))
         {
             auto && loc = split_full_name(loc_full_name);
-            attr_id_holder.load(
+            attr_id_holder = detail::HDF_Object_Holder(
                 detail::Util::wrap(H5Aopen_by_name, _file_id, loc.first.c_str(), loc.second.c_str(),
                                    H5P_DEFAULT, H5P_DEFAULT),
                 detail::Util::wrapped_closer(H5Aclose));
-            type_id_holder.load(
+            type_id_holder = detail::HDF_Object_Holder(
                 detail::Util::wrap(H5Aget_type, attr_id_holder.id),
                 detail::Util::wrapped_closer(H5Tclose));
         }
         else
         {
-            ds_id_holder.load(
+            ds_id_holder = detail::HDF_Object_Holder(
                 detail::Util::wrap(H5Oopen, _file_id, loc_full_name.c_str(), H5P_DEFAULT),
                 detail::Util::wrapped_closer(H5Oclose));
-            type_id_holder.load(
+            type_id_holder = detail::HDF_Object_Holder(
                 detail::Util::wrap(H5Dget_type, ds_id_holder.id),
                 detail::Util::wrapped_closer(H5Tclose));
         }

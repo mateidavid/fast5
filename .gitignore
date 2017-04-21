@@ -1,3 +1,5 @@
 /build*
 /local*
 /file.*.fast5
+/doc
+/doxygen.log

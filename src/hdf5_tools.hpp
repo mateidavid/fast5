@@ -83,7 +83,15 @@ std::size_t offset_of(U T::* mem_ptr)
  * Note HDF5 idiosyncracy:
  *   Types such as H5T_NATIVE_INT are not constants(!?), so id() is not a constexpr.
  */
-template <typename T> struct get_mem_type           { static hid_t id() { return -1;                 } };
+template <typename T>
+struct get_mem_type
+{
+    /// Id
+    static hid_t id()
+    {
+        return -1;
+    }
+};
 #ifndef DOXY
 // signed integral
 template <> struct get_mem_type<char>               { static hid_t id() { return H5T_NATIVE_CHAR;    } };
@@ -123,6 +131,7 @@ struct mem_type_class
                                                    std::integral_constant<int, 4>,
                                                    std::integral_constant<int, 0>>::type>::type::value;
 #else
+    /// Value
     static int const value = 0;
 #endif
 };
@@ -592,9 +601,13 @@ public:
           compound_map_ptr(_compound_map_ptr),
           compound_size(_compound_size) {}
 
+    /// Is member a numeric
     bool is_numeric()    const { return type == numeric;    }
+    /// Is member a fixed-length string
     bool is_char_array() const { return type == char_array; }
+    /// Is member a variable-length string
     bool is_string()     const { return type == string;     }
+    /// Is member a compound
     bool is_compound()   const { return type == compound;   }
 
     /// Create and return a holder for the HDF5 type of this compound member.
@@ -617,6 +630,7 @@ public:
         return res;
     } // get_type()
 
+    /// Write compound member description to stream
     friend std::ostream & operator << (std::ostream & os, Compound_Member_Description const & e)
     {
         os << "(&=" << (void*)&e
@@ -1307,7 +1321,7 @@ struct Reader_Helper
 
 /**
  * Prepare destination for a read operation.
- * Branch statically on the destination data type @Dest_Type.
+ * Branch statically on the destination data type @p Dest_Type.
  * Use @p Reader_Base to open file object, then pass control to @p Reader_Helper.
  * Note: called by @p File::read.
  */
@@ -1398,10 +1412,19 @@ struct Reader
     }
 };
 
-// Writer_Base
-//   Common base for Write_helper atomic/compound
+/**
+ * Holder of HDF5 access methods used during a write operation.
+ */
 struct Writer_Base
 {
+    /**
+     * Create a dataset/attribute.
+     * @param grp_id Parent group object.
+     * @param loc_name dataset/attribute name.
+     * @param as_ds Flag; create dataset iff true.
+     * @param dspace_id HDF5 dataspace.
+     * @param file_dtype_id HDF5 file datatype.
+     */
     static HDF_Object_Holder create(hid_t grp_id, std::string const & loc_name, bool as_ds,
                                     hid_t dspace_id, hid_t file_dtype_id)
     {
@@ -1422,6 +1445,13 @@ struct Writer_Base
         }
         return obj_id_holder;
     }
+    /**
+     * Write dataset/attribute to file.
+     * @param obj_id Destination object.
+     * @param as_ds Flag; write dataset iff true.
+     * @param mem_dtype_id HDF5 memory datatype.
+     * @param in Source memory address.
+     */
     static void write(hid_t obj_id, bool as_ds, hid_t mem_dtype_id, void const * in)
     {
         if (as_ds)
@@ -1433,6 +1463,16 @@ struct Writer_Base
             Util::wrap(H5Awrite, obj_id, mem_dtype_id, in);
         }
     }
+    /**
+     * Create and write dataset/attribute.
+     * @param grp_id Parent group object.
+     * @param loc_name dataset/attribute name.
+     * @param as_ds Flag; create dataset iff true.
+     * @param dspace_id HDF5 dataspace.
+     * @param mem_dtype_id HDF5 memory datatype.
+     * @param file_dtype_id HDF5 file datatype.
+     * @param in Source memory address.
+     */
     static void create_and_write(hid_t grp_id, std::string const & loc_name, bool as_ds,
                                  hid_t dspace_id, hid_t mem_dtype_id, hid_t file_dtype_id,
                                  void const * in)
@@ -1442,15 +1482,34 @@ struct Writer_Base
     }
 }; // struct Writer_Base
 
-// Writer_Helper
-//  Branch on memory type classes
+
+/**
+ * Manage calls to Write_Base methods.
+ * Note: called by @p Writer; level 2 below @p File::write().
+ */
 template <int, typename>
 struct Writer_Helper;
 
-// numeric
+/// @details @em Specialization_Numeric: @p Mem_Type_Class = 1.
+#ifndef DOXY
 template <typename In_Data_Type>
 struct Writer_Helper<1, In_Data_Type>
+#else
+template <int Mem_Type_Class, typename In_Data_Type>
+struct Writer_Helper
+#endif
 {
+    /**
+     * Functor operator. @em Specialization_Numeric.
+     * Obtain memory type from @p get_mem_type.
+     * @param grp_id Parent group object.
+     * @param loc_name dataset/attribute name.
+     * @param as_ds Flag; create dataset iff true.
+     * @param dspace_id HDF5 dataspace.
+     * @param in Source memory address.
+     * @param file_dtype_id HDF5 file datatype;
+     * if 0, use @p mem_dtype_id.
+     */
     void operator () (hid_t grp_id, std::string const & loc_name,
                       bool as_ds, hid_t dspace_id, size_t,
                       In_Data_Type const * in, hid_t file_dtype_id = 0) const
@@ -1468,10 +1527,29 @@ struct Writer_Helper<1, In_Data_Type>
     }
 }; // struct Writer_Helper<1, In_Data_Type>
 
-// fixed-length string
+/// @details @em Specialization_Fix_Len_String: @p Mem_Type_Class = 2.
+#ifndef DOXY
 template <typename In_Data_Type>
 struct Writer_Helper<2, In_Data_Type>
+#else
+template <int Mem_Type_Class, typename In_Data_Type>
+struct Writer_Helper
+#endif
 {
+    /**
+     * Functor operator. @em Specialization_Fix_Len_String.
+     * Write as fixed-length or variable-length strings.
+     * @param grp_id Parent group object.
+     * @param loc_name dataset/attribute name.
+     * @param as_ds Flag; create dataset iff true.
+     * @param dspace_id HDF5 dataspace.
+     * @param sz Number of elements.
+     * @param in Source memory address.
+     * @param file_dtype_id HDF5 file datatype:
+     * if 0, use @p mem_dtype_id;
+     * if >0, write as fixed-length strings of this size;
+     * if <0, write as variable-length strings.
+     */
     void operator () (hid_t grp_id, std::string const & loc_name,
                       bool as_ds, hid_t dspace_id, size_t sz,
                       In_Data_Type const * in, hid_t file_dtype_id = 0) const
@@ -1512,10 +1590,28 @@ struct Writer_Helper<2, In_Data_Type>
     }
 }; // struct Writer_Helper<2, In_Data_Type>
 
-// variable-length string
+/// @details @em Specialization_Var_Len_String: @p Mem_Type_Class = 3.
+#ifndef DOXY
 template <>
 struct Writer_Helper<3, std::string>
+#else
+template <int Mem_Type_Class, typename In_Data_Type>
+struct Writer_Helper
+#endif
 {
+    /**
+     * Functor operator. @em Specialization_Var_Len_String.
+     * Write as fixed-length or variable-length strings.
+     * @param grp_id Parent group object.
+     * @param loc_name dataset/attribute name.
+     * @param as_ds Flag; create dataset iff true.
+     * @param dspace_id HDF5 dataspace.
+     * @param sz Number of elements.
+     * @param in Source memory address.
+     * @param file_dtype_id HDF5 file datatype:
+     * if -1, write variable-length strings;
+     * if >=0, write as fixed-length strings of that size.
+     */
     void operator () (hid_t grp_id, std::string const & loc_name,
                       bool as_ds, hid_t dspace_id, size_t sz,
                       std::string const * in, hid_t file_dtype_id = -1) const
@@ -1558,10 +1654,28 @@ struct Writer_Helper<3, std::string>
     }
 }; // struct Writer_Helper<3, std::string>
 
-// compound
+/// @details @em Specialization_Compound: @p Mem_Type_Class = 4.
+#ifndef DOXY
 template <typename In_Data_Type>
 struct Writer_Helper<4, In_Data_Type>
+#else
+template <int Mem_Type_Class, typename In_Data_Type>
+struct Writer_Helper
+#endif
 {
+    /**
+     * Functor operator. @em Specialization_Compound.
+     * Go through the list of compound members;
+     * write all of the ones that don't need conversion in one go;
+     * write the remaining ones one at a time.
+     * @param grp_id Parent group object.
+     * @param loc_name dataset/attribute name.
+     * @param as_ds Flag; create dataset iff true.
+     * @param dspace_id HDF5 dataspace.
+     * @param sz Number of elements.
+     * @param in Source memory address.
+     * @param cm Compound map.
+     */
     void operator () (hid_t grp_id, std::string const & loc_name,
                       bool as_ds, hid_t dspace_id, size_t sz,
                       In_Data_Type const * in, Compound_Map const & cm) const
@@ -1620,21 +1734,38 @@ struct Writer_Helper<4, In_Data_Type>
 }; // struct Writer_Helper<4, In_Data_Type>
 
 /**
- * struct Writer
- *
- * Hierarchy: called by File::write.
- *
- * Purpose: Branch statically of the data type used to store the object to write.
- * If object is a vector, write a simple extent.
+ * Prepare for a write operation.
+ * Branch statically on the source data type @p Src_Type:
+ * if object is a vector, write a simple extent;
  * if object is not a vector, write a scalar.
- *
- * Specializations:
- * - default : storage is not a std::vector; write a scalar.
- * - vector  : storage is std::vector; write a simple extent.
+ * Pass control to appropriate @p Writer_Helper.
+ * Note: called by @p File::write.
  */
+template <typename Src_Type>
+struct Writer;
+
+/**
+ * @struct Writer
+ * @details @em Specialization_Default: @p Src_Type = @p In_Data_Type.
+ */
+#ifndef DOXY
 template <typename In_Data_Type>
 struct Writer
+#else
+template <typename Src_Type>
+struct Writer
+#endif
 {
+    /**
+     * Functor operator.
+     * @em Specialization_Default.
+     * Create dataspace and invoke @p Writer_Helper.
+     * @param grp_id HDF5 parent group
+     * @param loc_name Object name to write
+     * @param as_ds Flag; create dataset iff true.
+     * @param in Source (single address).
+     * @param args Optional reading arguments passed to @p Writer_Helper.
+     */
     template <typename ...Args>
     void operator () (hid_t grp_id, std::string const & loc_name,
                       bool as_ds, In_Data_Type const & in, Args && ...args) const
@@ -1648,11 +1779,29 @@ struct Writer
             dspace_id_holder.id, 1,
             &in, std::forward<Args>(args)...);
     }
-};
-
+}; // struct Writer<In_Data_Type>
+/**
+ * @struct Writer
+ * @details @em Specialization_Vector: @p Src_Type = @p std::vector<In_Data_Type>.
+ */
+#ifndef DOXY
 template <typename In_Data_Type>
 struct Writer<std::vector<In_Data_Type>>
+#else
+template <typename Src_Type>
+struct Writer
+#endif
 {
+    /**
+     * Functor operator.
+     * @em Specialization_Vector.
+     * Create dataspace and invoke @p Writer_Helper.
+     * @param grp_id HDF5 parent group
+     * @param loc_name Object name to write
+     * @param as_ds Flag; create dataset iff true.
+     * @param in Source.
+     * @param args Optional reading arguments passed to @p Writer_Helper.
+     */
     template <typename ...Args>
     void operator () (hid_t grp_id, std::string const & loc_name,
                       bool as_ds, std::vector<In_Data_Type> const & in, Args && ...args) const
@@ -1668,7 +1817,7 @@ struct Writer<std::vector<In_Data_Type>>
             dspace_id_holder.id, sz,
             in.data(), std::forward<Args>(args)...);
     }
-};
+}; // struct Writer<std::vector<In_Data_Type>>
 
 } // namespace detail
 
@@ -1676,18 +1825,36 @@ struct Writer<std::vector<In_Data_Type>>
 class File
 {
 public:
+    /// A map of attributes of string type.
     typedef std::map<std::string, std::string> Attr_Map;
 
+    /// Ctor: default
     File() : _file_id(0) {}
+    /**
+     * Ctor: from file name
+     * @param file_name File name to open.
+     * @param rw Flag: open for writing iff true.
+     */
     File(std::string const & file_name, bool rw = false) : _file_id(0) { open(file_name, rw); }
+    /// Ctor: copy
     File(File const &) = delete;
+    /// Asop: copy
     File & operator = (File const &) = delete;
+    /// Dtor
     ~File() { if (is_open()) close(); }
 
+    /// Check if file is open.
     bool is_open() const { return _file_id > 0; }
+    /// Check if file is open for writing.
     bool is_rw() const { return _rw; }
+    /// Get file name.
     std::string const & file_name() const { return _file_name; }
 
+    /**
+     * Create file.
+     * @param file_name File name to create.
+     * @param truncate Control behaviour if file exists: if true, truncate; if false, fail.
+     */
     void create(std::string const & file_name, bool truncate = false)
     {
         if (is_open()) close();
@@ -1695,7 +1862,12 @@ public:
         _rw = true;
         _file_id = H5Fcreate(file_name.c_str(), truncate? H5F_ACC_TRUNC : H5F_ACC_EXCL, H5P_DEFAULT, H5P_DEFAULT);
         if (not is_open()) throw Exception(_file_name + ": error in H5Fcreate");
-    }
+    } // create()
+    /**
+     * Open file.
+     * @param file_name File name to open.
+     * @param rw Flag: open for writing iff true.
+     */
     void open(std::string const & file_name, bool rw = false)
     {
         if (is_open()) close();
@@ -1703,7 +1875,8 @@ public:
         _rw = rw;
         _file_id = H5Fopen(file_name.c_str(), not rw? H5F_ACC_RDONLY : H5F_ACC_RDWR, H5P_DEFAULT);
         if (not is_open()) throw Exception(_file_name + ": error in H5Fopen");
-    }
+    } // open()
+    /// Close file
     void close()
     {
         if (not is_open()) return;
@@ -1712,7 +1885,8 @@ public:
         if (status < 0) throw Exception(_file_name + ": error in H5Fclose");
         _file_id = 0;
         _file_name.clear();
-    }
+    } // close()
+    /// Check if file name is a valid HDF5 file.
     static bool is_valid_file(std::string const & file_name)
     {
         std::ifstream ifs(file_name);
@@ -1727,15 +1901,20 @@ public:
         status = H5Fclose(file_id);
         if (status < 0) throw Exception(file_name + ": error in H5Fclose");
         return 1;
-    }
+    } // is_valid_file()
 
+    /// Get HDF5 object count.
     static int get_object_count()
     {
         return H5Fget_obj_count(H5F_OBJ_ALL, H5F_OBJ_ALL);
-    }
+    } // get_object_count()
 
-    /// Check if a group exists
-    bool group_exists(std::string const & loc_full_name) const
+    /**
+     * Check if an object exists that is a group.
+     * @param loc_full_name Full path.
+     */
+    bool
+    group_exists(std::string const & loc_full_name) const
     {
         assert(is_open());
         assert(not loc_full_name.empty() and loc_full_name.front() == '/');
@@ -1744,9 +1923,13 @@ public:
         // check all path elements exist, except for what is to the right of the last '/'
         // sets active path
         return path_exists(loc.first) and check_object_type(loc_full_name, H5O_TYPE_GROUP);
-    }
-    /// Check if a dataset exists
-    bool dataset_exists(std::string const & loc_full_name) const
+    } // group_exists()
+    /**
+     * Check if an object exists that is a dataset.
+     * @param loc_full_name Full path.
+     */
+    bool
+    dataset_exists(std::string const & loc_full_name) const
     {
         assert(is_open());
         assert(not loc_full_name.empty() and loc_full_name.front() == '/');
@@ -1755,8 +1938,13 @@ public:
         // check all path elements exist, except for what is to the right of the last '/'
         // sets active path
         return path_exists(loc.first) and check_object_type(loc_full_name, H5O_TYPE_DATASET);
-    }
-    bool group_or_dataset_exists(std::string const & loc_full_name) const
+    } // dataset_exists()
+    /**
+     * Check if an object exists that is a group or a dataset.
+     * @param loc_full_name Full path.
+     */
+    bool
+    group_or_dataset_exists(std::string const & loc_full_name) const
     {
         assert(is_open());
         assert(not loc_full_name.empty() and loc_full_name.front() == '/');
@@ -1767,9 +1955,13 @@ public:
         return (path_exists(loc.first) and
                 (check_object_type(loc_full_name, H5O_TYPE_DATASET) or
                  check_object_type(loc_full_name, H5O_TYPE_GROUP)));
-    }
-    /// Check if attribute exists
-    bool attribute_exists(std::string const & loc_full_name) const
+    } // group_or_dataset_exists()
+    /**
+     * Check if an object exists that is an attribute.
+     * @param loc_full_name Full path.
+     */
+    bool
+    attribute_exists(std::string const & loc_full_name) const
     {
         assert(is_open());
         assert(not loc_full_name.empty() and loc_full_name.front() == '/');
@@ -1782,15 +1974,26 @@ public:
         int status = H5Aexists_by_name(_file_id, loc.first.c_str(), loc.second.c_str(), H5P_DEFAULT);
         if (status < 0) throw Exception("error in H5Aexists_by_name");
         return status > 0;
-    }
-    bool exists(std::string const & loc_full_name) const
+    } // attribute_exists()
+    /**
+     * Check if an object exists.
+     * @param loc_full_name Full path.
+     */
+    bool
+    exists(std::string const & loc_full_name) const
     {
         return attribute_exists(loc_full_name) or dataset_exists(loc_full_name);
-    }
+    } // exists()
 
-    /// Read attribute or dataset at address
+    /**
+     * Read dataset/attribute.
+     * @param loc_full_name Full path.
+     * @param out Destination (single address or vector reference).
+     * @param args Extra arguments to pass on to @p Reader.
+     */
     template <typename Data_Storage, typename ...Args>
-    void read(std::string const & loc_full_name, Data_Storage & out, Args && ...args) const
+    void
+    read(std::string const & loc_full_name, Data_Storage & out, Args && ...args) const
     {
         assert(is_open());
         assert(not loc_full_name.empty() and loc_full_name[0] == '/');
@@ -1801,10 +2004,17 @@ public:
             detail::Util::wrapped_closer(H5Oclose));
         detail::Reader<Data_Storage>()(grp_id_holder.id, loc.second,
                                          out, std::forward<Args>(args)...);
-    }
-    /// Write attribute or dataset
+    } // read()
+    /**
+     * Write dataset/attribute.
+     * @param loc_full_name Full path.
+     * @param as_ds Flag; create dataset iff true.
+     * @param in Source (single address or vector reference).
+     * @param args Extra arguments to pass on to @p Writer.
+     */
     template <typename In_Data_Storage, typename ...Args>
-    void write(std::string const & loc_full_name, bool as_ds, In_Data_Storage const & in, Args && ...args) const
+    void
+    write(std::string const & loc_full_name, bool as_ds, In_Data_Storage const & in, Args && ...args) const
     {
         assert(is_open());
         assert(is_rw());
@@ -1830,20 +2040,39 @@ public:
                 detail::Util::wrapped_closer(H5Gclose));
         }
         detail::Writer<In_Data_Storage>()(grp_id_holder.id, loc.second, as_ds, in, std::forward<Args>(args)...);
-    }
+    } // write()
+    /**
+     * Write dataset.
+     * @param loc_full_name Full path.
+     * @param in Source (single address or vector reference).
+     * @param args Extra arguments to pass on to @p Writer.
+     */
     template <typename In_Data_Storage, typename ...Args>
-    void write_dataset(std::string const & loc_full_name, In_Data_Storage const & in, Args && ...args) const
+    void
+    write_dataset(std::string const & loc_full_name, In_Data_Storage const & in, Args && ...args) const
     {
         write(loc_full_name, true, in, std::forward<Args>(args)...);
-    }
+    } // write_dataset()
+    /**
+     * Write attribute.
+     * @param loc_full_name Full path.
+     * @param in Source (single address or vector reference).
+     * @param args Extra arguments to pass on to @p Writer.
+     */
     template <typename In_Data_Storage, typename ...Args>
-    void write_attribute(std::string const & loc_full_name, In_Data_Storage const & in, Args && ...args) const
+    void
+    write_attribute(std::string const & loc_full_name, In_Data_Storage const & in, Args && ...args) const
     {
         write(loc_full_name, false, in, std::forward<Args>(args)...);
-    }
+    } // write_attribute()
 
-    /// Return a list of names (groups/datasets) in the given group
-    std::vector<std::string> list_group(std::string const & group_full_name) const
+    /**
+     * List group.
+     * Return a list of names (groups/datasets) in the given group.
+     * @param group_full_name Full path.
+     */
+    std::vector<std::string>
+    list_group(std::string const & group_full_name) const
     {
         std::vector<std::string> res;
         Exception::active_path() = group_full_name;
@@ -1865,9 +2094,14 @@ public:
             if (sz1 != sz2) throw Exception("error in H5Lget_name_by_idx: sz1!=sz2");
         }
         return res;
-    } // list_group
-    /// Return a list of attributes of the given object
-    std::vector<std::string> get_attr_list(std::string const & loc_full_name) const
+    } // list_group()
+    /**
+     * List attributes.
+     * Return a list of attribute names of the given object.
+     * @param loc_full_name Full path.
+     */
+    std::vector<std::string>
+    get_attr_list(std::string const & loc_full_name) const
     {
         std::vector<std::string> res;
         Exception::active_path() = loc_full_name;
@@ -1888,7 +2122,12 @@ public:
             res.emplace_back(std::move(tmp));
         }
         return res;
-    } // get_attr_list
+    } // get_attr_list()
+    /**
+     * Read attribute map.
+     * @param path Full path.
+     * @param recurse Flag: if true, recurse into subgroups.
+     */
     Attr_Map
     get_attr_map(std::string const & path, bool recurse = false) const
     {
@@ -1918,6 +2157,11 @@ public:
         }
         return res;
     } // get_attr_map()
+    /**
+     * Write attribute map.
+     * @param path Full path.
+     * @param attr_m Attribute map.
+     */
     void
     add_attr_map(std::string const & path, Attr_Map const & attr_m) const
     {
@@ -1926,8 +2170,13 @@ public:
             write_attribute(path + "/" + p.first, p.second);
         }
     } // add_attr_map()
-    /// Return a list of struct field names in the given dataset/attribute
-    std::vector<std::string> get_struct_members(std::string const & loc_full_name) const
+    /**
+     * List field names.
+     * Return a list of struct field names in the given compound dataset/attribute.
+     * @param loc_full_name Full path.
+     */
+    std::vector<std::string>
+    get_struct_members(std::string const & loc_full_name) const
     {
         std::vector<std::string> res;
         Exception::active_path() = loc_full_name;
@@ -1967,35 +2216,18 @@ public:
             }
         }
         return res;
-    } // get_struct_members
+    } // get_struct_members()
 
-    /*
-    static void copy(File & src_f, File & dst_f, std::string const & path, bool shallow = false)
-    {
-        assert(src_f.is_open());
-        assert(dst_f.is_open());
-        assert(dst_f.is_rw());
-        assert(src_f.group_exists(path) or src_f.dataset_exists(path));
-        assert(not (dst_f.group_exists(path) or dst_f.dataset_exists(path)));
-        detail::HDF_Object_Holder ocpypl_id_holder(
-            detail::Util::wrap(H5Pcreate, H5P_OBJECT_COPY),
-            detail::Util::wrapped_closer(H5Pclose));
-        auto status = hdf5::H5Pset_copy_object(ocpypl_id_holder.id, H5O_COPY_MERGE_COMMITTED_DTYPE_FLAG);
-        if (status < 0) throw Exception("error in H5Pset_copy_object");
-        if (shallow)
-        {
-            status = hdf5::H5Pset_copy_object(ocpypl_id_holder.id, H5O_COPY_SHALLOW_HIERARCHY_FLAG);
-            if (status < 0) throw Exception("error in H5Pset_copy_object");
-        }
-        auto res = hdf5::H5Ocopy(src_f._file_id, path.c_str(),
-                                 dst_f._file_id, path.c_str(),
-                                 ocpypl_id_holder.id, H5P_DEFAULT);
-        if (res < 0) throw Exception("error in H5Ocopy");
-    } // copy
-    */
-
-    static void copy_attribute(File const & src_f, File const & dst_f,
-                               std::string const & src_full_path, std::string const & _dst_full_path = std::string())
+    /**
+     * Copy an attribute between files.
+     * @param src_f Source file.
+     * @param dst_f Destination file.
+     * @param src_full_path Source path.
+     * @param _dst_full_path Destination path; if empty, use @p src_full_path.
+     */
+    static void
+    copy_attribute(File const & src_f, File const & dst_f,
+                   std::string const & src_full_path, std::string const & _dst_full_path = std::string())
     {
         if (not src_f.is_open()) throw Exception("source file not open");
         if (not dst_f.is_open()) throw Exception("destination file not open");
@@ -2084,8 +2316,15 @@ public:
         {
             throw Exception("unsupported attribute type for copying");
         }
-    } // copy_attribute
+    } // copy_attribute()
 
+    /**
+     * Copy attributes between files.
+     * @param src_f Source file.
+     * @param dst_f Destination file.
+     * @param path Source path.
+     * @param recurse Flag; if true, recurse.
+     */
     static void
     copy_attributes(File const & src_f, File const & dst_f, std::string const & path, bool recurse = false)
     {
@@ -2109,9 +2348,12 @@ private:
     hid_t _file_id;
     bool _rw;
 
-    /// Split a full name into path and name
-    /// full_name must begin with '/', and not end with '/' unless it equals "/"
-    static std::pair<std::string, std::string> split_full_name(std::string const & full_name)
+    /**
+     * Split a full name into path and name.
+     * Note: @p full_name must begin with '/', and not end with '/' unless it equals "/".
+     */
+    static std::pair<std::string, std::string>
+    split_full_name(std::string const & full_name)
     {
         assert(not full_name.empty() and
                full_name.front() == '/' and
@@ -2121,10 +2363,11 @@ private:
         return (pos != std::string::npos
                 ? std::make_pair(full_name.substr(0, pos > 0? pos : 1), full_name.substr(pos + 1))
                 : std::make_pair(std::string(), std::string()));
-    } // split_full_name
+    } // split_full_name()
 
     /// Determine if a path to an element exists
-    bool path_exists(std::string const & full_path_name) const
+    bool
+    path_exists(std::string const & full_path_name) const
     {
         assert(is_open());
         assert(not full_path_name.empty() and full_path_name.front() == '/');
@@ -2153,8 +2396,9 @@ private:
         return true;
     } // path_exists()
 
-    /// Check if a group exists
-    bool check_object_type(std::string const & loc_full_name, H5O_type_t type_id) const
+    /// Check if HDF5 object has given type
+    bool
+    check_object_type(std::string const & loc_full_name, H5O_type_t type_id) const
     {
         // check link exists
         if (loc_full_name != "/"
@@ -2169,7 +2413,7 @@ private:
         H5O_info_t o_info;
         detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info);
         return o_info.type == type_id;
-    }
+    } // check_object_type()
 }; // class File
 
 } // namespace hdf5_tools

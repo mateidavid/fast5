@@ -1566,7 +1566,19 @@ private:
         {
             std::string tmp;
             Base::read(path, tmp);
-            auto pref = basecall_root_path().substr(1) + "/" + basecall_group_prefix();
+
+            // Metrichor writes "Analyses" before the group, Albacore does not
+            std::string possible_prefix = "Analyses";
+            std::string pref = "";
+
+            if(tmp.substr(0, possible_prefix.length()) == possible_prefix) {
+                // metrichor version
+                pref = possible_prefix + "/" + basecall_group_prefix();
+            } else {
+                // albacore version
+                pref = basecall_group_prefix();
+            }
+
             if (tmp.size() >= pref.size()
                 and tmp.substr(0, pref.size()) == pref)
             {

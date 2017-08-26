@@ -7,7 +7,7 @@ services:
 
 before_install:
     - sudo apt-get update -y
-    - sudo apt-get install -y -o Dpkg::Options::="--force-confnew" docker-engine
+    - sudo apt-get install -y -o Dpkg::Options::="--force-confnew" docker-ce
     - TZ=$(cat /etc/timezone) USER_ID=$(id -u) USER_NAME=$(id -un) GROUP_ID=$(id -g) GROUP_NAME=$(id -gn) envsubst <.travis.Dockerfile.in | docker build -t fast5 -
 
 install:

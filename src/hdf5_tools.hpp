@@ -80,7 +80,7 @@ std::size_t offset_of(U T::* mem_ptr)
 
 /**
  * TMF: Get HDF5 memory type for native numeric destination type.
- * Note HDF5 idiosyncracy:
+ * Note HDF5 idiosyncrasy:
  *   Types such as H5T_NATIVE_INT are not constants(!?), so id() is not a constexpr.
  */
 template <typename T>

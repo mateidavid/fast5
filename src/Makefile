@@ -20,7 +20,7 @@ HPPTOOLS_DIR ?= hpptools
 
 TARGETS = f5ls f5ls-full hdf5-mod f5-mod
 EXTRA_TARGETS = f5dump f5pack
-HPP_FILES := fast5.hpp hdf5_tools.hpp Huffman_Packer.hpp Bit_Packer.hpp
+HPP_FILES := fast5.hpp fast5/hdf5_tools.hpp fast5/Huffman_Packer.hpp fast5/Bit_Packer.hpp
 
 CXXFLAGS := -std=c++11 -O0 -g3 -ggdb -fno-eliminate-unused-debug-types -Wall -Wextra -Wpedantic
 CPPFLAGS := -isystem ${HDF5_INCLUDE_DIR}

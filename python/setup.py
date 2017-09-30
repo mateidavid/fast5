@@ -26,7 +26,8 @@ if (not os.path.isfile(os.path.join(hdf5_lib_dir, 'lib' + hdf5_lib + '.so'))
     sys.exit(hdf5_lib_dir + ': could not find HDF5 library file; use HDF5_DIR or HDF5_LIB_DIR/HDF5_LIB')
 
 fast5_dir = os.environ.get('FAST5_DIR', '..')
-fast5_src_dir = os.path.join(fast5_dir, 'src')
+fast5pack_src_dir = os.path.join(fast5_dir, 'src')
+fast5_src_dir = os.path.join(fast5_dir, 'include')
 fast5_version = open(os.path.join(fast5_dir, 'VERSION')).readline().strip()
 
 extra_compile_args = [
@@ -51,7 +52,7 @@ extensions = [
         'fast5',
         language='c++',
         sources=['fast5/fast5.' + ['cpp', 'pyx'][use_cython]],
-        include_dirs=[fast5_src_dir],
+        include_dirs=[fast5_src_dir, fast5pack_src_dir],
         library_dirs=[hdf5_lib_dir],
         runtime_library_dirs=[hdf5_lib_dir],
         libraries=[hdf5_lib],

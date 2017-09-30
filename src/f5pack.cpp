@@ -12,7 +12,7 @@
 
 #include <tclap/CmdLine.h>
 
-#include "fast5.hpp"
+#include <fast5.hpp>
 #include "File_Packer.hpp"
 
 using namespace std;

@@ -9,7 +9,7 @@
 #include <iostream>
 #include <string>
 
-#include "fast5/hdf5_tools.hpp"
+#include <fast5/hdf5_tools.hpp>
 
 using namespace std;
 using namespace hdf5;

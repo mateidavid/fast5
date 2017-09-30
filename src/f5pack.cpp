@@ -11,7 +11,6 @@
 #include <string>
 
 #include <tclap/CmdLine.h>
-#include "logger.hpp"
 
 #include "fast5.hpp"
 #include "File_Packer.hpp"

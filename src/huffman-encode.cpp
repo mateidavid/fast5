@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "fast5_pack.hpp"
-#include "logger.hpp"
+#include <fast5/fast5_pack.hpp>
+#include <fast5/logger.hpp>
 
 using namespace std;
 

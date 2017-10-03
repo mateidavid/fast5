@@ -13,7 +13,7 @@
 #include <tclap/CmdLine.h>
 #include "alg.hpp"
 
-#include "fast5.hpp"
+#include <fast5.hpp>
 
 using namespace std;
 

@@ -11,8 +11,7 @@
 #include <string>
 #include <set>
 
-#include "fast5.hpp"
-#include "logger.hpp"
+#include <fast5.hpp>
 
 #define STATIC_MEMBER_WRAPPER(_type, _id, _init) \
     static _type & _id() { static _type _ ## _id = _init; return _ ## _id; }

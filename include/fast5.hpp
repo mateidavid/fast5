@@ -22,11 +22,11 @@
 #include <map>
 #include <stdexcept>
 
-#include "logger.hpp"
-#include "fast5_version.hpp"
-#include "hdf5_tools.hpp"
-#include "Huffman_Packer.hpp"
-#include "Bit_Packer.hpp"
+#include "fast5/logger.hpp"
+#include "fast5/fast5_version.hpp"
+#include "fast5/hdf5_tools.hpp"
+#include "fast5/Huffman_Packer.hpp"
+#include "fast5/Bit_Packer.hpp"
 
 #define MAX_K_LEN 8
 

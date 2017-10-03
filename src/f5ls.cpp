@@ -9,7 +9,7 @@
 #include <iostream>
 #include <string>
 
-#include "fast5.hpp"
+#include <fast5.hpp>
 
 using namespace std;
 

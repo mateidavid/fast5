@@ -12,7 +12,7 @@ A lightweight C++ library for accessing Oxford Nanopore Technologies sequencing 
 
 The core library is written in header-only C++11, and it enables read-write access to fast5 files from C++ code.
 
-The core library requires no installation, other than setting the compiler's include path to find [[file:src/fast5.hpp][fast5.hpp]]. See [[file:src/f5ls-full.cpp][f5ls-full.cpp]] for an example.
+The core library requires no installation, other than setting the compiler's include path to find [[file:include/fast5.hpp][fast5.hpp]]. See [[file:src/f5ls-full.cpp][f5ls-full.cpp]] for an example.
 
 The core library is built on top the HDF5 C API, so the compiler must also be able to find the HDF5 headers and libraries. See the project's Travis CI [[file:.travis.Dockerfile.in][Dockerfile]] for an example of how to install prerequisites on Debian Jessie.
 

@@ -78,6 +78,8 @@ typedef Attr_Map Tracking_Id_Params;
 
 typedef Attr_Map Sequences_Params;
 
+typedef Attr_Map Context_Tags_Params;
+
 typedef float Raw_Sample;
 typedef int16_t Raw_Int_Sample;
 
@@ -711,6 +713,27 @@ public:
     add_tracking_id_params(Tracking_Id_Params const & tracking_id_params) const
     {
         add_attr_map(tracking_id_path(), tracking_id_params);
+    }
+    
+    //
+    // Access /UniqueGlobalKey/context_tags
+    //
+    bool
+    have_context_tags_params() const
+    {
+        return Base::group_exists(context_tags_path());
+    }
+
+    Context_Tags_Params
+    get_context_tags_params() const
+    {
+        return get_attr_map(context_tags_path());
+    }
+
+    void
+    add_context_tags_params(Context_Tags_Params const & context_tags_params) const
+    {
+        add_attr_map(context_tags_path(), context_tags_params);
     }
 
     //
@@ -2377,6 +2400,7 @@ private:
     static std::string file_version_path() { return "/file_version"; }
     static std::string channel_id_path()   { return "/UniqueGlobalKey/channel_id"; }
     static std::string tracking_id_path()  { return "/UniqueGlobalKey/tracking_id"; }
+    static std::string context_tags_path()  { return "/UniqueGlobalKey/context_tags"; }
     static std::string sequences_path()    { return "/Sequences/Meta"; }
     static std::string raw_samples_root_path() { return "/Raw/Reads"; }
     static std::string raw_samples_params_path(std::string const & rn)

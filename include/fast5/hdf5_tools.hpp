@@ -26,17 +26,13 @@
 #include <type_traits>
 
 /// Original HDF5 C API.
-namespace hdf5
-{
 #ifndef DOXY
 #include <hdf5.h>
 #endif
-}
 
 /// New C++ wrapper for the HDF5 C API.
 namespace hdf5_tools
 {
-using namespace hdf5;
 
 /// Exception class thrown by failed hdf5 operations.
 class Exception
@@ -2248,15 +2244,15 @@ public:
         detail::HDF_Object_Holder src_attr_dtype_id_holder(
             detail::Util::wrap(H5Aget_type, src_attr_id_holder.id),
             detail::Util::wrapped_closer(H5Tclose));
-        if (hdf5::H5Tget_class(src_attr_dtype_id_holder.id) == H5T_INTEGER)
+        if (H5Tget_class(src_attr_dtype_id_holder.id) == H5T_INTEGER)
         {
-            if (hdf5::H5Tget_sign(src_attr_dtype_id_holder.id) == H5T_SGN_NONE)
+            if (H5Tget_sign(src_attr_dtype_id_holder.id) == H5T_SGN_NONE)
             {
                 unsigned long long tmp;
                 src_f.read(src_full_path, tmp);
                 dst_f.write_attribute(dst_full_path, tmp, src_attr_dtype_id_holder.id);
             }
-            else if (hdf5::H5Tget_sign(src_attr_dtype_id_holder.id) == H5T_SGN_2)
+            else if (H5Tget_sign(src_attr_dtype_id_holder.id) == H5T_SGN_2)
             {
                 long long tmp;
                 src_f.read(src_full_path, tmp);
@@ -2267,17 +2263,17 @@ public:
                 throw Exception("error in H5Tget_sign");
             }
         }
-        else if (hdf5::H5Tget_class(src_attr_dtype_id_holder.id) == H5T_FLOAT)
+        else if (H5Tget_class(src_attr_dtype_id_holder.id) == H5T_FLOAT)
         {
             long double tmp;
             src_f.read(src_full_path, tmp);
             dst_f.write_attribute(dst_full_path, tmp, src_attr_dtype_id_holder.id);
         }
-        else if (hdf5::H5Tget_class(src_attr_dtype_id_holder.id) == H5T_STRING)
+        else if (H5Tget_class(src_attr_dtype_id_holder.id) == H5T_STRING)
         {
             std::string tmp;
             src_f.read(src_full_path, tmp);
-            auto is_varlen = hdf5::H5Tis_variable_str(src_attr_dtype_id_holder.id);
+            auto is_varlen = H5Tis_variable_str(src_attr_dtype_id_holder.id);
             if (is_varlen < 0) throw Exception("error in H5Tis_variable_str");
             if (is_varlen)
             {
@@ -2286,12 +2282,12 @@ public:
             else
             {
                 // not varlen; now deal with array-of-size-1 chars
-                int sz = hdf5::H5Tget_size(src_attr_dtype_id_holder.id);
+                int sz = H5Tget_size(src_attr_dtype_id_holder.id);
                 if (sz == 0) throw Exception("error in H5Tget_size");
                 detail::HDF_Object_Holder src_attr_dspace_id_holder(
                     detail::Util::wrap(H5Aget_space, src_attr_id_holder.id),
                     detail::Util::wrapped_closer(H5Sclose));
-                auto dspace_type = hdf5::H5Sget_simple_extent_type(src_attr_dspace_id_holder.id);
+                auto dspace_type = H5Sget_simple_extent_type(src_attr_dspace_id_holder.id);
                 if (dspace_type == H5S_SCALAR)
                 {
                     dst_f.write_attribute(dst_full_path, tmp, 0);

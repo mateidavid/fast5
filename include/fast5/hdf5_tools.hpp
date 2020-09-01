@@ -2107,7 +2107,7 @@ public:
             detail::Util::wrapped_closer(H5Oclose));
         H5O_info_t info;
 #if H5_VERSION_GE(1, 12, 0)
-        detail::Util::wrap(H5Oget_info, id_holder.id, &info, 0);
+        detail::Util::wrap(H5Oget_info, id_holder.id, &info, H5O_INFO_NUM_ATTRS);
 #else
         detail::Util::wrap(H5Oget_info, id_holder.id, &info);
 #endif
@@ -2391,7 +2391,7 @@ private:
             // check object is a group
             H5O_info_t o_info;
 #if H5_VERSION_GE(1, 12, 0)
-            detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info, 0);
+            detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info, H5O_INFO_BASIC);
 #else
             detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info);
 #endif
@@ -2416,7 +2416,7 @@ private:
         // check object is a group
         H5O_info_t o_info;
 #if H5_VERSION_GE(1, 12, 0)
-        detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info, 0);
+        detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info, H5O_INFO_BASIC);
 #else
         detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info);
 #endif

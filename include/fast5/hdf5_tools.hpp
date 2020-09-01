@@ -2106,7 +2106,11 @@ public:
             detail::Util::wrap(H5Oopen, _file_id, loc_full_name.c_str(), H5P_DEFAULT),
             detail::Util::wrapped_closer(H5Oclose));
         H5O_info_t info;
+#if H5_VERSION_GE(1, 12, 0)
+        detail::Util::wrap(H5Oget_info, id_holder.id, &info, 0);
+#else
         detail::Util::wrap(H5Oget_info, id_holder.id, &info);
+#endif
         // num_attrs in info.num_attrs
         for (unsigned i = 0; i < (unsigned)info.num_attrs; ++i)
         {
@@ -2386,7 +2390,11 @@ private:
                 detail::Util::wrapped_closer(H5Oclose));
             // check object is a group
             H5O_info_t o_info;
+#if H5_VERSION_GE(1, 12, 0)
+            detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info, 0);
+#else
             detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info);
+#endif
             if (o_info.type != H5O_TYPE_GROUP) return false;
         }
         return true;
@@ -2407,7 +2415,11 @@ private:
             detail::Util::wrapped_closer(H5Oclose));
         // check object is a group
         H5O_info_t o_info;
+#if H5_VERSION_GE(1, 12, 0)
+        detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info, 0);
+#else
         detail::Util::wrap(H5Oget_info, o_id_holder.id, &o_info);
+#endif
         return o_info.type == type_id;
     } // check_object_type()
 }; // class File
